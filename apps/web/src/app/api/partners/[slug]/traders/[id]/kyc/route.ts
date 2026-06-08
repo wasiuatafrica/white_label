@@ -1,7 +1,11 @@
-import sql from '@/app/api/utils/sql';
+import { getPartnerWithPinBySlug } from '@/db/queries/partners';
+import {
+  getTraderKyc,
+  submitTraderKyc,
+  updateTraderKycStatus,
+} from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 
-// GET — get KYC status (requires session)
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
@@ -13,20 +17,15 @@ export async function GET(
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rows = await sql`
-      SELECT kyc_status, kyc_full_name, kyc_id_type, kyc_id_number,
-             kyc_id_url, kyc_address, kyc_selfie_url, kyc_submitted_at
-      FROM traders WHERE id = ${id} LIMIT 1
-    `;
-    if (rows.length === 0) return Response.json({ error: 'Not found' }, { status: 404 });
-    return Response.json(rows[0]);
+    const kyc = await getTraderKyc(Number(id));
+    if (!kyc) return Response.json({ error: 'Not found' }, { status: 404 });
+    return Response.json(kyc);
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to fetch KYC' }, { status: 500 });
   }
 }
 
-// POST — submit KYC (requires session)
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
@@ -48,18 +47,14 @@ export async function POST(
       );
     }
 
-    await sql`
-      UPDATE traders SET
-        kyc_status = 'submitted',
-        kyc_full_name = ${full_name},
-        kyc_id_type = ${id_type},
-        kyc_id_number = ${id_number},
-        kyc_id_url = ${id_url},
-        kyc_address = ${address},
-        kyc_selfie_url = ${selfie_url || null},
-        kyc_submitted_at = NOW()
-      WHERE id = ${id}
-    `;
+    await submitTraderKyc(Number(id), {
+      fullName: full_name,
+      idType: id_type,
+      idNumber: id_number,
+      idUrl: id_url,
+      address,
+      selfieUrl: selfie_url,
+    });
 
     return Response.json({ success: true });
   } catch (e) {
@@ -68,7 +63,6 @@ export async function POST(
   }
 }
 
-// PATCH — admin approve/reject KYC (no session required, uses admin PIN)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
@@ -82,15 +76,13 @@ export async function PATCH(
       return Response.json({ error: 'kyc_status must be approved or rejected' }, { status: 400 });
     }
 
-    // Verify admin PIN
-    const partners = await sql`SELECT id, admin_pin FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partners.length === 0)
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    if (partners[0].admin_pin !== admin_pin) {
+    const partner = await getPartnerWithPinBySlug(slug);
+    if (!partner) return Response.json({ error: 'Partner not found' }, { status: 404 });
+    if (partner.admin_pin !== admin_pin) {
       return Response.json({ error: 'Invalid PIN' }, { status: 403 });
     }
 
-    await sql`UPDATE traders SET kyc_status = ${kyc_status} WHERE id = ${id} AND partner_id = ${partners[0].id}`;
+    await updateTraderKycStatus(Number(id), kyc_status, partner.id);
     return Response.json({ success: true });
   } catch (e) {
     console.error(e);

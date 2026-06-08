@@ -1,31 +1,9 @@
-import sql from '@/app/api/utils/sql';
+import { listPendingPayments } from '@/db/queries/admin';
+import { activateEvaluation } from '@/db/queries/evaluations';
 
-// GET /api/admin/payments — all pending_payment evaluations across every partner
 export async function GET() {
   try {
-    const rows = await sql`
-      SELECT
-        e.id              AS eval_id,
-        e.eval_type,
-        e.amount,
-        e.status,
-        e.purchase_date,
-        e.profit_target,
-        e.max_drawdown,
-        e.required_days,
-        t.id              AS trader_id,
-        t.name            AS trader_name,
-        t.email           AS trader_email,
-        p.id              AS partner_id,
-        p.slug            AS partner_slug,
-        p.firm_name       AS partner_firm_name,
-        p.brand_color     AS partner_brand_color
-      FROM evaluations e
-      JOIN traders t ON t.id = e.trader_id
-      JOIN partners p ON p.id = e.partner_id
-      WHERE e.status = 'pending_payment'
-      ORDER BY e.purchase_date DESC
-    `;
+    const rows = await listPendingPayments();
     return Response.json(rows);
   } catch (e) {
     console.error(e);
@@ -33,8 +11,6 @@ export async function GET() {
   }
 }
 
-// PATCH /api/admin/payments — confirm a payment, activate the evaluation
-// Body: { eval_id }
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
@@ -44,14 +20,8 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'eval_id is required' }, { status: 400 });
     }
 
-    const result = await sql`
-      UPDATE evaluations
-      SET status = 'active', updated_at = NOW()
-      WHERE id = ${eval_id} AND status = 'pending_payment'
-      RETURNING id
-    `;
-
-    if (result.length === 0) {
+    const result = await activateEvaluation(eval_id);
+    if (!result) {
       return Response.json({ error: 'Evaluation not found or already activated' }, { status: 404 });
     }
 

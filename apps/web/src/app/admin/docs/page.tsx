@@ -681,8 +681,10 @@ export default function DocsPage() {
 
           <H3 id="arch-db">Database Schema</H3>
           <P>
-            Three tables in a single Neon PostgreSQL database, accessed via the <Code>sql</Code>{' '}
-            tagged-template utility at <Code>api/utils/sql.ts</Code>.
+            Five application tables in a single Neon PostgreSQL database, defined in{' '}
+            <Code>src/db/schema/</Code> and accessed via Drizzle ORM query modules in{' '}
+            <Code>src/db/queries/</Code>. Run <Code>npm run db:generate</Code> or{' '}
+            <Code>npm run db:push</Code> from <Code>apps/web</Code> to sync schema changes.
           </P>
 
           {/* ── PARTNER PROGRAM ───────────────────────────────────────── */}
@@ -1108,8 +1110,10 @@ export default function DocsPage() {
           {/* ── DATABASE ──────────────────────────────────────────────── */}
           <H2 id="db-schema">Database</H2>
           <P>
-            All tables live in a single Neon PostgreSQL 17 database. Use the <Code>sql</Code>{' '}
-            utility at <Code>api/utils/sql.ts</Code> — never install additional DB drivers.
+            All tables live in a single Neon PostgreSQL 17 database. Schema is defined with{' '}
+            <Code>Drizzle ORM</Code> under <Code>src/db/schema/</Code>. Run{' '}
+            <Code>npm run db:generate</Code> to create migrations and <Code>npm run db:push</Code>{' '}
+            to sync schema to Neon.
           </P>
 
           <H3>partners</H3>
@@ -1182,6 +1186,40 @@ export default function DocsPage() {
               ['required_days', 'INTEGER', 'Default: 30 (SS) / 21 (SSL)'],
               ['purchase_date', 'TIMESTAMP', 'now()'],
               ['updated_at', 'TIMESTAMP', 'now()'],
+              ['payout_status', 'ENUM', 'NULL', 'processing | paid — set after eval passes'],
+            ]}
+          />
+
+          <H3>trader_requests</H3>
+          <Table
+            headers={['Column', 'Type', 'Notes']}
+            rows={[
+              ['id', 'SERIAL PK', '—'],
+              ['trader_id', 'INT FK → traders.id', 'CASCADE DELETE'],
+              ['partner_id', 'INT FK → partners.id', 'CASCADE DELETE'],
+              ['eval_id', 'INT FK → evaluations.id', 'CASCADE DELETE'],
+              ['request_type', 'ENUM', 'talent_bonus | aso_payout_ssl | aso_account'],
+              ['notes', 'TEXT', 'Trader notes'],
+              ['admin_notes', 'TEXT', 'Admin response'],
+              ['status', 'ENUM', 'pending | approved | rejected'],
+              ['created_at', 'TIMESTAMP', 'now()'],
+              ['updated_at', 'TIMESTAMP', 'now()'],
+            ]}
+          />
+
+          <H3>partner_payout_requests</H3>
+          <Table
+            headers={['Column', 'Type', 'Notes']}
+            rows={[
+              ['id', 'SERIAL PK', '—'],
+              ['partner_id', 'INT FK → partners.id', 'CASCADE DELETE'],
+              ['amount_requested', 'NUMERIC(14,2)', '—'],
+              ['bank_name', 'TEXT', '—'],
+              ['account_number', 'TEXT', '—'],
+              ['account_name', 'TEXT', '—'],
+              ['notes', 'TEXT', 'Optional'],
+              ['status', 'ENUM', 'pending | approved | rejected | paid'],
+              ['created_at', 'TIMESTAMP', 'now()'],
             ]}
           />
 

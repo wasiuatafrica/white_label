@@ -2,7 +2,9 @@
   "name": "whitelabel",
   "private": true,
   "scripts": {
-    "heroku-postbuild": "yarn workspace web build"
+    "heroku-postbuild": "yarn workspace web build",
+    "db:generate": "yarn workspace web db:generate",
+    "db:push": "yarn workspace web db:push"
   },
   "engines": {
     "node": "24.x"

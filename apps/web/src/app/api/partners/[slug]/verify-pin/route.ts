@@ -1,7 +1,5 @@
-import sql from '@/app/api/utils/sql';
+import { verifyPartnerPin } from '@/db/queries/partners';
 
-// POST /api/partners/[slug]/verify-pin
-// Body: { pin }
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -12,12 +10,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'pin is required' }, { status: 400 });
     }
 
-    const result = await sql`SELECT admin_pin FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (result.length === 0) {
+    const valid = await verifyPartnerPin(slug, pin);
+    if (valid === null) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    const valid = result[0].admin_pin === String(pin);
     return Response.json({ valid });
   } catch (e) {
     console.error(e);

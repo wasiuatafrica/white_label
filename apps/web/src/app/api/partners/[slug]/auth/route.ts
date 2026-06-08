@@ -1,4 +1,10 @@
-import sql from '@/app/api/utils/sql';
+import { getPartnerIdBySlug } from '@/db/queries/partners';
+import {
+  getTraderForLogin,
+  getTraderForPasswordSetup,
+  getTraderForSession,
+  setTraderPassword,
+} from '@/db/queries/traders';
 import argon2 from 'argon2';
 import {
   createSessionToken,
@@ -9,27 +15,22 @@ import {
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 
-// GET — verify current session
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
     const session = parseSessionFromRequest(request, slug);
     if (!session) return Response.json({ session: null }, { status: 401 });
 
-    const rows = await sql`
-      SELECT id, name, email, status, kyc_status
-      FROM traders WHERE id = ${session.traderId} AND partner_id = ${session.partnerId} LIMIT 1
-    `;
-    if (rows.length === 0) return Response.json({ session: null }, { status: 401 });
+    const trader = await getTraderForSession(session.traderId, session.partnerId);
+    if (!trader) return Response.json({ session: null }, { status: 401 });
 
-    return Response.json({ session, trader: rows[0] });
+    return Response.json({ session, trader });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Session check failed' }, { status: 500 });
   }
 }
 
-// POST — login with email + password
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -40,18 +41,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const partners = await sql`SELECT id FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partners.length === 0)
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    const partnerId = partners[0].id;
+    const partnerId = await getPartnerIdBySlug(slug);
+    if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const traders = await sql`
-      SELECT id, name, email, status, password_hash
-      FROM traders WHERE email = ${email} AND partner_id = ${partnerId} LIMIT 1
-    `;
-    if (traders.length === 0) return Response.json({ error: 'no_account' }, { status: 401 });
-
-    const trader = traders[0];
+    const trader = await getTraderForLogin(partnerId, email);
+    if (!trader) return Response.json({ error: 'no_account' }, { status: 401 });
 
     if (!trader.password_hash) {
       return Response.json({ error: 'no_password', traderId: trader.id }, { status: 401 });
@@ -84,7 +78,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   }
 }
 
-// PATCH — set password for existing account with no password yet
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -95,24 +88,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
-    const partners = await sql`SELECT id FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partners.length === 0)
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    const partnerId = partners[0].id;
+    const partnerId = await getPartnerIdBySlug(slug);
+    if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const traders = await sql`
-      SELECT id, name, email FROM traders
-      WHERE id = ${traderId} AND email = ${email} AND partner_id = ${partnerId}
-        AND password_hash IS NULL
-      LIMIT 1
-    `;
-    if (traders.length === 0) {
+    const trader = await getTraderForPasswordSetup(traderId, email, partnerId);
+    if (!trader) {
       return Response.json({ error: 'Invalid request or password already set' }, { status: 400 });
     }
 
-    const trader = traders[0];
     const hash = await argon2.hash(password);
-    await sql`UPDATE traders SET password_hash = ${hash} WHERE id = ${trader.id}`;
+    await setTraderPassword(trader.id, hash);
 
     const session: TraderSession = {
       traderId: trader.id,
@@ -138,7 +123,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
   }
 }
 
-// DELETE — logout
 export async function DELETE(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const cookieName = getSessionCookieName(slug);

@@ -1,9 +1,14 @@
-import sql from '@/app/api/utils/sql';
+import { getPartnerIdBySlug, getPartnerWithPinBySlug } from '@/db/queries/partners';
+import {
+  completePasswordReset,
+  getTraderByResetToken,
+  getTraderForReset,
+  setTraderResetToken,
+} from '@/db/queries/traders';
 import argon2 from 'argon2';
 import crypto from 'crypto';
 import { sendEmail } from '@/app/api/utils/send-email';
 
-// POST — request a password reset link via email
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -12,24 +17,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
 
-    const partners = await sql`SELECT id, firm_name FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partners.length === 0)
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    const partner = partners[0];
+    const partner = await getPartnerWithPinBySlug(slug);
+    if (!partner) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const traders = await sql`
-      SELECT id, name FROM traders
-      WHERE email = ${email} AND partner_id = ${partner.id} LIMIT 1
-    `;
+    const trader = await getTraderForReset(partner.id, email);
 
-    // Always return success to avoid email enumeration
-    if (traders.length === 0) return Response.json({ success: true });
+    if (!trader) return Response.json({ success: true });
 
-    const trader = traders[0];
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 3600 * 1000); // 1 hour
+    const expires = new Date(Date.now() + 3600 * 1000);
 
-    await sql`UPDATE traders SET reset_token = ${token}, reset_token_expires = ${expires} WHERE id = ${trader.id}`;
+    await setTraderResetToken(trader.id, token, expires);
 
     const appUrl = process.env.NEXT_PUBLIC_CREATE_APP_URL || '';
     const resetUrl = `${appUrl}/${slug}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
@@ -39,6 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         to: email,
         from: 'FT9ja <onboarding@resend.dev>',
         subject: `Reset your ${partner.firm_name} password`,
+        text: `Reset your ${partner.firm_name} password: ${resetUrl}`,
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
             <h2 style="font-size:20px;font-weight:900;color:#111;margin-bottom:8px">Password Reset</h2>
@@ -69,7 +68,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   }
 }
 
-// PUT — confirm reset with token + set new password
 export async function PUT(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
@@ -83,27 +81,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
       return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
 
-    const partners = await sql`SELECT id FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partners.length === 0)
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
+    const partnerId = await getPartnerIdBySlug(slug);
+    if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const traders = await sql`
-      SELECT id FROM traders
-      WHERE email = ${email}
-        AND partner_id = ${partners[0].id}
-        AND reset_token = ${token}
-        AND reset_token_expires > NOW()
-      LIMIT 1
-    `;
-    if (traders.length === 0) {
+    const trader = await getTraderByResetToken(partnerId, email, token);
+    if (!trader) {
       return Response.json({ error: 'Invalid or expired reset link' }, { status: 400 });
     }
 
     const hash = await argon2.hash(password);
-    await sql`
-      UPDATE traders SET password_hash = ${hash}, reset_token = NULL, reset_token_expires = NULL
-      WHERE id = ${traders[0].id}
-    `;
+    await completePasswordReset(trader.id, hash);
 
     return Response.json({ success: true });
   } catch (e) {

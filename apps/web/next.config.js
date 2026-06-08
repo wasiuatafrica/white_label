@@ -14,6 +14,7 @@ const nextConfig = {
     'ws',
     '@better-auth/kysely-adapter',
     'kysely',
+    'drizzle-orm',
   ],
   rewrites() {
     return [

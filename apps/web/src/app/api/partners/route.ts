@@ -1,10 +1,8 @@
-import sql from '@/app/api/utils/sql';
+import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
 
 export async function GET() {
   try {
-    const partners = await sql`
-      SELECT * FROM partners ORDER BY created_at DESC
-    `;
+    const partners = await listPartners();
     return Response.json(partners);
   } catch (e) {
     console.error(e);
@@ -24,7 +22,6 @@ export async function POST(request: Request) {
       description,
       brand_color,
       secondary_color,
-      payment_method,
       payment_proof_url,
     } = body;
 
@@ -35,29 +32,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check slug uniqueness
-    const existing = await sql`SELECT id FROM partners WHERE slug = ${slug}`;
-    if (existing.length > 0) {
+    if (await slugExists(slug)) {
       return Response.json(
         { error: 'That subdomain is already taken. Please choose another.' },
         { status: 409 }
       );
     }
 
-    const result = await sql`
-      INSERT INTO partners (
-        slug, firm_name, owner_name, owner_email, tagline, description,
-        brand_color, secondary_color, payment_proof_url, status
-      ) VALUES (
-        ${slug}, ${firm_name}, ${owner_name || null}, ${owner_email},
-        ${tagline || null}, ${description || null},
-        ${brand_color || '#16A34A'}, ${secondary_color || '#F59E0B'},
-        ${payment_proof_url || null}, 'pending'
-      )
-      RETURNING *
-    `;
+    const partner = await createPartner({
+      slug,
+      firmName: firm_name,
+      ownerName: owner_name,
+      ownerEmail: owner_email,
+      tagline,
+      description,
+      brandColor: brand_color,
+      secondaryColor: secondary_color,
+      paymentProofUrl: payment_proof_url,
+    });
 
-    return Response.json(result[0], { status: 201 });
+    return Response.json(partner, { status: 201 });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to create partner' }, { status: 500 });

@@ -1,20 +1,17 @@
-import sql from '@/app/api/utils/sql';
+import {
+  deletePartnerBySlug,
+  getPartnerBySlug,
+  updatePartnerBySlug,
+} from '@/db/queries/partners';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    // Exclude admin_pin from public response
-    const result = await sql`
-      SELECT id, slug, firm_name, owner_name, owner_email, logo_url, brand_color,
-             secondary_color, tagline, description, status, monthly_fee_paid,
-             setup_fee_waived, total_traders, total_revenue, payment_proof_url,
-             created_at, updated_at, template, fee_markup
-      FROM partners WHERE slug = ${slug} LIMIT 1
-    `;
-    if (result.length === 0) {
+    const partner = await getPartnerBySlug(slug);
+    if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
-    return Response.json(result[0]);
+    return Response.json(partner);
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to fetch partner' }, { status: 500 });
@@ -39,33 +36,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       'admin_pin',
       'fee_markup',
     ];
-    const setClauses: string[] = [];
-    const values: unknown[] = [];
-    let i = 1;
-
-    for (const key of allowed) {
-      if (key in body) {
-        setClauses.push(`${key} = $${i}`);
-        values.push(body[key]);
-        i++;
-      }
-    }
-
-    if (setClauses.length === 0) {
+    const hasAllowedField = allowed.some((key) => key in body);
+    if (!hasAllowedField) {
       return Response.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    setClauses.push(`updated_at = NOW()`);
-    values.push(slug);
-
-    const query = `UPDATE partners SET ${setClauses.join(', ')} WHERE slug = $${i} RETURNING *`;
-    const result = await sql(query, values);
-
-    if (result.length === 0) {
+    const partner = await updatePartnerBySlug(slug, body);
+    if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    return Response.json(result[0]);
+    return Response.json(partner);
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to update partner' }, { status: 500 });
@@ -75,7 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
 export async function DELETE(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    await sql`DELETE FROM partners WHERE slug = ${slug}`;
+    await deletePartnerBySlug(slug);
     return Response.json({ success: true });
   } catch (e) {
     console.error(e);

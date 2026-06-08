@@ -1,9 +1,14 @@
-import sql from '@/app/api/utils/sql';
+import { getPartnerIdBySlug } from '@/db/queries/partners';
+import { getEvaluationForTrader } from '@/db/queries/evaluations';
+import {
+  createTraderRequest,
+  findDuplicateTraderRequest,
+  listTraderRequests,
+} from '@/db/queries/trader-requests';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 
-const VALID_TYPES = ['talent_bonus', 'aso_payout_ssl', 'aso_account'];
+const VALID_TYPES = ['talent_bonus', 'aso_payout_ssl', 'aso_account'] as const;
 
-// GET /api/partners/[slug]/traders/[id]/requests — list all requests for this trader
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
@@ -15,25 +20,7 @@ export async function GET(
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rows = await sql`
-      SELECT
-        r.id,
-        r.eval_id,
-        r.request_type,
-        r.status,
-        r.notes,
-        r.admin_notes,
-        r.created_at,
-        r.updated_at,
-        e.eval_type,
-        e.amount,
-        e.status AS eval_status
-      FROM trader_requests r
-      JOIN evaluations e ON e.id = r.eval_id
-      WHERE r.trader_id = ${id}
-      ORDER BY r.created_at DESC
-    `;
-
+    const rows = await listTraderRequests(Number(id));
     return Response.json(rows);
   } catch (e) {
     console.error(e);
@@ -41,8 +28,6 @@ export async function GET(
   }
 }
 
-// POST /api/partners/[slug]/traders/[id]/requests — submit a new request
-// Body: { eval_id, request_type, notes? }
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
@@ -65,25 +50,16 @@ export async function POST(
       return Response.json({ error: 'Invalid request_type' }, { status: 400 });
     }
 
-    // Verify evaluation belongs to this trader and is passed
-    const partner = await sql`SELECT id FROM partners WHERE slug = ${slug} LIMIT 1`;
-    if (partner.length === 0) {
+    const partnerId = await getPartnerIdBySlug(slug);
+    if (!partnerId) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    const evalRow = await sql`
-      SELECT id, eval_type, status FROM evaluations
-      WHERE id = ${eval_id} AND trader_id = ${id} AND partner_id = ${partner[0].id}
-      LIMIT 1
-    `;
-
-    if (evalRow.length === 0) {
+    const ev = await getEvaluationForTrader(eval_id, Number(id), partnerId);
+    if (!ev) {
       return Response.json({ error: 'Evaluation not found' }, { status: 404 });
     }
 
-    const ev = evalRow[0];
-
-    // Validate request_type against eval_type
     if (request_type === 'aso_payout_ssl' && ev.eval_type !== 'SSL') {
       return Response.json(
         { error: 'Aso Payout (SSL) is only available for SSL evaluations' },
@@ -97,28 +73,23 @@ export async function POST(
       );
     }
 
-    // Check for existing pending/approved request of same type for same eval
-    const existing = await sql`
-      SELECT id FROM trader_requests
-      WHERE eval_id = ${eval_id} AND request_type = ${request_type}
-        AND status IN ('pending', 'approved')
-      LIMIT 1
-    `;
-
-    if (existing.length > 0) {
+    const existing = await findDuplicateTraderRequest(eval_id, request_type);
+    if (existing) {
       return Response.json(
         { error: 'A request of this type already exists for this evaluation' },
         { status: 409 }
       );
     }
 
-    const result = await sql`
-      INSERT INTO trader_requests (trader_id, partner_id, eval_id, request_type, notes, status)
-      VALUES (${id}, ${partner[0].id}, ${eval_id}, ${request_type}, ${notes || null}, 'pending')
-      RETURNING *
-    `;
+    const result = await createTraderRequest({
+      traderId: Number(id),
+      partnerId,
+      evalId: eval_id,
+      requestType: request_type,
+      notes,
+    });
 
-    return Response.json(result[0], { status: 201 });
+    return Response.json(result, { status: 201 });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to submit request' }, { status: 500 });
