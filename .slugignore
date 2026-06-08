@@ -1,0 +1,8 @@
+apps/mobile
+publisher
+.cursor
+**/.next/cache
+apps/web/.next/cache
+**/*.md
+playwright-report
+test-results
