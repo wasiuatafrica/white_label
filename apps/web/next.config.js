@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   devIndicators: false,
+  turbopack: {
+    resolveAlias: {
+      '@better-auth/kysely-adapter': './stubs/empty-kysely-adapter.mjs',
+      'better-auth/kysely-adapter': './stubs/empty-kysely-adapter.mjs',
+    },
+  },
   typescript: {
     ignoreBuildErrors: true,
   },

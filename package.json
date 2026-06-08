@@ -2,7 +2,6 @@
   "name": "whitelabel",
   "private": true,
   "scripts": {
-    "heroku-prebuild": "corepack enable && yarn workspaces focus web --all",
     "heroku-postbuild": "yarn workspace web build"
   },
   "engines": {

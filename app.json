@@ -4,10 +4,6 @@
   "repository": "https://github.com/ATAfrica/whitelabel",
   "keywords": ["nextjs", "node", "whitelabel"],
   "env": {
-    "HEROKU_SKIP_INSTALL": {
-      "description": "Use yarn workspaces focus to install only the web app dependencies",
-      "value": "1"
-    },
     "NPM_CONFIG_PRODUCTION": {
       "description": "Install devDependencies needed for next build",
       "value": "false"
