@@ -1,4 +1,5 @@
-apps/mobile
+apps/mobile/*
+!apps/mobile/package.json
 publisher
 .cursor
 **/.next/cache
