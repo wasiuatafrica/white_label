@@ -46,7 +46,7 @@ type Partner = {
   description: string;
   logo_url: string;
   template: string;
-  fee_markup: number;
+  fee_markup: number | string | null;
 };
 
 type Trader = {
@@ -71,6 +71,8 @@ type Evaluation = {
   trader_email: string;
   eval_type: string;
   amount: string;
+  payment_method: string | null;
+  payment_proof_url: string | null;
   status: string;
   payout_status: string | null;
   profit_target: string;
@@ -123,6 +125,16 @@ function fmtMoney(n: number) {
   if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `₦${(n / 1_000).toFixed(0)}K`;
   return `₦${n.toFixed(0)}`;
+}
+
+function toMoneyNumber(value: number | string | null | undefined) {
+  return Number(value || 0);
+}
+
+function formatPaymentMethod(method: string | null) {
+  if (method === 'paypal') return 'PayPal';
+  if (method === 'crypto') return 'Crypto';
+  return 'Transfer';
 }
 
 function StatCard({
@@ -238,7 +250,7 @@ function PaymentsTab({
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
   const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
   const totalRevenue = confirmed.reduce((s, e) => s + parseFloat(e.amount || '0'), 0);
-  const markup = partner.fee_markup || 0;
+  const markup = toMoneyNumber(partner.fee_markup);
   const partnerEarnings = confirmed.length * markup;
   const ft9jaEarnings = totalRevenue - partnerEarnings;
 
@@ -337,9 +349,28 @@ function PaymentsTab({
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
                       {ev.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'}
                     </span>
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      {formatPaymentMethod(ev.payment_method)}
+                    </span>
                   </div>
                   <div className="text-xs text-gray-400">
                     {ev.trader_email} · {fmtDate(ev.purchase_date)}
+                  </div>
+                  <div className="mt-1">
+                    {ev.payment_proof_url ? (
+                      <a
+                        href={ev.payment_proof_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                      >
+                        <ExternalLink size={11} /> View payment evidence
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                        <AlertCircle size={11} /> No payment evidence
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right mr-2">
@@ -350,7 +381,8 @@ function PaymentsTab({
                 </div>
                 <button
                   onClick={() => activateEval.mutate(ev.id)}
-                  disabled={activateEval.isPending}
+                  disabled={activateEval.isPending || !ev.payment_proof_url}
+                  title={!ev.payment_proof_url ? 'Payment evidence is required before activation' : ''}
                   className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: '#16A34A' }}
                 >
@@ -435,7 +467,7 @@ function PayoutsTab({
 }) {
   const qc = useQueryClient();
   const slug = partner.slug;
-  const markup = partner.fee_markup || 0;
+  const markup = toMoneyNumber(partner.fee_markup);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -724,7 +756,7 @@ function AnalyticsTab({
   partner: Partner;
   primary: string;
 }) {
-  const markup = partner.fee_markup || 0;
+  const markup = toMoneyNumber(partner.fee_markup);
   const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
   const active = evaluations.filter((e) => e.status === 'active');
   const passed = evaluations.filter((e) => e.status === 'passed');
@@ -1215,7 +1247,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
         logo_url: partner.logo_url || '',
         template: partner.template || 'minimal',
         admin_pin: '',
-        fee_markup: partner.fee_markup || 0,
+        fee_markup: toMoneyNumber(partner.fee_markup),
       });
     }
   }, [partner]);
@@ -1438,7 +1470,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   const primary = brandForm.brand_color || '#16A34A';
   const revenue = parseFloat(partner.total_revenue || '0');
-  const markup = partner.fee_markup || 0;
+  const markup = toMoneyNumber(partner.fee_markup);
 
   const TABS = [
     { id: 'overview', label: 'Overview', icon: <Activity size={13} />, badge: 0 },
@@ -1875,7 +1907,8 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     { label: 'Standard Evaluation (SS)', base: 149000 },
                     { label: 'Starter Evaluation (SSL)', base: 52000 },
                   ].map((p) => {
-                    const total = p.base + (brandForm.fee_markup || 0);
+                    const markup = toMoneyNumber(brandForm.fee_markup);
+                    const total = p.base + markup;
                     return (
                       <div
                         key={p.label}
@@ -1892,7 +1925,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-400">Your markup</span>
                             <span className="font-medium text-gray-700">
-                              +₦{(brandForm.fee_markup || 0).toLocaleString()}
+                              +₦{markup.toLocaleString()}
                             </span>
                           </div>
                           <div className="flex justify-between border-t border-gray-100 pt-1 text-xs font-bold">

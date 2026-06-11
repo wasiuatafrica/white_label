@@ -2,9 +2,13 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
+    Banknote,
+    Bitcoin,
     CheckCircle,
     ChevronDown,
     Copy,
+    CreditCard,
+    FileText,
     Loader2,
     Mail,
     Shield,
@@ -14,6 +18,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { use, useState } from 'react';
+import useUpload from '@/utils/useUpload';
+
+type PaymentMethod = 'transfer' | 'paypal' | 'crypto';
 
 type Partner = {
   id: number;
@@ -29,7 +36,7 @@ type Partner = {
   total_traders: number;
   logo_url: string | null;
   template: string | null;
-  fee_markup: number;
+  fee_markup: number | string | null;
 };
 
 type EvalProduct = {
@@ -82,10 +89,11 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
   },
 ];
 
-function getProducts(feeMarkup: number): EvalProduct[] {
-  if (!feeMarkup) return BASE_EVAL_PRODUCTS;
+function getProducts(feeMarkup: number | string | null | undefined): EvalProduct[] {
+  const markup = Number(feeMarkup || 0);
+  if (!markup) return BASE_EVAL_PRODUCTS;
   return BASE_EVAL_PRODUCTS.map((p) => {
-    const total = p.priceNum + feeMarkup;
+    const total = p.priceNum + markup;
     return {
       ...p,
       priceNum: total,
@@ -394,13 +402,31 @@ function PurchaseModal({
   const [email, setEmail] = useState('');
   const [copied, setCopied] = useState(false);
   const [createdEmail, setCreatedEmail] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('transfer');
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [upload, { loading: uploading }] = useUpload();
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!proofFile) throw new Error('Upload payment evidence before submitting.');
+      setUploadError(null);
+      const uploaded = await upload({ file: proofFile });
+      if (uploaded.error || !uploaded.url) {
+        throw new Error(uploaded.error || 'Upload failed');
+      }
+
       const res = await fetch(`/api/partners/${slug}/evaluations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, eval_type: product.code, amount: product.priceNum }),
+        body: JSON.stringify({
+          name,
+          email,
+          eval_type: product.code,
+          amount: product.priceNum,
+          payment_method: paymentMethod,
+          payment_proof_url: uploaded.url,
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -410,12 +436,15 @@ function PurchaseModal({
     },
     onSuccess: () => {
       setCreatedEmail(email);
-      setStep('payment');
+      setStep('success');
+    },
+    onError: (error) => {
+      setUploadError(error instanceof Error ? error.message : 'Payment submission failed');
     },
   });
 
-  const copyAccount = () => {
-    navigator.clipboard.writeText('3012345678');
+  const copyPaymentValue = (value: string) => {
+    navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -489,21 +518,12 @@ function PurchaseModal({
               </p>
             )}
             <button
-              onClick={() => mutation.mutate()}
-              disabled={!name || !email || mutation.isPending}
+              onClick={() => setStep('payment')}
+              disabled={!name || !email}
               className="w-full rounded-lg py-3 text-sm font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90"
               style={{ backgroundColor: primary }}
             >
-              {mutation.isPending ? (
-                <>
-                  <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} />{' '}
-                  Processing...
-                </>
-              ) : (
-                <>
-                  Continue to Payment <ArrowRight size={15} />
-                </>
-              )}
+              Continue to Payment <ArrowRight size={15} />
             </button>
           </div>
         )}
@@ -513,18 +533,57 @@ function PurchaseModal({
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-semibold text-amber-800 mb-0.5">Payment Instructions</p>
               <p className="text-xs text-amber-700">
-                Transfer <strong>{product.price}</strong> to the account below. Your evaluation
-                activates within 2 hours.
+                Choose a payment method, pay <strong>{product.price}</strong>, then upload your
+                receipt or transaction screenshot for admin approval.
               </p>
             </div>
-            <div className="space-y-3 mb-5">
+            <div className="mb-4 grid grid-cols-3 gap-2">
               {[
-                { label: 'Bank', value: 'First Bank of Nigeria' },
-                { label: 'Account Name', value: 'FT9ja Trading Ltd' },
-                { label: 'Account Number', value: '3012345678', copy: true },
-                { label: 'Amount', value: product.price },
-                { label: 'Reference', value: createdEmail },
-              ].map((r) => (
+                { id: 'transfer' as const, label: 'Transfer', icon: <Banknote size={14} /> },
+                { id: 'paypal' as const, label: 'PayPal', icon: <CreditCard size={14} /> },
+                { id: 'crypto' as const, label: 'Crypto', icon: <Bitcoin size={14} /> },
+              ].map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  onClick={() => setPaymentMethod(method.id)}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                    paymentMethod === method.id
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {method.icon}
+                  {method.label}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-3 mb-5">
+              {(paymentMethod === 'transfer'
+                ? [
+                    { label: 'Bank', value: 'Zenith Bank' },
+                    { label: 'Account Name', value: 'Asokoro Technologies' },
+                    { label: 'Account Number', value: '1217002454', copy: true },
+                    { label: 'Amount', value: product.price },
+                    { label: 'Reference', value: email },
+                  ]
+                : paymentMethod === 'paypal'
+                  ? [
+                      { label: 'PayPal', value: 'https://www.paypal.me/ft9ja', copy: true },
+                      { label: 'Amount', value: product.price },
+                      { label: 'Reference', value: email },
+                    ]
+                  : [
+                      { label: 'Network', value: 'BTC' },
+                      {
+                        label: 'Wallet',
+                        value: '3CLFanKRsufL2hrMmFuBMQAGVDmThr4RPa',
+                        copy: true,
+                      },
+                      { label: 'Amount', value: product.price },
+                      { label: 'Reference', value: email },
+                    ]
+              ).map((r) => (
                 <div
                   key={r.label}
                   className="flex items-center justify-between py-2 border-b border-gray-50"
@@ -533,7 +592,10 @@ function PurchaseModal({
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">{r.value}</span>
                     {r.copy && (
-                      <button onClick={copyAccount} className="text-gray-400 hover:text-gray-700">
+                      <button
+                        onClick={() => copyPaymentValue(r.value)}
+                        className="text-gray-400 hover:text-gray-700"
+                      >
                         {copied ? (
                           <CheckCircle size={14} className="text-green-500" />
                         ) : (
@@ -545,12 +607,50 @@ function PurchaseModal({
                 </div>
               ))}
             </div>
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <label className="mb-2 block text-xs font-semibold text-gray-700">
+                Upload payment evidence
+              </label>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-3 text-xs text-gray-500 hover:border-gray-400">
+                <span className="flex min-w-0 items-center gap-2">
+                  <FileText size={14} className="shrink-0 text-gray-400" />
+                  <span className="truncate">
+                    {proofFile ? proofFile.name : 'Receipt, screenshot, or transaction proof'}
+                  </span>
+                </span>
+                <span className="shrink-0 font-semibold text-gray-900">Choose file</span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    setProofFile(e.target.files?.[0] ?? null);
+                    setUploadError(null);
+                  }}
+                />
+              </label>
+              <p className="mt-2 text-xs text-gray-400">
+                Accepted: image or PDF, up to 10MB.
+              </p>
+            </div>
+            {(uploadError || mutation.error) && (
+              <p className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {uploadError || (mutation.error as Error).message}
+              </p>
+            )}
             <button
-              onClick={() => setStep('success')}
-              className="w-full rounded-lg py-3 text-sm font-semibold text-white hover:opacity-90"
+              onClick={() => mutation.mutate()}
+              disabled={!proofFile || mutation.isPending || uploading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: primary }}
             >
-              I&apos;ve Completed Payment ✓
+              {mutation.isPending || uploading ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" /> Submitting Payment...
+                </>
+              ) : (
+                <>Submit Payment Evidence ✓</>
+              )}
             </button>
           </div>
         )}

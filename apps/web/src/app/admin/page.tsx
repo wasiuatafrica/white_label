@@ -11,6 +11,8 @@ import {
   TrendingUp,
   Search,
   Eye,
+  EyeOff,
+  Copy,
   Mail,
   BookOpen,
   X,
@@ -39,6 +41,7 @@ type Partner = {
   total_traders: number;
   total_revenue: string;
   payment_proof_url: string | null;
+  admin_pin: string;
   created_at: string;
 };
 
@@ -63,6 +66,8 @@ type PaymentRow = {
   eval_id: number;
   eval_type: string;
   amount: string;
+  payment_method: string | null;
+  payment_proof_url: string | null;
   status: string;
   purchase_date: string;
   trader_id: number;
@@ -150,6 +155,12 @@ function formatDate(d: string) {
   const [hh, mm] = timePart.split(':');
   const month = months[parseInt(mo ?? '1', 10) - 1] ?? '';
   return `${parseInt(day ?? '1', 10)} ${month} ${yr}, ${hh ?? '00'}:${mm ?? '00'}`;
+}
+
+function formatPaymentMethod(method: string | null) {
+  if (method === 'paypal') return 'PayPal';
+  if (method === 'crypto') return 'Crypto';
+  return 'Transfer';
 }
 
 const REQUEST_META_ADMIN: Record<string, { label: string; icon: string }> = {
@@ -354,6 +365,8 @@ function PartnersTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [visiblePins, setVisiblePins] = useState<Set<number>>(new Set());
+  const [copiedPinId, setCopiedPinId] = useState<number | null>(null);
   const qc = useQueryClient();
 
   const { data: partners = [], isLoading } = useQuery<Partner[]>({
@@ -389,6 +402,25 @@ function PartnersTab({
   const totalRevenue = partners.reduce((s, p) => s + parseFloat(p.total_revenue || '0'), 0);
   const activeCount = partners.filter((p) => p.status === 'active').length;
   const pendingCount = partners.filter((p) => p.status === 'pending').length;
+
+  const togglePinVisibility = (partnerId: number) => {
+    setVisiblePins((current) => {
+      const next = new Set(current);
+      if (next.has(partnerId)) {
+        next.delete(partnerId);
+      } else {
+        next.add(partnerId);
+      }
+      return next;
+    });
+  };
+
+  const copyPin = async (partnerId: number, pin: string) => {
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(pin);
+    setCopiedPinId(partnerId);
+    window.setTimeout(() => setCopiedPinId(null), 1600);
+  };
 
   return (
     <div className="space-y-5">
@@ -519,6 +551,36 @@ function PartnersTab({
                           <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
                             <AlertTriangle size={11} /> No receipt
                           </span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-medium text-gray-400">Admin PIN</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700">
+                          {p.admin_pin
+                            ? visiblePins.has(p.id)
+                              ? p.admin_pin
+                              : '••••'
+                            : 'No PIN'}
+                        </span>
+                        {p.admin_pin && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => togglePinVisibility(p.id)}
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                            >
+                              {visiblePins.has(p.id) ? <EyeOff size={11} /> : <Eye size={11} />}
+                              {visiblePins.has(p.id) ? 'Hide' : 'Show'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyPin(p.id, p.admin_pin)}
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                            >
+                              <Copy size={11} />
+                              {copiedPinId === p.id ? 'Copied' : 'Copy'}
+                            </button>
+                          </>
                         )}
                       </div>
                       {/* Mobile stats */}
@@ -839,8 +901,8 @@ function PaymentsTab() {
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <AlertTriangle size={14} className="shrink-0 text-amber-600 mt-0.5" />
           <p className="text-xs text-amber-700">
-            <strong>Confirm payments only after verifying the bank transfer.</strong> Check First
-            Bank account 3012345678 — each trader should reference their email address.
+            <strong>Confirm payments only after verifying uploaded evidence.</strong> Match the
+            method, amount, and trader reference before activating the evaluation.
           </p>
         </div>
       )}
@@ -882,9 +944,27 @@ function PaymentsTab() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold text-gray-900">{row.trader_name}</span>
                       <Badge color="gray">{row.eval_type}</Badge>
+                      <Badge color="blue">{formatPaymentMethod(row.payment_method)}</Badge>
                     </div>
                     <div className="mt-0.5 text-xs text-gray-400 truncate">
                       {row.trader_email} · {row.partner_firm_name}
+                    </div>
+                    <div className="mt-1">
+                      {row.payment_proof_url ? (
+                        <a
+                          href={row.payment_proof_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <ExternalLink size={11} /> View payment evidence
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                          <AlertTriangle size={11} /> No payment evidence
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1 text-sm font-black text-gray-900 sm:hidden">
                       ₦{parseFloat(row.amount).toLocaleString()}
@@ -910,7 +990,7 @@ function PaymentsTab() {
                         </button>
                         <button
                           onClick={() => confirm.mutate(row.eval_id)}
-                          disabled={confirm.isPending}
+                          disabled={confirm.isPending || !row.payment_proof_url}
                           className="flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
                         >
                           {confirm.isPending ? (
@@ -925,7 +1005,9 @@ function PaymentsTab() {
                   ) : (
                     <button
                       onClick={() => setConfirming(row.eval_id)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] sm:px-4"
+                      disabled={!row.payment_proof_url}
+                      title={!row.payment_proof_url ? 'Payment evidence is required before approval' : ''}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50 sm:px-4"
                     >
                       <CheckCircle size={12} /> Confirm
                     </button>

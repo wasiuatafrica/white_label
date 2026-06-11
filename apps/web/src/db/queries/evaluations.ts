@@ -12,6 +12,8 @@ const evaluationColumns = {
   partner_id: evaluations.partnerId,
   eval_type: evaluations.evalType,
   amount: evaluations.amount,
+  payment_method: evaluations.paymentMethod,
+  payment_proof_url: evaluations.paymentProofUrl,
   status: evaluations.status,
   profit_target: evaluations.profitTarget,
   current_profit: evaluations.currentProfit,
@@ -75,6 +77,8 @@ export async function createEvaluationWithTrader(data: {
   email: string;
   evalType: 'SS' | 'SSL';
   amount: string | number;
+  paymentMethod?: string | null;
+  paymentProofUrl?: string | null;
 }) {
   return db.transaction(async (tx) => {
     let traderRow = await getTraderByEmail(data.partnerId, data.email, tx);
@@ -100,6 +104,8 @@ export async function createEvaluationWithTrader(data: {
         partnerId: data.partnerId,
         evalType: data.evalType,
         amount,
+        paymentMethod: data.paymentMethod ?? null,
+        paymentProofUrl: data.paymentProofUrl ?? null,
         status: 'pending_payment',
         profitTarget,
         currentProfit: '0',

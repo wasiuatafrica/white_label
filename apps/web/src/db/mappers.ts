@@ -65,6 +65,8 @@ export function mapEvaluation(row: Evaluation) {
     partner_id: row.partnerId,
     eval_type: row.evalType,
     amount: row.amount,
+    payment_method: row.paymentMethod,
+    payment_proof_url: row.paymentProofUrl,
     status: row.status,
     profit_target: row.profitTarget,
     current_profit: row.currentProfit,

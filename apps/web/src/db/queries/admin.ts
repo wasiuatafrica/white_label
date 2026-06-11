@@ -39,6 +39,8 @@ export async function listPendingPayments() {
       eval_id: evaluations.id,
       eval_type: evaluations.evalType,
       amount: evaluations.amount,
+      payment_method: evaluations.paymentMethod,
+      payment_proof_url: evaluations.paymentProofUrl,
       status: evaluations.status,
       purchase_date: evaluations.purchaseDate,
       profit_target: evaluations.profitTarget,

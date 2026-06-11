@@ -5,7 +5,9 @@ import {
   numeric,
   pgTable,
   serial,
+  text,
   timestamp,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import { evalStatusEnum, evalTypeEnum, payoutStatusEnum } from './enums';
 import { partners } from './partners';
@@ -24,6 +26,8 @@ export const evaluations = pgTable(
       .references(() => partners.id, { onDelete: 'cascade' }),
     evalType: evalTypeEnum('eval_type').notNull(),
     amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
+    paymentMethod: varchar('payment_method', { length: 20 }),
+    paymentProofUrl: text('payment_proof_url'),
     status: evalStatusEnum('status').notNull().default('pending_payment'),
     profitTarget: numeric('profit_target', { precision: 5, scale: 2 }).notNull().default('10.0'),
     currentProfit: numeric('current_profit', { precision: 5, scale: 2 }).notNull().default('0'),

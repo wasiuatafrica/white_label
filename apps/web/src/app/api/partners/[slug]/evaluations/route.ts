@@ -39,10 +39,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   try {
     const { slug } = await params;
     const body = await request.json();
-    const { name, email, eval_type, amount } = body;
+    const { name, email, eval_type, amount, payment_method, payment_proof_url } = body;
 
     if (!name || !email || !eval_type) {
       return Response.json({ error: 'name, email and eval_type are required' }, { status: 400 });
+    }
+
+    if (!payment_method || !payment_proof_url) {
+      return Response.json(
+        { error: 'payment_method and payment_proof_url are required' },
+        { status: 400 }
+      );
     }
 
     const partnerId = await getPartnerIdBySlug(slug);
@@ -56,6 +63,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       email,
       evalType: eval_type,
       amount: amount || 0,
+      paymentMethod: payment_method,
+      paymentProofUrl: payment_proof_url,
     });
 
     return Response.json(
