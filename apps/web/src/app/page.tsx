@@ -507,7 +507,7 @@ export default function HomePage() {
               Apply for Partnership <ArrowRight size={16} />
             </Link>
             <Link
-              href="apexfunds.ft9ja.com"
+              href="https://apexfunds.ft9ja.com"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-7 py-3.5 text-sm font-semibold text-white hover:border-white/40"
