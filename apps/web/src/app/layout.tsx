@@ -3,12 +3,14 @@ import type { Metadata } from 'next';
 import './global.css';
 import { Providers } from './providers';
 
+const LOGO_URL = 'https://res.cloudinary.com/ddlupbcws/image/upload/v1781211105/logo_trg4xb.png';
+
 export const metadata: Metadata = {
   title: 'FT9ja Partner Program — Launch Your Prop Firm',
   description:
     'Build your own prop trading firm powered by FT9ja. Brand it, sell evaluations, keep the markup.',
   icons: {
-    icon: '/favicon.png',
+    icon: LOGO_URL,
   },
 };
 
