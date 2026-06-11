@@ -32,6 +32,10 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!payment_proof_url) {
+      return Response.json({ error: 'Payment receipt upload is required' }, { status: 400 });
+    }
+
     if (await slugExists(slug)) {
       return Response.json(
         { error: 'That subdomain is already taken. Please choose another.' },

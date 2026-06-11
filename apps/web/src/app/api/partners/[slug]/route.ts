@@ -41,6 +41,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       return Response.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
+    if (body.status === 'active') {
+      const existing = await getPartnerBySlug(slug);
+      if (!existing) {
+        return Response.json({ error: 'Partner not found' }, { status: 404 });
+      }
+      if (!existing.payment_proof_url) {
+        return Response.json(
+          { error: 'Payment receipt is required before approval' },
+          { status: 400 }
+        );
+      }
+    }
+
     const partner = await updatePartnerBySlug(slug, body);
     if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });

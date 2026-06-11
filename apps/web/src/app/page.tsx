@@ -415,9 +415,9 @@ export default function HomePage() {
               <div className="mt-8 space-y-4">
                 {[
                   {
-                    method: 'Bank Transfer (FirstBank)',
+                    method: 'Bank Transfer (Zenith Bank)',
                     detail:
-                      'Pay directly to our FT9ja FirstBank account. Upload proof of payment in your application.',
+                      'Pay Asokoro Technologies, Zenith Bank, 1217002454. Upload proof of payment in your application.',
                     icon: '🏦',
                   },
                   {
@@ -429,7 +429,7 @@ export default function HomePage() {
                   {
                     method: 'Cryptocurrency (USDT/BTC)',
                     detail:
-                      'Pay with USDT (TRC20/ERC20) or BTC. Wallet address provided after application review.',
+                      'Pay with USDT or BTC and upload your transaction receipt or hash in your application.',
                     icon: '₿',
                   },
                 ].map((p) => (

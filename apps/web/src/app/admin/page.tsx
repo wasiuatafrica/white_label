@@ -37,6 +37,7 @@ type Partner = {
   monthly_fee_paid: boolean;
   total_traders: number;
   total_revenue: string;
+  payment_proof_url: string | null;
   created_at: string;
 };
 
@@ -492,6 +493,22 @@ function PartnersTab() {
                         </span>
                       </div>
                       <div className="mt-0.5 text-xs text-gray-400 truncate">{p.owner_email}</div>
+                      <div className="mt-1.5">
+                        {p.payment_proof_url ? (
+                          <a
+                            href={p.payment_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                          >
+                            <FileText size={11} /> Receipt uploaded
+                          </a>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
+                            <AlertTriangle size={11} /> No receipt
+                          </span>
+                        )}
+                      </div>
                       {/* Mobile stats */}
                       <div className="mt-1.5 flex items-center gap-3 text-xs text-gray-500 sm:hidden">
                         <span>
@@ -547,7 +564,8 @@ function PartnersTab() {
                       <>
                         <button
                           onClick={() => updateStatus.mutate({ slug: p.slug, status: 'active' })}
-                          disabled={updateStatus.isPending}
+                          disabled={updateStatus.isPending || !p.payment_proof_url}
+                          title={!p.payment_proof_url ? 'Receipt is required before approval' : ''}
                           className="rounded-lg border border-[#16A34A]/30 bg-[#16A34A]/10 px-3 py-1.5 text-xs font-medium text-[#16A34A] hover:bg-[#16A34A]/20 disabled:opacity-50"
                         >
                           Approve
@@ -1487,6 +1505,7 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
   const [pwError, setPwError] = useState(false);
+  const [pwChecking, setPwChecking] = useState(false);
   const [tab, setTab] = useState<'partners' | 'kyc' | 'payments' | 'payouts' | 'requests'>(
     'partners'
   );
@@ -1533,13 +1552,36 @@ export default function AdminPage() {
   const payoutsPending = payoutRows.filter((r) => !r.payout_status).length;
   const requestsPending = requestRows.filter((r) => r.status === 'pending').length;
 
-  const checkPw = () => {
-    if (pw === 'ft9ja-admin-2026') {
-      setAuthed(true);
-      setPwError(false);
-    } else {
+  const checkPw = async () => {
+    setPwChecking(true);
+    setPwError(false);
+
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+
+      if (res.ok) {
+        setPw('');
+        setAuthed(true);
+      } else {
+        setPwError(true);
+      }
+    } catch {
       setPwError(true);
+    } finally {
+      setPwChecking(false);
     }
+  };
+
+  const submitPw = () => {
+    if (!pw || pwChecking) {
+      return;
+    }
+
+    void checkPw();
   };
 
   if (!authed) {
@@ -1563,14 +1605,16 @@ export default function AdminPage() {
               setPwError(false);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') checkPw();
+              if (e.key === 'Enter') submitPw();
             }}
           />
           {pwError && <p className="mt-1 text-xs text-red-500">Incorrect password.</p>}
           <button
-            onClick={checkPw}
-            className="mt-4 w-full rounded-lg bg-[#111827] py-2.5 text-sm font-semibold text-white hover:bg-gray-800"
+            onClick={submitPw}
+            disabled={!pw || pwChecking}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#111827] py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
+            {pwChecking && <Loader2 size={14} className="animate-spin" />}
             Access Admin
           </button>
         </div>

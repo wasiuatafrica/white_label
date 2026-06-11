@@ -48,7 +48,7 @@ export default function ApplyPage() {
   const canNext = () => {
     if (step === 0) return form.firm_name && form.owner_name && form.owner_email && form.slug;
     if (step === 1) return form.brand_color;
-    if (step === 2) return form.payment_method;
+    if (step === 2) return form.payment_method && form.payment_proof_url;
     return true;
   };
 
@@ -382,8 +382,8 @@ export default function ApplyPage() {
                 {[
                   {
                     id: 'bank',
-                    label: 'Bank Transfer — FirstBank',
-                    detail: 'Account: FT9ja Ltd · 3123456789 · FirstBank Nigeria',
+                    label: 'Bank Transfer — Zenith Bank',
+                    detail: 'Asokoro Technologies · 1217002454 · Zenith Bank',
                   },
                   {
                     id: 'paypal',
@@ -393,7 +393,7 @@ export default function ApplyPage() {
                   {
                     id: 'crypto',
                     label: 'USDT / Crypto',
-                    detail: 'USDT TRC20 wallet address provided after review',
+                    detail: 'Upload your transaction receipt or hash after sending payment',
                   },
                 ].map((m) => (
                   <label
@@ -422,7 +422,7 @@ export default function ApplyPage() {
 
               <div>
                 <label className="mb-1.5 block text-xs font-semibold text-gray-700">
-                  Upload Payment Proof (optional)
+                  Upload Payment Proof *
                 </label>
                 <input
                   ref={proofRef}
@@ -451,7 +451,7 @@ export default function ApplyPage() {
                   )}
                 </button>
                 <p className="mt-1.5 text-xs text-gray-400">
-                  You can also send proof via email after applying.
+                  Required for bank transfer, PayPal, and crypto payments before submitting.
                 </p>
               </div>
             </div>
@@ -473,6 +473,7 @@ export default function ApplyPage() {
                   { label: 'Subdomain', value: `${form.slug}.ft9ja.com` },
                   { label: 'Contact', value: `${form.owner_name} · ${form.owner_email}` },
                   { label: 'Payment Method', value: form.payment_method.toUpperCase() || '—' },
+                  { label: 'Receipt', value: form.payment_proof_url ? 'Uploaded' : 'Missing' },
                 ].map((r) => (
                   <div
                     key={r.label}
@@ -528,7 +529,7 @@ export default function ApplyPage() {
             ) : (
               <button
                 onClick={handleSubmit}
-                disabled={submitting}
+                disabled={submitting || uploading}
                 className="flex items-center gap-2 rounded-lg bg-[#16A34A] px-6 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
               >
                 {submitting ? (

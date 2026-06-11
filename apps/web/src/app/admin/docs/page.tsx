@@ -694,7 +694,7 @@ export default function DocsPage() {
           <P>
             Prospective partners complete a multi-step application at <Code>/apply</Code>. The form
             collects firm details, branding preferences (primary & secondary colours), payment
-            method, and an optional payment proof upload. On submission it calls{' '}
+            method, and a required payment receipt upload. On submission it calls{' '}
             <Code>POST /api/partners</Code>, which creates a row with <Code>status = pending</Code>.
           </P>
           <Callout type="warning">
@@ -713,7 +713,7 @@ export default function DocsPage() {
               ['secondary_color', 'No', 'Secondary hex colour (default: #F59E0B)'],
               ['tagline', 'No', 'Hero headline shown on storefront'],
               ['description', 'No', 'Paragraph description below tagline'],
-              ['payment_proof_url', 'No', 'Upload URL from Uploadcare CDN'],
+              ['payment_proof_url', 'Yes', 'Receipt URL uploaded to AWS S3'],
             ]}
           />
 
@@ -1267,9 +1267,9 @@ export default function DocsPage() {
           {/* ── SUPER ADMIN ───────────────────────────────────────────── */}
           <H2 id="super-admin">Super Admin</H2>
           <P>
-            The super admin panel at <Code>/admin</Code> is password-protected (current password:{' '}
-            <Code>ft9ja-admin-2026</Code>). It provides a complete view of all partners on the
-            platform.
+            The super admin panel at <Code>/admin</Code> is password-protected using the{' '}
+            <Code>SUPER_ADMIN_PASSWORD</Code> environment variable. It provides a complete view of
+            all partners on the platform.
           </P>
           <Table
             headers={['Feature', 'Description']}
@@ -1288,9 +1288,8 @@ export default function DocsPage() {
             ]}
           />
           <Callout type="warning">
-            The super admin password is currently hardcoded in the frontend (<Code>page.tsx</Code>).
-            For production, move this to a server-side PIN verification endpoint and remove the demo
-            password hint from the UI.
+            Set <Code>SUPER_ADMIN_PASSWORD</Code> in every deployed environment. Do not use a{' '}
+            <Code>NEXT_PUBLIC_</Code> variable for this value.
           </Callout>
 
           {/* ── ENV VARS ──────────────────────────────────────────────── */}
@@ -1324,11 +1323,10 @@ export default function DocsPage() {
                 'Backend (API routes)',
                 'Bearer token for integration API calls',
               ],
-              [
-                'EXPO_PUBLIC_UPLOADCARE_PUBLIC_KEY',
-                'Frontend + Mobile',
-                'Uploadcare CDN public key for file uploads',
-              ],
+              ['AWS_ACCESS_KEY_ID', 'Backend (API routes)', 'AWS access key for S3 uploads'],
+              ['AWS_SECRET_ACCESS_KEY', 'Backend (API routes)', 'AWS secret key for S3 uploads'],
+              ['AWS_REGION', 'Backend (API routes)', 'AWS region for the receipt bucket'],
+              ['AWS_S3_BUCKET', 'Backend (API routes)', 'S3 bucket for uploaded receipts'],
               ['NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'Frontend', 'Google Maps API key (if maps used)'],
               [
                 'STRIPE_SECRET_KEY',
