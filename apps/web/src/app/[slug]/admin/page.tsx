@@ -1268,7 +1268,11 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const saveBranding = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = { ...brandForm };
-      if (!brandForm.admin_pin) delete payload.admin_pin;
+      if (brandForm.admin_pin) {
+        payload.current_admin_pin = verifiedPin;
+      } else {
+        delete payload.admin_pin;
+      }
       const res = await fetch(`/api/partners/${slug}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1282,6 +1286,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['partner', slug] });
+      if (brandForm.admin_pin) {
+        sessionStorage.setItem(`partner_pin_${slug}`, brandForm.admin_pin);
+        setVerifiedPin(brandForm.admin_pin);
+      }
       setBrandSaved(true);
       setBrandError(null);
       setBrandForm((f) => ({ ...f, admin_pin: '' }));
@@ -1395,8 +1403,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               )}
             </button>
             <p className="mt-4 text-center text-xs text-gray-400">
-              Default PIN is <span className="font-mono font-semibold">0000</span>. Change it in
-              Settings.
+              Your PIN is included in your FT9ja partner approval email.
             </p>
           </form>
           <div className="mt-4 text-center">
@@ -2090,8 +2097,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     type="password"
                     value={brandForm.admin_pin}
                     onChange={(e) => setBrandForm((f) => ({ ...f, admin_pin: e.target.value }))}
-                    placeholder="Enter new PIN"
-                    maxLength={20}
+                    placeholder="Enter 4-12 digit PIN"
+                    maxLength={12}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
                   />
                 </div>

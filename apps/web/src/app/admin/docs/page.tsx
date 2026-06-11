@@ -720,8 +720,8 @@ export default function DocsPage() {
           <H3 id="partner-admin">Partner Admin Panel</H3>
           <P>
             Each partner has a private admin panel at <Code>/&#123;slug&#125;/admin</Code>. Access
-            is gated by a 4-digit PIN stored in the <Code>partners.admin_pin</Code> column (default:
-            <Code>0000</Code>). Partners should change this immediately after activation.
+            is gated by a generated PIN stored in the <Code>partners.admin_pin</Code> column. The
+            PIN is sent in the partner approval email and can be changed from Settings.
           </P>
           <P>From the partner admin, a partner can:</P>
           <ul className="mb-6 space-y-2">
@@ -1132,7 +1132,7 @@ export default function DocsPage() {
               ['description', 'TEXT', 'NULL', '—'],
               ['template', 'VARCHAR(20)', 'minimal', 'minimal | bold | dark'],
               ['status', 'VARCHAR(20)', 'pending', 'pending | active | suspended'],
-              ['admin_pin', 'VARCHAR(20)', '0000', 'Partner admin PIN'],
+              ['admin_pin', 'VARCHAR(20)', 'none', 'Generated partner admin PIN'],
               ['fee_markup', 'NUMERIC(10,2)', '0', 'Added to base eval prices'],
               ['monthly_fee_paid', 'BOOLEAN', 'false', '—'],
               ['setup_fee_waived', 'BOOLEAN', 'false', '—'],

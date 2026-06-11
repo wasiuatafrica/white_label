@@ -31,7 +31,7 @@ export const partners = pgTable(
     description: text('description'),
     template: partnerTemplateEnum('template').notNull().default('minimal'),
     status: partnerStatusEnum('status').notNull().default('pending'),
-    adminPin: varchar('admin_pin', { length: 20 }).notNull().default('0000'),
+    adminPin: varchar('admin_pin', { length: 20 }).notNull(),
     feeMarkup: numeric('fee_markup', { precision: 10, scale: 2 }).notNull().default('0'),
     monthlyFeePaid: boolean('monthly_fee_paid').notNull().default(false),
     setupFeeWaived: boolean('setup_fee_waived').notNull().default(false),

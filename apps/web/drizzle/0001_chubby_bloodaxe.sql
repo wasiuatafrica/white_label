@@ -1,0 +1,1 @@
+ALTER TABLE "partners" ALTER COLUMN "admin_pin" DROP DEFAULT;

@@ -65,7 +65,8 @@ export async function POST(request: Request) {
       paymentProofUrl: payment_proof_url,
     });
 
-    return Response.json(partner, { status: 201 });
+    const { admin_pin: _adminPin, ...partnerResponse } = partner;
+    return Response.json(partnerResponse, { status: 201 });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to create partner' }, { status: 500 });

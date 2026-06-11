@@ -1,5 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../index';
+import { generatePartnerAdminPin } from '@/lib/admin-pin';
 import type { DbOrTx } from '../types';
 import { mapPartner, mapPartnerPublic } from '../mappers';
 import { partners } from '../schema/partners';
@@ -21,6 +22,11 @@ export async function getPartnerIdBySlug(slug: string) {
 export async function getPartnerBySlug(slug: string) {
   const [row] = await db.select().from(partners).where(eq(partners.slug, slug)).limit(1);
   return row ? mapPartnerPublic(row) : null;
+}
+
+export async function getPartnerPrivateBySlug(slug: string) {
+  const [row] = await db.select().from(partners).where(eq(partners.slug, slug)).limit(1);
+  return row ? mapPartner(row) : null;
 }
 
 export async function getPartnerWithPinBySlug(slug: string) {
@@ -52,6 +58,7 @@ export async function createPartner(data: {
   brandColor?: string;
   secondaryColor?: string;
   paymentProofUrl?: string | null;
+  adminPin?: string;
 }) {
   const [row] = await db
     .insert(partners)
@@ -65,6 +72,7 @@ export async function createPartner(data: {
       brandColor: data.brandColor ?? '#16A34A',
       secondaryColor: data.secondaryColor ?? '#F59E0B',
       paymentProofUrl: data.paymentProofUrl ?? null,
+      adminPin: data.adminPin ?? generatePartnerAdminPin(),
       status: 'pending',
     })
     .returning();
