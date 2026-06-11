@@ -8,6 +8,7 @@ import {
 import argon2 from 'argon2';
 import crypto from 'crypto';
 import { sendEmail } from '@/app/api/utils/send-email';
+import { getPartnerUrl } from '@/lib/tenant';
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -29,8 +30,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     await setTraderResetToken(trader.id, token, expires);
 
-    const appUrl = process.env.NEXT_PUBLIC_CREATE_APP_URL || '';
-    const resetUrl = `${appUrl}/${slug}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetUrl = getPartnerUrl(
+      slug,
+      `/reset-password?token=${token}&email=${encodeURIComponent(email)}`
+    );
 
     try {
       await sendEmail({

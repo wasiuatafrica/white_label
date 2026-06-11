@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getPartnerUrl } from '@/lib/tenant';
 import {
   CheckCircle,
   Clock,
@@ -555,7 +556,7 @@ function PartnersTab() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <Link
-                      href={`/${p.slug}/admin`}
+                      href={getPartnerUrl(p.slug, '/admin')}
                       className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50"
                     >
                       <Eye size={12} /> View

@@ -3,6 +3,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import useUpload from '@/utils/useUpload';
+import { getPartnerUrl, normalizePartnerSlug } from '@/lib/tenant';
 
 const STEPS = ['Your Details', 'Branding', 'Payment', 'Review'];
 
@@ -40,10 +41,7 @@ export default function ApplyPage() {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const autoSlug = (name: string) =>
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '')
-      .slice(0, 20);
+    normalizePartnerSlug(name.replace(/[^a-z0-9]+/gi, '-')).slice(0, 20);
 
   const canNext = () => {
     if (step === 0) return form.firm_name && form.owner_name && form.owner_email && form.slug;
@@ -90,7 +88,7 @@ export default function ApplyPage() {
             <div className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-2">
               Your Subdomain
             </div>
-            <div className="text-sm font-semibold text-gray-900">{form.slug}.ft9ja.com</div>
+            <div className="text-sm font-semibold text-gray-900">{getPartnerUrl(form.slug)}</div>
             <div className="mt-1 text-xs text-gray-400">
               Will be live after approval and payment confirmation.
             </div>
@@ -207,9 +205,7 @@ export default function ApplyPage() {
                       className="flex-1 px-4 py-2.5 text-sm text-gray-900 outline-none"
                       placeholder="apexfunds"
                       value={form.slug}
-                      onChange={(e) =>
-                        set('slug', e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))
-                      }
+                      onChange={(e) => set('slug', normalizePartnerSlug(e.target.value))}
                     />
                     <span className="border-l border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
                       .ft9ja.com
@@ -218,7 +214,7 @@ export default function ApplyPage() {
                   {form.slug && (
                     <p className="mt-1 text-xs text-gray-400">
                       Your public URL:{' '}
-                      <strong className="text-gray-600">{form.slug}.ft9ja.com</strong>
+                      <strong className="text-gray-600">{getPartnerUrl(form.slug)}</strong>
                     </p>
                   )}
                 </div>
@@ -470,7 +466,7 @@ export default function ApplyPage() {
               <div className="space-y-3">
                 {[
                   { label: 'Firm Name', value: form.firm_name },
-                  { label: 'Subdomain', value: `${form.slug}.ft9ja.com` },
+                  { label: 'Subdomain', value: getPartnerUrl(form.slug) },
                   { label: 'Contact', value: `${form.owner_name} · ${form.owner_email}` },
                   { label: 'Payment Method', value: form.payment_method.toUpperCase() || '—' },
                   { label: 'Receipt', value: form.payment_proof_url ? 'Uploaded' : 'Missing' },

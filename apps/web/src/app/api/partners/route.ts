@@ -1,4 +1,5 @@
 import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
+import { isReservedPartnerSlug, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export async function GET() {
   try {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const {
       firm_name,
-      slug,
+      slug: rawSlug,
       owner_name,
       owner_email,
       tagline,
@@ -25,11 +26,20 @@ export async function POST(request: Request) {
       payment_proof_url,
     } = body;
 
+    const slug = normalizePartnerSlug(String(rawSlug || ''));
+
     if (!firm_name || !slug || !owner_email) {
       return Response.json(
         { error: 'firm_name, slug, and owner_email are required' },
         { status: 400 }
       );
+    }
+
+    if (!isValidPartnerSlug(slug)) {
+      const error = isReservedPartnerSlug(slug)
+        ? 'That subdomain is reserved. Please choose another.'
+        : 'Subdomain must use only letters, numbers, or hyphens.';
+      return Response.json({ error }, { status: 400 });
     }
 
     if (!payment_proof_url) {
