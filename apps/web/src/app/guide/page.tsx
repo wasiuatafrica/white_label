@@ -1,17 +1,17 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
-import {
-  ArrowRight,
-  ChevronDown,
-  BookOpen,
-  Shield,
-  TrendingUp,
-  AlertCircle,
-  CheckCircle,
-  Zap,
-} from 'lucide-react';
 import FT9jaLogo from '@/components/FT9jaLogo';
+import {
+    AlertCircle,
+    ArrowRight,
+    BookOpen,
+    CheckCircle,
+    ChevronDown,
+    Shield,
+    TrendingUp,
+    Zap,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
 
 const sections = [
   {
@@ -87,7 +87,7 @@ const sections = [
       },
       {
         q: 'What is the profit split?',
-        a: "Funded traders receive up to 80% of profits generated. The exact split depends on your partner firm's agreement. There is no cap on how much you can earn — the more you profit, the more you keep.",
+        a: "Funded traders receive up to 90% of profits generated. The exact split depends on your partner firm's agreement. There is no cap on how much you can earn — the more you profit, the more you keep.",
       },
       {
         q: 'How do I request a payout?',
@@ -324,7 +324,7 @@ export default function GuidePage() {
                       ['Min Trading Days', '30 days', '21 days'],
                       ['News Trading', '✅ Allowed', '⚠️ Restricted'],
                       ['EA / Bots', '⚠️ Restricted', '✅ Allowed'],
-                      ['Profit Split (funded)', 'Up to 80%', 'Up to 80%'],
+                      ['Profit Split (funded)', 'Up to 90%', 'Up to 90%'],
                     ].map(([rule, ss, ssl]) => (
                       <tr key={rule}>
                         <td className="py-3 pr-6 text-xs font-medium text-gray-500">{rule}</td>
@@ -380,7 +380,7 @@ export default function GuidePage() {
             <Link href="/apply" className="hover:text-gray-700">
               Apply
             </Link>
-            <span>support@ft9ja.com</span>
+            <span>accounts@ft9ja.com</span>
           </div>
           <p className="text-xs text-gray-400">© 2026 FT9ja. All rights reserved.</p>
         </div>

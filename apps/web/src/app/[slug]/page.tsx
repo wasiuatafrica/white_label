@@ -1,19 +1,19 @@
 'use client';
-import { use, useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import Link from 'next/link';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight,
-  Shield,
-  TrendingUp,
-  Zap,
-  X,
-  CheckCircle,
-  Copy,
-  Loader2,
-  ChevronDown,
-  Mail,
+    ArrowRight,
+    CheckCircle,
+    ChevronDown,
+    Copy,
+    Loader2,
+    Mail,
+    Shield,
+    TrendingUp,
+    X,
+    Zap,
 } from 'lucide-react';
+import Link from 'next/link';
+import { use, useState } from 'react';
 
 type Partner = {
   id: number;
@@ -122,7 +122,7 @@ const PARTNER_FAQS = [
   },
   {
     q: 'What is the profit split on funded accounts?',
-    a: 'Funded traders keep up to 80% of their net profits. Payouts are processed within 7 business days of a withdrawal request through your trader dashboard.',
+    a: 'Funded traders keep up to 90% of their net profits. Payouts are processed within 7 business days of a withdrawal request through your trader dashboard.',
   },
 ];
 
@@ -138,7 +138,7 @@ const EVAL_RULES = [
       { label: 'Min Trading Days', value: '30 days' },
       { label: 'News Trading', value: '✅ Allowed' },
       { label: 'Expert Advisors', value: '⚠️ Restricted' },
-      { label: 'Profit Split', value: 'Up to 80%' },
+      { label: 'Profit Split', value: 'Up to 90%' },
     ],
   },
   {
@@ -152,7 +152,7 @@ const EVAL_RULES = [
       { label: 'Min Trading Days', value: '21 days' },
       { label: 'News Trading', value: '⚠️ Restricted' },
       { label: 'Expert Advisors', value: '✅ Allowed' },
-      { label: 'Profit Split', value: 'Up to 80%' },
+      { label: 'Profit Split', value: 'Up to 90%' },
     ],
   },
 ];
@@ -676,7 +676,7 @@ function TemplateMinimal({
             </h1>
             <p className="mb-8 text-lg text-gray-500">
               {partner.description ||
-                `Pass our evaluation, get funded, keep up to 80% of your profits. ${partner.firm_name} is powered by FT9ja.`}
+                `Pass our evaluation, get funded, keep up to 90% of your profits. ${partner.firm_name} is powered by FT9ja.`}
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a
@@ -697,7 +697,7 @@ function TemplateMinimal({
           <div className="mt-14 grid grid-cols-3 gap-4">
             {[
               { label: 'Active Traders', value: `${partner.total_traders}+` },
-              { label: 'Profit Split', value: 'Up to 80%' },
+              { label: 'Profit Split', value: 'Up to 90%' },
               { label: 'Payout Time', value: '7 Days' },
             ].map((s) => (
               <div
@@ -735,7 +735,7 @@ function TemplateMinimal({
               {
                 step: '03',
                 title: 'Get Funded',
-                desc: 'Receive a live funded account. Keep up to 80% of profits.',
+                desc: 'Receive a live funded account. Keep up to 90% of profits.',
               },
             ].map((s) => (
               <div
@@ -854,7 +854,7 @@ function TemplateBold({
             </h1>
             <p className="mb-10 text-xl text-gray-400 max-w-xl">
               {partner.description ||
-                `Pass the challenge, trade a real funded account, keep up to 80% of your profits. ${partner.firm_name} is powered by FT9ja.`}
+                `Pass the challenge, trade a real funded account, keep up to 90% of your profits. ${partner.firm_name} is powered by FT9ja.`}
             </p>
             <div className="flex flex-col gap-4 sm:flex-row">
               <a
@@ -918,7 +918,7 @@ function TemplateBold({
               {
                 n: 3,
                 title: 'Trade Live Capital',
-                desc: 'Get a real funded account and earn up to 80% profits.',
+                desc: 'Get a real funded account and earn up to 90% profits.',
               },
             ].map((s) => (
               <div
@@ -1049,7 +1049,7 @@ function TemplateDark({
           </h1>
           <p className="mx-auto mb-10 max-w-xl text-lg text-white/50">
             {partner.description ||
-              `Join ${partner.firm_name} — trade with real capital, keep up to 80% of your profits. Backed by FT9ja.`}
+              `Join ${partner.firm_name} — trade with real capital, keep up to 90% of your profits. Backed by FT9ja.`}
           </p>
           <div className="flex justify-center gap-4">
             <a
@@ -1114,7 +1114,7 @@ function TemplateDark({
               {
                 step: '03',
                 title: 'Trade Live Capital',
-                desc: 'Graduate to a funded account, earn up to 80% of profits.',
+                desc: 'Graduate to a funded account, earn up to 90% of profits.',
               },
             ].map((s) => (
               <div key={s.step} className="rounded-2xl border border-white/10 bg-white/5 p-7">

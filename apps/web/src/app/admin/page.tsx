@@ -345,7 +345,13 @@ function KYCDrawer({
 
 // ─── Partners Tab ─────────────────────────────────────────────────────────────
 
-function PartnersTab() {
+function PartnersTab({
+  onOpenReceipt,
+  openingReceiptUrl,
+}: {
+  onOpenReceipt: (receiptUrl: string) => void;
+  openingReceiptUrl: string | null;
+}) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const qc = useQueryClient();
@@ -496,14 +502,19 @@ function PartnersTab() {
                       <div className="mt-0.5 text-xs text-gray-400 truncate">{p.owner_email}</div>
                       <div className="mt-1.5">
                         {p.payment_proof_url ? (
-                          <a
-                            href={p.payment_proof_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => onOpenReceipt(p.payment_proof_url!)}
+                            disabled={openingReceiptUrl === p.payment_proof_url}
                             className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
                           >
-                            <FileText size={11} /> Receipt uploaded
-                          </a>
+                            {openingReceiptUrl === p.payment_proof_url ? (
+                              <Loader2 size={11} className="animate-spin" />
+                            ) : (
+                              <FileText size={11} />
+                            )}{' '}
+                            Receipt uploaded
+                          </button>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
                             <AlertTriangle size={11} /> No receipt
@@ -1507,6 +1518,7 @@ export default function AdminPage() {
   const [pw, setPw] = useState('');
   const [pwError, setPwError] = useState(false);
   const [pwChecking, setPwChecking] = useState(false);
+  const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<'partners' | 'kyc' | 'payments' | 'payouts' | 'requests'>(
     'partners'
   );
@@ -1583,6 +1595,35 @@ export default function AdminPage() {
     }
 
     void checkPw();
+  };
+
+  const openReceipt = async (receiptUrl: string) => {
+    const opened = window.open('', '_blank');
+    if (opened) {
+      opened.opener = null;
+    }
+    setOpeningReceiptUrl(receiptUrl);
+
+    try {
+      const res = await fetch(`/api/admin/receipts?url=${encodeURIComponent(receiptUrl)}`);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.url) {
+        opened?.close();
+        throw new Error(data?.error || 'Failed to open receipt');
+      }
+
+      if (opened) {
+        opened.location.href = data.url;
+      } else {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to open receipt');
+    } finally {
+      setOpeningReceiptUrl(null);
+    }
   };
 
   if (!authed) {
@@ -1690,7 +1731,9 @@ export default function AdminPage() {
       </nav>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {tab === 'partners' && <PartnersTab />}
+        {tab === 'partners' && (
+          <PartnersTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
+        )}
         {tab === 'kyc' && <KYCTab />}
         {tab === 'payments' && <PaymentsTab />}
         {tab === 'payouts' && <PayoutsTab />}

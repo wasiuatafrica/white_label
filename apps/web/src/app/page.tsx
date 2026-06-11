@@ -1,8 +1,8 @@
 'use client';
+import FT9jaLogo from '@/components/FT9jaLogo';
+import { ArrowRight, CheckCircle, ChevronDown, Globe, Shield, TrendingUp, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { ArrowRight, CheckCircle, Zap, Globe, TrendingUp, Shield, ChevronDown } from 'lucide-react';
-import FT9jaLogo from '@/components/FT9jaLogo';
 
 // Revenue model:
 // Partners buy at 25% off FT9ja retail.
@@ -74,7 +74,6 @@ const faqs = [
 
 export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen font-inter" style={{ backgroundColor: '#F7F4EF' }}>
@@ -90,17 +89,7 @@ export default function HomePage() {
               Partner Program
             </div>
           </div>
-          {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-5">
-            <Link href="/guide/partner" className="text-sm text-gray-500 hover:text-gray-900">
-              Partner Guide
-            </Link>
-            <Link href="/guide" className="text-sm text-gray-500 hover:text-gray-900">
-              Trader Guide
-            </Link>
-            <Link href="/legal" className="text-sm text-gray-500 hover:text-gray-900">
-              Legal
-            </Link>
+          <div className="flex items-center">
             <Link
               href="/apply"
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#111827] px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
@@ -108,50 +97,7 @@ export default function HomePage() {
               Apply Now <ArrowRight size={14} />
             </Link>
           </div>
-          {/* Mobile menu button */}
-          <button
-            className="md:hidden flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Toggle menu"
-          >
-            {menuOpen ? '✕' : '☰'}
-          </button>
         </div>
-        {/* Mobile dropdown */}
-        {menuOpen && (
-          <div className="border-t border-gray-100 bg-white px-4 pb-4 md:hidden">
-            <div className="flex flex-col gap-1 pt-3">
-              <Link
-                href="/guide/partner"
-                className="rounded-lg px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Partner Guide
-              </Link>
-              <Link
-                href="/guide"
-                className="rounded-lg px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Trader Guide
-              </Link>
-              <Link
-                href="/legal"
-                className="rounded-lg px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Legal
-              </Link>
-              <Link
-                href="/apply"
-                className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-[#111827] px-4 py-3 text-sm font-semibold text-white"
-                onClick={() => setMenuOpen(false)}
-              >
-                Apply Now <ArrowRight size={14} />
-              </Link>
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Hero */}
@@ -168,7 +114,7 @@ export default function HomePage() {
           </h1>
           <p className="mb-10 max-w-xl text-base text-gray-500 sm:text-lg">
             Launch your own prop trading firm in{' '}
-            <strong className="text-gray-800">1 hour (not 14 days)</strong>. FT9ja handles funding,
+            <strong className="text-gray-800">hours (not months)</strong>. FT9ja handles funding,
             payouts, and compliance. You brand it, you sell it, you keep the markup.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -423,13 +369,13 @@ export default function HomePage() {
                   {
                     method: 'PayPal',
                     detail:
-                      'Send payment to payments@ft9ja.com. Include your application reference in the note.',
+                      'Send payment to https://www.paypal.me/ft9ja. Include your application reference in the note.',
                     icon: '💳',
                   },
                   {
-                    method: 'Cryptocurrency (USDT/BTC)',
+                    method: 'Cryptocurrency (BTC)',
                     detail:
-                      'Pay with USDT or BTC and upload your transaction receipt or hash in your application.',
+                      'Pay with BTC to 3CLFanKRsufL2hrMmFuBMQAGVDmThr4RPa and upload your transaction receipt or hash in your application.',
                     icon: '₿',
                   },
                 ].map((p) => (
@@ -562,6 +508,8 @@ export default function HomePage() {
             </Link>
             <Link
               href="/apexfunds"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-7 py-3.5 text-sm font-semibold text-white hover:border-white/40"
             >
               See a live example
@@ -588,7 +536,7 @@ export default function HomePage() {
               <Link href="/apply" className="hover:text-gray-700">
                 Apply
               </Link>
-              <span>support@ft9ja.com</span>
+              <span>accounts@ft9ja.com</span>
             </div>
             <div className="text-xs text-gray-400">© 2026 FT9ja. All rights reserved.</div>
           </div>

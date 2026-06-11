@@ -1,8 +1,8 @@
 'use client';
-import { use } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, FileText } from 'lucide-react';
+import Link from 'next/link';
+import { use } from 'react';
 
 type Partner = {
   slug: string;
@@ -46,7 +46,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
         },
         {
           heading: '4. Profit Sharing',
-          text: `Funded traders receive up to 80% of net profits. All profit distributions are processed by FT9ja on behalf of ${firmName}. Profits are your income and you are responsible for applicable taxes in your jurisdiction.`,
+          text: `Funded traders receive up to 90% of net profits. All profit distributions are processed by FT9ja on behalf of ${firmName}. Profits are your income and you are responsible for applicable taxes in your jurisdiction.`,
         },
         {
           heading: '5. Prohibited Activities',
@@ -261,7 +261,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
               </a>
             )}
             <a
-              href="mailto:support@ft9ja.com"
+              href="mailto:accounts@ft9ja.com"
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               FT9ja Support

@@ -1,24 +1,24 @@
 'use client';
-import { useState } from 'react';
-import Link from 'next/link';
-import {
-  ArrowRight,
-  ChevronDown,
-  Zap,
-  DollarSign,
-  Settings,
-  Globe,
-  Shield,
-  BarChart3,
-  Clock,
-  CheckCircle,
-  TrendingUp,
-  Banknote,
-  BookOpen,
-  Star,
-  AlertCircle,
-} from 'lucide-react';
 import FT9jaLogo from '@/components/FT9jaLogo';
+import {
+    AlertCircle,
+    ArrowRight,
+    Banknote,
+    BarChart3,
+    BookOpen,
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    DollarSign,
+    Globe,
+    Settings,
+    Shield,
+    Star,
+    TrendingUp,
+    Zap,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
 
 type FAQ = { q: string; a: string };
 type Section = { id: string; icon: React.ReactNode; title: string; color: string; faqs: FAQ[] };
@@ -255,7 +255,7 @@ export default function PartnerGuidePage() {
           </h1>
           <p className="text-base text-gray-500 max-w-xl sm:text-lg">
             From setup to your first sale — a complete guide to running a profitable FT9ja partner
-            firm. Go live in <strong className="text-gray-800">1 hour (not 14 days)</strong>.
+            firm. Go live in <strong className="text-gray-800">hours (not months)</strong>.
           </p>
 
           {/* Quick stats */}
@@ -557,7 +557,7 @@ export default function PartnerGuidePage() {
             <Link href="/apply" className="hover:text-gray-700">
               Apply
             </Link>
-            <span>support@ft9ja.com</span>
+            <span>accounts@ft9ja.com</span>
           </div>
           <p className="text-xs text-gray-400">© 2026 FT9ja. All rights reserved.</p>
         </div>

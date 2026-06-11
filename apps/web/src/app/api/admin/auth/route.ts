@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'crypto';
+import { createAdminSessionCookie } from '@/lib/admin-auth';
 
 function passwordsMatch(input: string, expected: string) {
   const inputBuffer = Buffer.from(input);
@@ -27,7 +28,16 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Invalid password' }, { status: 401 });
     }
 
-    return Response.json({ success: true });
+    return Response.json(
+      { success: true },
+      {
+        headers: {
+          'Set-Cookie': createAdminSessionCookie(adminPassword, {
+            secure: process.env.NODE_ENV === 'production',
+          }),
+        },
+      }
+    );
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to verify admin password' }, { status: 500 });

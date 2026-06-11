@@ -1,27 +1,27 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import {
-  ArrowLeft,
-  ChevronRight,
-  Database,
-  Globe,
-  Key,
-  Mail,
-  Server,
-  Shield,
-  Users,
-  Zap,
-  BookOpen,
-  Code2,
-  LayoutDashboard,
-  Building2,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle2,
-  Terminal,
-  ChevronDown,
+    AlertTriangle,
+    ArrowLeft,
+    BookOpen,
+    Building2,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    Code2,
+    Database,
+    Globe,
+    Key,
+    LayoutDashboard,
+    Mail,
+    Server,
+    Shield,
+    Terminal,
+    TrendingUp,
+    Users,
+    Zap,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -871,7 +871,7 @@ export default function DocsPage() {
             FT9ja does not process payouts directly from the platform at this time. Once a trader
             passes their evaluation and has approved KYC, the partner firm contacts the trader
             directly to set up a live funded account. Payout target is 7 business days from request.
-            Funded traders keep <strong>up to 80% of net profits</strong>.
+            Funded traders keep <strong>up to 90% of net profits</strong>.
           </P>
 
           {/* ── EVALUATION RULES ──────────────────────────────────────── */}
@@ -889,7 +889,7 @@ export default function DocsPage() {
               ['News Trading', 'Allowed', 'High-impact news events permitted'],
               ['Expert Advisors', 'Restricted', 'Certain high-frequency EAs not permitted'],
               ['Copy Trading', 'Prohibited', 'From funded accounts'],
-              ['Profit Split', 'Up to 80%', 'On net profits after passing'],
+              ['Profit Split', 'Up to 90%', 'On net profits after passing'],
             ]}
           />
 
@@ -905,7 +905,7 @@ export default function DocsPage() {
               ['News Trading', 'Restricted', 'High-impact news events not allowed'],
               ['Expert Advisors', 'Allowed', 'All EAs permitted'],
               ['Copy Trading', 'Prohibited', 'From funded accounts'],
-              ['Profit Split', 'Up to 80%', 'On net profits after passing'],
+              ['Profit Split', 'Up to 90%', 'On net profits after passing'],
             ]}
           />
 

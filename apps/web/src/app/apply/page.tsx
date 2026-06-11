@@ -1,9 +1,9 @@
 'use client';
-import { useState, useRef } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Upload, CheckCircle, Loader2 } from 'lucide-react';
-import useUpload from '@/utils/useUpload';
 import { getPartnerUrl, normalizePartnerSlug } from '@/lib/tenant';
+import useUpload from '@/utils/useUpload';
+import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { useRef, useState } from 'react';
 
 const STEPS = ['Your Details', 'Branding', 'Payment', 'Review'];
 
@@ -132,7 +132,7 @@ export default function ApplyPage() {
             <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#16A34A]">
               <span className="text-[10px] font-black text-white">FT</span>
             </div>
-            <span className="text-sm font-black text-gray-900">9ja Partner Application</span>
+            <span className="text-sm font-black text-gray-900">9ja Partner</span>
           </div>
         </div>
       </nav>
@@ -384,12 +384,14 @@ export default function ApplyPage() {
                   {
                     id: 'paypal',
                     label: 'PayPal',
-                    detail: 'Send to: payments@ft9ja.com · Include your firm name in notes',
+                    detail:
+                      'Send to: https://www.paypal.me/ft9ja · Include your firm name in notes',
                   },
                   {
                     id: 'crypto',
-                    label: 'USDT / Crypto',
-                    detail: 'Upload your transaction receipt or hash after sending payment',
+                    label: 'BTC',
+                    detail:
+                      'BTC Network Address: 3CLFanKRsufL2hrMmFuBMQAGVDmThr4RPa · Upload your transaction receipt or hash after sending payment',
                   },
                 ].map((m) => (
                   <label

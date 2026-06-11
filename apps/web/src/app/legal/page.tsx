@@ -1,6 +1,6 @@
 'use client';
-import Link from 'next/link';
 import { ArrowRight, FileText } from 'lucide-react';
+import Link from 'next/link';
 
 const sections = [
   {
@@ -25,7 +25,7 @@ const sections = [
       },
       {
         heading: '5. Profit Sharing',
-        text: 'Funded traders receive up to 80% of net profits generated on their funded account. Profit splits are calculated and paid on a schedule determined by each Partner firm. FT9ja processes all profit distributions and bears the financial responsibility for payouts. Profit splits are taxable income and traders are responsible for their own tax obligations.',
+        text: 'Funded traders receive up to 90% of net profits generated on their funded account. Profit splits are calculated and paid on a schedule determined by each Partner firm. FT9ja processes all profit distributions and bears the financial responsibility for payouts. Profit splits are taxable income and traders are responsible for their own tax obligations.',
       },
       {
         heading: '6. Prohibited Activities',

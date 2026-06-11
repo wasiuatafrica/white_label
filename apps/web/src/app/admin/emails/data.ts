@@ -414,7 +414,7 @@ const T07 = wrap(
     ) +
     btn('{{BRAND_COLOR}}', 'Complete KYC &rarr;') +
     note(
-      'Profit split: up to 80% of net profits. Payouts processed within 7 business days of request.'
+      'Profit split: up to 90% of net profits. Payouts processed within 7 business days of request.'
     )
 );
 
