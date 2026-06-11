@@ -222,11 +222,15 @@ function PaymentsTab({
   traders,
   partner,
   primary,
+  onOpenReceipt,
+  openingReceiptUrl,
 }: {
   evaluations: Evaluation[];
   traders: Trader[];
   partner: Partner;
   primary: string;
+  onOpenReceipt: (receiptUrl: string) => void;
+  openingReceiptUrl: string | null;
 }) {
   const qc = useQueryClient();
   const slug = partner.slug;
@@ -358,14 +362,19 @@ function PaymentsTab({
                   </div>
                   <div className="mt-1">
                     {ev.payment_proof_url ? (
-                      <a
-                        href={ev.payment_proof_url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => onOpenReceipt(ev.payment_proof_url!)}
+                        disabled={openingReceiptUrl === ev.payment_proof_url}
                         className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
                       >
-                        <ExternalLink size={11} /> View payment evidence
-                      </a>
+                        {openingReceiptUrl === ev.payment_proof_url ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <ExternalLink size={11} />
+                        )}{' '}
+                        View payment evidence
+                      </button>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
                         <AlertCircle size={11} /> No payment evidence
@@ -1166,6 +1175,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinLoading, setPinLoading] = useState(false);
   const [verifiedPin, setVerifiedPin] = useState('');
+  const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const authed = sessionStorage.getItem(`partner_admin_${slug}`) === 'true';
@@ -1200,6 +1210,39 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       setPinLoading(false);
     }
   }
+
+  const openReceipt = async (receiptUrl: string) => {
+    const opened = window.open('', '_blank');
+    if (opened) {
+      opened.opener = null;
+    }
+    setOpeningReceiptUrl(receiptUrl);
+
+    try {
+      const res = await fetch(`/api/partners/${slug}/receipts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: receiptUrl, admin_pin: verifiedPin }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.url) {
+        opened?.close();
+        throw new Error(data?.error || 'Failed to open receipt');
+      }
+
+      if (opened) {
+        opened.location.href = data.url;
+      } else {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to open receipt');
+    } finally {
+      setOpeningReceiptUrl(null);
+    }
+  };
 
   // ── Admin state ────────────────────────────────────────────────────────────
   const [tab, setTab] = useState<
@@ -1679,6 +1722,8 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
             traders={traders}
             partner={partner}
             primary={primary}
+            onOpenReceipt={openReceipt}
+            openingReceiptUrl={openingReceiptUrl}
           />
         )}
 

@@ -832,7 +832,13 @@ function KYCTab() {
 
 // ─── Payments Tab ─────────────────────────────────────────────────────────────
 
-function PaymentsTab() {
+function PaymentsTab({
+  onOpenReceipt,
+  openingReceiptUrl,
+}: {
+  onOpenReceipt: (receiptUrl: string) => void;
+  openingReceiptUrl: string | null;
+}) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState<number | null>(null);
 
@@ -951,15 +957,19 @@ function PaymentsTab() {
                     </div>
                     <div className="mt-1">
                       {row.payment_proof_url ? (
-                        <a
-                          href={row.payment_proof_url}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => onOpenReceipt(row.payment_proof_url!)}
+                          disabled={openingReceiptUrl === row.payment_proof_url}
                           className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100"
-                          onClick={(event) => event.stopPropagation()}
                         >
-                          <ExternalLink size={11} /> View payment evidence
-                        </a>
+                          {openingReceiptUrl === row.payment_proof_url ? (
+                            <Loader2 size={11} className="animate-spin" />
+                          ) : (
+                            <ExternalLink size={11} />
+                          )}{' '}
+                          View payment evidence
+                        </button>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">
                           <AlertTriangle size={11} /> No payment evidence
@@ -1817,7 +1827,9 @@ export default function AdminPage() {
           <PartnersTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
         )}
         {tab === 'kyc' && <KYCTab />}
-        {tab === 'payments' && <PaymentsTab />}
+        {tab === 'payments' && (
+          <PaymentsTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
+        )}
         {tab === 'payouts' && <PayoutsTab />}
         {tab === 'requests' && <RequestsTab />}
       </div>
