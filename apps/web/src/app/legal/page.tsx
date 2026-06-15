@@ -1,6 +1,7 @@
 'use client';
 import { ArrowRight, FileText } from 'lucide-react';
 import Link from 'next/link';
+import FT9jaLogo from '@/components/FT9jaLogo';
 
 const sections = [
   {
@@ -29,11 +30,11 @@ const sections = [
       },
       {
         heading: '6. Prohibited Activities',
-        text: 'The following are strictly prohibited: (a) any form of collusion between multiple accounts; (b) trading strategies designed to exploit platform errors or latency; (c) providing false or misleading information during account creation; (d) copy trading from other FT9ja accounts; (e) holding positions over weekends on certain instruments as specified; (f) any activity that constitutes market manipulation.',
+        text: 'The following are strictly prohibited: (a) any form of collusion between multiple accounts; (b) trading strategies designed to exploit platform errors or latency; (c) providing false or misleading information during account creation; (d) copy trading from other FT9ja accounts; (e) any activity that constitutes market manipulation.',
       },
       {
         heading: '7. Intellectual Property',
-        text: 'All FT9ja branding, technology, and content is the intellectual property of FT9ja Trading Ltd. Partners are granted a limited, non-exclusive, revocable license to use FT9ja branding within the scope of the Partner Program. This license terminates immediately upon cancellation or termination of the partner agreement.',
+        text: 'All FT9ja branding, technology, and content is the intellectual property of Asokoro Technologies. Partners are granted a limited, non-exclusive, revocable license to use FT9ja branding within the scope of the Partner Program. This license terminates immediately upon cancellation or termination of the partner agreement.',
       },
       {
         heading: '8. Limitation of Liability',
@@ -67,11 +68,11 @@ const sections = [
       },
       {
         heading: '4. Data Retention',
-        text: 'We retain your personal data for as long as necessary to provide services and comply with legal obligations — typically 7 years for financial records. You may request deletion of non-essential data by contacting privacy@ft9ja.com, subject to legal retention requirements.',
+        text: 'We retain your personal data for as long as necessary to provide services and comply with legal obligations — typically 7 years for financial records. You may request deletion of non-essential data by contacting accounts@ft9ja.com, subject to legal retention requirements.',
       },
       {
         heading: '5. Your Rights',
-        text: 'You have the right to: (a) Access a copy of your personal data; (b) Correct inaccurate information; (c) Request deletion of data where legally permissible; (d) Object to processing of your data; (e) Lodge a complaint with a data protection authority. Contact privacy@ft9ja.com to exercise these rights.',
+        text: 'You have the right to: (a) Access a copy of your personal data; (b) Correct inaccurate information; (c) Request deletion of data where legally permissible; (d) Object to processing of your data; (e) Lodge a complaint with a data protection authority. Contact accounts@ft9ja.com to exercise these rights.',
       },
       {
         heading: '6. Cookies',
@@ -138,16 +139,11 @@ export default function LegalPage() {
     <div className="min-h-screen bg-[#F7F4EF] font-inter">
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#16A34A]">
-                <span className="text-xs font-black text-white">FT</span>
-              </div>
-              <span className="text-lg font-black tracking-tight text-gray-900">9ja</span>
-            </div>
-            <span className="text-sm text-gray-400">/</span>
-            <span className="text-sm font-semibold text-gray-700">Legal</span>
+            <FT9jaLogo height={36} />
+            <span className="hidden text-sm text-gray-400 sm:block">/</span>
+            <span className="hidden text-sm font-semibold text-gray-700 sm:block">Legal</span>
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/guide" className="text-sm text-gray-500 hover:text-gray-900">
@@ -227,22 +223,22 @@ export default function LegalPage() {
           </p>
           <div className="flex flex-wrap gap-3">
             <a
-              href="mailto:legal@ft9ja.com"
+              href="mailto:accounts@ft9ja.com"
               className="inline-flex items-center gap-2 rounded-lg bg-[#111827] px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
             >
-              legal@ft9ja.com
+              accounts@ft9ja.com
             </a>
             <a
-              href="mailto:privacy@ft9ja.com"
+              href="mailto:accounts@ft9ja.com"
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
-              privacy@ft9ja.com
+              accounts@ft9ja.com
             </a>
           </div>
         </div>
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          These terms apply to all FT9ja services and partner programs. FT9ja Trading Ltd, Lagos,
+          These terms apply to all FT9ja services and partner programs. Asokoro Technologies, Lagos,
           Nigeria. © 2026.
         </p>
       </div>
@@ -250,12 +246,7 @@ export default function LegalPage() {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white py-8 mt-4">
         <div className="mx-auto max-w-6xl px-6 flex flex-col items-center justify-between gap-3 md:flex-row">
-          <div className="flex items-center gap-1.5">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#16A34A]">
-              <span className="text-[10px] font-black text-white">FT</span>
-            </div>
-            <span className="text-sm font-black tracking-tight text-gray-900">9ja</span>
-          </div>
+          <FT9jaLogo height={32} />
           <div className="flex items-center gap-4 text-xs text-gray-400">
             <Link href="/guide" className="hover:text-gray-700">
               Trader Guide

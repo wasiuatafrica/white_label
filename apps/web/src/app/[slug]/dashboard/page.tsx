@@ -1,29 +1,29 @@
 'use client';
-import { use, useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    AlertCircle,
+    ArrowRight,
+    Banknote,
+    BarChart3,
+    CheckCircle,
+    ChevronDown,
+    ChevronUp,
+    Clock,
+    CreditCard,
+    Eye,
+    EyeOff,
+    FileText,
+    Loader2,
+    LogOut,
+    Send,
+    Shield,
+    Upload,
+    User,
+    X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Shield,
-  CheckCircle,
-  AlertCircle,
-  ArrowRight,
-  LogOut,
-  User,
-  FileText,
-  BarChart3,
-  Loader2,
-  Eye,
-  EyeOff,
-  Upload,
-  CreditCard,
-  Banknote,
-  Clock,
-  X,
-  ChevronDown,
-  ChevronUp,
-  Send,
-} from 'lucide-react';
+import { use, useEffect, useState } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -307,7 +307,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                     </div>
                     <div className="flex justify-between">
                       <span className="text-amber-700">Account Name:</span>
-                      <span className="font-semibold text-amber-900">FT9ja Trading Ltd</span>
+                      <span className="font-semibold text-amber-900">Asokoro Technologies</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-amber-700">Reference:</span>

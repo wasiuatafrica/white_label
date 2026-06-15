@@ -50,11 +50,11 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
         },
         {
           heading: '5. Prohibited Activities',
-          text: 'Strictly prohibited: account collusion, exploiting platform errors, providing false information, copy trading from other funded accounts, holding restricted positions over weekends, and any form of market manipulation. Violation results in immediate account termination with no refund.',
+          text: 'Strictly prohibited: account collusion, exploiting platform errors, providing false information, copy trading from other funded accounts, and any form of market manipulation. Violation results in immediate account termination with no refund.',
         },
         {
           heading: '6. Governing Law',
-          text: `These terms are governed by the laws of the Federal Republic of Nigeria. The relationship between ${firmName} and its traders is facilitated through FT9ja Trading Ltd. Any disputes are subject to FT9ja's dispute resolution process.`,
+          text: `These terms are governed by the laws of the Federal Republic of Nigeria. The relationship between ${firmName} and its traders is facilitated through Asokoro Technologies. Any disputes are subject to FT9ja's dispute resolution process.`,
         },
       ],
     },
@@ -286,7 +286,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
         </div>
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          © 2026 {firmName}. Powered by FT9ja Trading Ltd, Lagos, Nigeria. All rights reserved.
+          © 2026 {firmName}. Powered by Asokoro Technologies, Lagos, Nigeria. All rights reserved.
         </p>
       </div>
 

@@ -102,7 +102,7 @@ const P03 = wrap(
       dr('Due Date', '{{DUE_DATE}}')
     ) +
     p(
-      'Transfer to: <strong>FT9ja Trading Ltd</strong>, First Bank — <strong>3012345678</strong>. Use your firm slug as the payment reference.'
+      'Transfer to: <strong>Asokoro Technologies</strong>, First Bank — <strong>3012345678</strong>. Use your firm slug as the payment reference.'
     ) +
     btn('#16A34A', 'Confirm Payment &rarr;') +
     note('Failure to pay by the due date may result in temporary suspension of your firm page.')
@@ -145,7 +145,7 @@ const P05 = wrap(
       dr('Suspension Date', '{{SUSPEND_DATE}}')
     ) +
     p(
-      'Transfer to <strong>FT9ja Trading Ltd, First Bank — 3012345678</strong> using your firm slug as reference, then confirm via admin.'
+      'Transfer to <strong>Asokoro Technologies, First Bank — 3012345678</strong> using your firm slug as reference, then confirm via admin.'
     ) +
     btn('#DC2626', 'Confirm Payment &rarr;') +
     note(
@@ -254,7 +254,7 @@ const P10 = wrap(
     ) +
     btn('#111827', 'Read Compliance Guide &rarr;') +
     note(
-      'Questions about this notice? Email legal@ft9ja.com. This notice was sent to all active partners.'
+      'Questions about this notice? Email accounts@ft9ja.com. This notice was sent to all active partners.'
     )
 );
 
@@ -298,7 +298,7 @@ const T02 = wrap(
       '#92400E',
       '#FFFBEB',
       '#FDE68A',
-      '<strong>Payment Details:</strong><br>Bank: First Bank of Nigeria<br>Account Name: FT9ja Trading Ltd<br>Account: <strong>3012345678</strong><br>Reference: <strong>{{TRADER_EMAIL}}</strong>'
+      '<strong>Payment Details:</strong><br>Bank: First Bank of Nigeria<br>Account Name: Asokoro Technologies<br>Account: <strong>3012345678</strong><br>Reference: <strong>{{TRADER_EMAIL}}</strong>'
     ) +
     p('Your evaluation activates within <strong>2 hours</strong> of confirmed payment.') +
     btn('{{BRAND_COLOR}}', 'View Dashboard &rarr;') +
