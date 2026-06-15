@@ -5,6 +5,7 @@ import {
   listEvaluationsByTrader,
 } from '@/db/queries/evaluations';
 import { getTraderByEmail } from '@/db/queries/traders';
+import { parseSessionFromRequest } from '@/app/api/utils/session';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -27,7 +28,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       return Response.json({ error: 'Trader not found' }, { status: 404 });
     }
 
+    const session = parseSessionFromRequest(request, slug);
+    const canViewAccountActivation =
+      session?.partnerId === partnerId && session.traderId === trader.id;
     const evaluations = await listEvaluationsByTrader(partnerId, trader.id);
+    if (!canViewAccountActivation) {
+      const publicEvaluations = evaluations.map(
+        ({
+          account_creation_code: _accountCreationCode,
+          trade_account_id: _tradeAccountId,
+          trade_account_number: _tradeAccountNumber,
+          trade_account_platform: _tradeAccountPlatform,
+          trade_account_broker: _tradeAccountBroker,
+          trade_account_completed: _tradeAccountCompleted,
+          ...evaluation
+        }) => evaluation
+      );
+      return Response.json({ trader, evaluations: publicEvaluations });
+    }
+
     return Response.json({ trader, evaluations });
   } catch (e) {
     console.error(e);

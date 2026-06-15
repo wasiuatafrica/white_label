@@ -13,6 +13,7 @@ import {
     Eye,
     EyeOff,
     FileText,
+    KeyRound,
     Loader2,
     LogOut,
     Send,
@@ -44,6 +45,12 @@ type Evaluation = {
   trading_days: number;
   required_days: number;
   purchase_date: string;
+  account_creation_code: string | null;
+  trade_account_id: number | null;
+  trade_account_number: number | null;
+  trade_account_platform: string | null;
+  trade_account_broker: string | null;
+  trade_account_completed: boolean | null;
 };
 type TraderRequest = {
   id: number;
@@ -373,6 +380,178 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
           <p className="text-sm text-gray-400">No evaluations yet.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Trading Account Tab ─────────────────────────────────────────────────────
+
+function TradingAccountTab({
+  evaluations,
+  slug,
+  primary,
+}: {
+  evaluations: Evaluation[];
+  slug: string;
+  primary: string;
+}) {
+  const qc = useQueryClient();
+  const eligible = evaluations.filter((e) => e.status === 'active' && e.account_creation_code);
+  const [selectedEvalId, setSelectedEvalId] = useState<number | null>(eligible[0]?.id ?? null);
+  const [form, setForm] = useState({
+    activation_code: '',
+    number: '',
+    password: '',
+    investor_password: '',
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const selected = eligible.find((e) => e.id === selectedEvalId) ?? eligible[0];
+
+  const submit = useMutation({
+    mutationFn: async () => {
+      if (!selected) throw new Error('Select an active evaluation');
+      const res = await fetch(`/api/partners/${slug}/trade-accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evaluation_id: selected.id,
+          activation_code: form.activation_code,
+          number: form.number,
+          password: form.password,
+          investor_password: form.investor_password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save account');
+      return data;
+    },
+    onSuccess: () => {
+      setError(null);
+      setForm({ activation_code: '', number: '', password: '', investor_password: '' });
+      qc.invalidateQueries({ queryKey: ['evaluations', slug] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  if (eligible.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
+        <KeyRound size={28} className="mx-auto mb-3 text-gray-200" />
+        <p className="text-sm font-semibold text-gray-900">No activation code yet</p>
+        <p className="mt-1 text-xs text-gray-400">
+          This form unlocks after FT9ja verifies your payment and issues your account activation
+          code.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+        <p className="text-sm font-semibold text-blue-800">Add your MT5 trading account</p>
+        <p className="mt-1 text-xs text-blue-700">
+          Use the activation code sent to your email. The code is tied to your account and cannot be
+          used by another trader.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6">
+        <div className="mb-5">
+          <label className="mb-1.5 block text-xs font-semibold text-gray-600">Evaluation</label>
+          <select
+            value={selected?.id ?? ''}
+            onChange={(e) => setSelectedEvalId(Number(e.target.value))}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
+          >
+            {eligible.map((e) => (
+              <option key={e.id} value={e.id}>
+                EVL-{e.id.toString().padStart(6, '0')} ·{' '}
+                {e.eval_type === 'SSL' ? 'Starter' : 'Standard'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selected?.trade_account_completed ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-green-800">
+              <CheckCircle size={15} /> Trading account added
+            </div>
+            <div className="grid gap-2 text-xs sm:grid-cols-3">
+              <div>
+                <span className="block text-green-700/70">Account Number</span>
+                <strong className="text-green-900">{selected.trade_account_number}</strong>
+              </div>
+              <div>
+                <span className="block text-green-700/70">Platform</span>
+                <strong className="text-green-900">
+                  {selected.trade_account_platform || 'MT5'}
+                </strong>
+              </div>
+              <div>
+                <span className="block text-green-700/70">Broker</span>
+                <strong className="text-green-900">
+                  {selected.trade_account_broker || 'Deriv-Demo'}
+                </strong>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                { label: 'Activation Code', key: 'activation_code', placeholder: '8-character code' },
+                { label: 'MT5 Account Number', key: 'number', placeholder: 'e.g. 12345678' },
+                { label: 'Password', key: 'password', placeholder: 'Trading password' },
+                {
+                  label: 'Investor Password',
+                  key: 'investor_password',
+                  placeholder: 'Read-only investor password',
+                },
+              ].map((field) => (
+                <div key={field.key}>
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+                    {field.label}
+                  </label>
+                  <input
+                    type={field.key.includes('password') ? 'password' : 'text'}
+                    value={form[field.key as keyof typeof form]}
+                    onChange={(e) =>
+                      setForm((v) => ({
+                        ...v,
+                        [field.key]:
+                          field.key === 'activation_code'
+                            ? e.target.value.toUpperCase()
+                            : e.target.value,
+                      }))
+                    }
+                    placeholder={field.placeholder}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {error && (
+              <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={() => submit.mutate()}
+              disabled={submit.isPending}
+              className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              style={{ backgroundColor: primary }}
+            >
+              {submit.isPending ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+              Save Trading Account
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1069,7 +1248,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'payments' | 'payouts' | 'profile' | 'kyc'
+    'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
   >('overview');
 
   const sessionQuery = useQuery({
@@ -1264,6 +1443,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
   const pendingPaymentCount = evaluations.filter((e) => e.status === 'pending_payment').length;
   const passedCount = evaluations.filter((e) => e.status === 'passed').length;
+  const accountSetupCount = evaluations.filter(
+    (e) => e.status === 'active' && e.account_creation_code && !e.trade_account_completed
+  ).length;
 
   const allTabs = [
     { id: 'overview', label: 'Dashboard', icon: <BarChart3 size={13} />, badge: 0 },
@@ -1272,6 +1454,12 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       label: 'Payments',
       icon: <CreditCard size={13} />,
       badge: pendingPaymentCount,
+    },
+    {
+      id: 'account',
+      label: 'Trading Account',
+      icon: <KeyRound size={13} />,
+      badge: accountSetupCount,
     },
     { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: passedCount },
     { id: 'profile', label: 'Profile', icon: <User size={13} />, badge: 0 },
@@ -1576,6 +1764,11 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
         {/* ── Payments Tab ── */}
         {activeTab === 'payments' && <PaymentsTab evaluations={evaluations} primary={primary} />}
+
+        {/* ── Trading Account Tab ── */}
+        {activeTab === 'account' && hasSession && (
+          <TradingAccountTab evaluations={evaluations} slug={slug} primary={primary} />
+        )}
 
         {/* ── Payouts Tab ── */}
         {activeTab === 'payouts' && hasSession && (

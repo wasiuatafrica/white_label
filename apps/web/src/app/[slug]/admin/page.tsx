@@ -83,6 +83,12 @@ type Evaluation = {
   required_days: number;
   purchase_date: string;
   updated_at: string;
+  account_creation_code: string | null;
+  trade_account_id: number | null;
+  trade_account_number: number | null;
+  trade_account_platform: string | null;
+  trade_account_broker: string | null;
+  trade_account_completed: boolean | null;
 };
 
 type PayoutRequest = {
@@ -401,6 +407,24 @@ function PaymentsTab({
                     {ev.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} ·{' '}
                     {fmtDate(ev.purchase_date)}
                   </div>
+                  {ev.account_creation_code && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 font-semibold text-blue-700">
+                        Code: {ev.account_creation_code}
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 font-medium ${
+                          ev.trade_account_completed
+                            ? 'border-green-200 bg-green-50 text-green-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {ev.trade_account_completed
+                          ? `Account ${ev.trade_account_number}`
+                          : 'Awaiting account details'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-green-600">

@@ -4,6 +4,7 @@ import { evaluations } from '../schema/evaluations';
 import { partners } from '../schema/partners';
 import { traderRequests } from '../schema/trader-requests';
 import { traders } from '../schema/traders';
+import { tradeAccounts } from '../schema/trade-accounts';
 
 export async function listKycSubmissions() {
   return db
@@ -59,6 +60,29 @@ export async function listPendingPayments() {
     .innerJoin(partners, eq(partners.id, evaluations.partnerId))
     .where(eq(evaluations.status, 'pending_payment'))
     .orderBy(desc(evaluations.purchaseDate));
+}
+
+export async function getPaymentActivationNotice(evalId: number) {
+  const [row] = await db
+    .select({
+      eval_id: evaluations.id,
+      eval_type: evaluations.evalType,
+      amount: evaluations.amount,
+      account_creation_code: tradeAccounts.creationCode,
+      trader_id: traders.id,
+      trader_name: traders.name,
+      trader_email: traders.email,
+      partner_slug: partners.slug,
+      partner_firm_name: partners.firmName,
+      partner_brand_color: partners.brandColor,
+    })
+    .from(evaluations)
+    .innerJoin(traders, eq(traders.id, evaluations.traderId))
+    .innerJoin(partners, eq(partners.id, evaluations.partnerId))
+    .innerJoin(tradeAccounts, eq(tradeAccounts.evaluationId, evaluations.id))
+    .where(eq(evaluations.id, evalId))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function listPassedEvaluationsForPayouts() {
