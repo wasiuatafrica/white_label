@@ -20,6 +20,13 @@ export async function PATCH(
       return Response.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
+    if (body.status === 'active' || body.status === 'pending_payment') {
+      return Response.json(
+        { error: 'Payment verification is handled by FT9ja super admin' },
+        { status: 403 }
+      );
+    }
+
     const evaluation = await updateEvaluation(Number(id), partnerId, body);
     if (!evaluation) {
       return Response.json({ error: 'Evaluation not found' }, { status: 404 });

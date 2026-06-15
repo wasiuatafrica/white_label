@@ -232,25 +232,6 @@ function PaymentsTab({
   onOpenReceipt: (receiptUrl: string) => void;
   openingReceiptUrl: string | null;
 }) {
-  const qc = useQueryClient();
-  const slug = partner.slug;
-
-  const activateEval = useMutation({
-    mutationFn: async (evalId: number) => {
-      const res = await fetch(`/api/partners/${slug}/evaluations/${evalId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['evaluations', slug] });
-      qc.invalidateQueries({ queryKey: ['traders', slug] });
-    },
-  });
-
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
   const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
   const totalRevenue = confirmed.reduce((s, e) => s + parseFloat(e.amount || '0'), 0);
@@ -332,7 +313,7 @@ function PaymentsTab({
           <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-5 py-3">
             <Clock size={14} className="text-amber-600" />
             <span className="text-sm font-semibold text-amber-700">
-              Awaiting Payment Confirmation
+              Awaiting FT9ja Payment Verification
             </span>
             <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-white">
               {pending.length}
@@ -386,22 +367,12 @@ function PaymentsTab({
                   <div className="text-sm font-black text-gray-900">
                     ₦{parseFloat(ev.amount).toLocaleString()}
                   </div>
-                  <div className="text-xs text-gray-400">due</div>
+                  <div className="text-xs text-gray-400">submitted</div>
                 </div>
-                <button
-                  onClick={() => activateEval.mutate(ev.id)}
-                  disabled={activateEval.isPending || !ev.payment_proof_url}
-                  title={!ev.payment_proof_url ? 'Payment evidence is required before activation' : ''}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                  style={{ backgroundColor: '#16A34A' }}
-                >
-                  {activateEval.isPending ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <ShieldCheck size={12} />
-                  )}
-                  Activate
-                </button>
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                  <Clock size={12} />
+                  Pending FT9ja
+                </span>
               </div>
             ))}
           </div>

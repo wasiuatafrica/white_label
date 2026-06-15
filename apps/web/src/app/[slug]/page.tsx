@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { use, useState } from 'react';
+import { getFt9jaPaymentRows } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
 
 type PaymentMethod = 'transfer' | 'paypal' | 'crypto';
@@ -533,8 +534,8 @@ function PurchaseModal({
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-semibold text-amber-800 mb-0.5">Payment Instructions</p>
               <p className="text-xs text-amber-700">
-                Choose a payment method, pay <strong>{product.price}</strong>, then upload your
-                receipt or transaction screenshot for admin approval.
+                Pay <strong>{product.price}</strong> to FT9ja using any method below, then upload
+                your receipt or transaction screenshot for FT9ja verification.
               </p>
             </div>
             <div className="mb-4 grid grid-cols-3 gap-2">
@@ -559,31 +560,7 @@ function PurchaseModal({
               ))}
             </div>
             <div className="space-y-3 mb-5">
-              {(paymentMethod === 'transfer'
-                ? [
-                    { label: 'Bank', value: 'Zenith Bank' },
-                    { label: 'Account Name', value: 'Asokoro Technologies' },
-                    { label: 'Account Number', value: '1217002454', copy: true },
-                    { label: 'Amount', value: product.price },
-                    { label: 'Reference', value: email },
-                  ]
-                : paymentMethod === 'paypal'
-                  ? [
-                      { label: 'PayPal', value: 'https://www.paypal.me/ft9ja', copy: true },
-                      { label: 'Amount', value: product.price },
-                      { label: 'Reference', value: email },
-                    ]
-                  : [
-                      { label: 'Network', value: 'BTC' },
-                      {
-                        label: 'Wallet',
-                        value: '3CLFanKRsufL2hrMmFuBMQAGVDmThr4RPa',
-                        copy: true,
-                      },
-                      { label: 'Amount', value: product.price },
-                      { label: 'Reference', value: email },
-                    ]
-              ).map((r) => (
+              {getFt9jaPaymentRows(paymentMethod, product.price, email).map((r) => (
                 <div
                   key={r.label}
                   className="flex items-center justify-between py-2 border-b border-gray-50"

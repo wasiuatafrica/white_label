@@ -24,6 +24,7 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ type Evaluation = {
   id: number;
   eval_type: string;
   amount: number;
+  payment_method: Ft9jaPaymentMethod | null;
   status: string;
   payout_status: string | null;
   profit_target: number;
@@ -295,33 +297,27 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                   </div>
                 </div>
                 <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4 space-y-2">
-                  <p className="text-xs font-semibold text-amber-800">📋 Payment Instructions</p>
+                  <p className="text-xs font-semibold text-amber-800">Payment Instructions</p>
+                  <p className="text-xs text-amber-700">
+                    Pay FT9ja using the details below. FT9ja will verify the evidence and activate
+                    the evaluation.
+                  </p>
                   <div className="grid grid-cols-1 gap-1.5 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-amber-700">Bank:</span>
-                      <span className="font-semibold text-amber-900">First Bank Nigeria</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-700">Account Number:</span>
-                      <span className="font-semibold text-amber-900">3012345678</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-700">Account Name:</span>
-                      <span className="font-semibold text-amber-900">Asokoro Technologies</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-700">Reference:</span>
-                      <span className="font-semibold text-amber-900">Your email address</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-amber-700">Amount:</span>
-                      <span className="font-semibold text-amber-900">
-                        ₦{parseFloat(String(e.amount)).toLocaleString()}
-                      </span>
-                    </div>
+                    {getFt9jaPaymentRows(
+                      e.payment_method ?? 'transfer',
+                      `₦${parseFloat(String(e.amount)).toLocaleString()}`,
+                      'Your email address'
+                    ).map((row) => (
+                      <div key={row.label} className="flex justify-between gap-3">
+                        <span className="text-amber-700">{row.label}:</span>
+                        <span className="text-right font-semibold text-amber-900">
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                   <p className="pt-1 text-xs text-amber-600">
-                    ⚡ Your evaluation activates within 2 hours of payment confirmation.
+                    Your evaluation activates after FT9ja confirms the payment.
                   </p>
                 </div>
               </div>
