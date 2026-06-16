@@ -77,7 +77,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     });
 
     if (!account) {
-      return Response.json({ error: 'Invalid activation code' }, { status: 403 });
+      return Response.json(
+        { error: 'Invalid or already used activation code' },
+        { status: 403 }
+      );
     }
 
     return Response.json({ account });

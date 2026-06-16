@@ -164,6 +164,11 @@ function getAvailableRequests(evalType: string): string[] {
   return ['talent_bonus', 'aso_account'];
 }
 
+function getEvalTypeLabel(evalType: string): string {
+  if (evalType === 'SSL') return 'Synthetic Signals Lite (SSL)';
+  return 'Synthetic Signals (SS)';
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string; dot: string }> = {
     active: {
@@ -558,7 +563,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-black text-gray-900">
-                        {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} Evaluation
+                        {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
                         <div className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Awaiting
@@ -609,7 +614,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-black text-gray-900">
-                        {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} Evaluation
+                        {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
                       <StatusBadge status={e.status} />
                     </div>
@@ -674,7 +679,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-gray-900">
-                      {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} Evaluation
+                      {getEvalTypeLabel(e.eval_type)} Evaluation
                     </span>
                     <StatusBadge status={e.status} />
                   </div>
@@ -725,6 +730,10 @@ function TradingAccountTab({
     number: '',
     password: '',
     investor_password: '',
+  });
+  const [visiblePasswords, setVisiblePasswords] = useState({
+    password: false,
+    investor_password: false,
   });
   const [error, setError] = useState<string | null>(null);
 
@@ -790,7 +799,7 @@ function TradingAccountTab({
             {eligible.map((e) => (
               <option key={e.id} value={e.id}>
                 EVL-{e.id.toString().padStart(6, '0')} ·{' '}
-                {e.eval_type === 'SSL' ? 'Starter' : 'Standard'}
+                {getEvalTypeLabel(e.eval_type)}
               </option>
             ))}
           </select>
@@ -824,7 +833,11 @@ function TradingAccountTab({
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               {[
-                { label: 'Activation Code', key: 'activation_code', placeholder: '8-character code' },
+                {
+                  label: 'Activation Code',
+                  key: 'activation_code',
+                  placeholder: '8-character code',
+                },
                 { label: 'MT5 Account Number', key: 'number', placeholder: 'e.g. 12345678' },
                 { label: 'Password', key: 'password', placeholder: 'Trading password' },
                 {
@@ -832,28 +845,64 @@ function TradingAccountTab({
                   key: 'investor_password',
                   placeholder: 'Read-only investor password',
                 },
-              ].map((field) => (
-                <div key={field.key}>
-                  <label className="mb-1.5 block text-xs font-semibold text-gray-600">
-                    {field.label}
-                  </label>
-                  <input
-                    type={field.key.includes('password') ? 'password' : 'text'}
-                    value={form[field.key as keyof typeof form]}
-                    onChange={(e) =>
-                      setForm((v) => ({
-                        ...v,
-                        [field.key]:
-                          field.key === 'activation_code'
-                            ? e.target.value.toUpperCase()
-                            : e.target.value,
-                      }))
-                    }
-                    placeholder={field.placeholder}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
-                  />
-                </div>
-              ))}
+              ].map((field) => {
+                const isPasswordField =
+                  field.key === 'password' || field.key === 'investor_password';
+                const inputType =
+                  isPasswordField && !visiblePasswords[field.key as keyof typeof visiblePasswords]
+                    ? 'password'
+                    : 'text';
+
+                return (
+                  <div key={field.key}>
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+                      {field.label}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={inputType}
+                        value={form[field.key as keyof typeof form]}
+                        onChange={(e) =>
+                          setForm((v) => ({
+                            ...v,
+                            [field.key]:
+                              field.key === 'activation_code'
+                                ? e.target.value.toUpperCase()
+                                : e.target.value,
+                          }))
+                        }
+                        placeholder={field.placeholder}
+                        className={`w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none ${
+                          isPasswordField ? 'pr-10' : ''
+                        }`}
+                      />
+                      {isPasswordField && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVisiblePasswords((v) => ({
+                              ...v,
+                              [field.key]: !v[field.key as keyof typeof visiblePasswords],
+                            }))
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                          aria-label={
+                            visiblePasswords[field.key as keyof typeof visiblePasswords]
+                              ? `Hide ${field.label}`
+                              : `Show ${field.label}`
+                          }
+                        >
+                          {visiblePasswords[field.key as keyof typeof visiblePasswords] ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {error && (
@@ -993,7 +1042,7 @@ function PayoutsTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-gray-900">
-                        {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} Evaluation
+                        {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
                       <StatusBadge status={e.status} />
                       <PayoutBadge status={e.payout_status ?? null} />
@@ -1951,7 +2000,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               <div className="flex items-center gap-3 flex-wrap">
                 <StatusBadge status={eval_.status} />
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600">
-                  {eval_.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} · $
+                  {getEvalTypeLabel(eval_.eval_type)} · $
                   {accountSize.toLocaleString()}
                 </div>
               </div>
@@ -2056,7 +2105,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                     { label: 'Trader Name', value: displayTrader.name },
                     {
                       label: 'Account Type',
-                      value: eval_.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)',
+                      value: getEvalTypeLabel(eval_.eval_type),
                     },
                     { label: 'Account Size', value: `$${accountSize.toLocaleString()}` },
                     { label: 'Current Balance', value: `$${currentBalance.toFixed(0)}` },
@@ -2099,7 +2148,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                     >
                       <div>
                         <div className="text-sm font-semibold text-gray-900">
-                          {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} · $
+                          {getEvalTypeLabel(e.eval_type)} · $
                           {e.eval_type === 'SSL' ? '5,000' : '10,000'}
                         </div>
                         <div className="text-xs text-gray-400">{formatDate(e.purchase_date)}</div>

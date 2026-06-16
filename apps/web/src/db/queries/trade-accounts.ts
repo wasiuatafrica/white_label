@@ -102,7 +102,10 @@ export async function completeTradeAccount(data: {
         eq(tradeAccounts.traderId, data.traderId),
         eq(tradeAccounts.partnerId, data.partnerId),
         eq(tradeAccounts.evaluationId, data.evaluationId),
-        eq(tradeAccounts.creationCode, data.creationCode)
+        eq(tradeAccounts.creationCode, data.creationCode),
+        eq(tradeAccounts.number, 0),
+        eq(tradeAccounts.password, ''),
+        eq(tradeAccounts.investorPassword, '')
       )
     )
     .returning();
