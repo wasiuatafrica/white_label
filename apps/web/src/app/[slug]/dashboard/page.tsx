@@ -55,6 +55,7 @@ type Evaluation = {
   eval_type: string;
   amount: number;
   payment_method: Ft9jaPaymentMethod | null;
+  payment_proof_url: string | null;
   status: string;
   payout_status: string | null;
   profit_target: number;
@@ -502,6 +503,8 @@ function CircleRing({
 
 function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; primary: string }) {
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
+  const awaitingPayment = pending.filter((e) => !e.payment_proof_url);
+  const awaitingConfirmation = pending.filter((e) => e.payment_proof_url);
   const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
 
   return (
@@ -538,18 +541,69 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
         ))}
       </div>
 
+      {/* Pending Confirmation */}
+      {awaitingConfirmation.length > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-white overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-5 py-3">
+            <Clock size={14} className="text-blue-600" />
+            <span className="text-sm font-semibold text-blue-700">Awaiting Confirmation</span>
+            <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-black text-white">
+              {awaitingConfirmation.length}
+            </span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {awaitingConfirmation.map((e) => (
+              <div key={e.id} className="p-5">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-black text-gray-900">
+                        {e.eval_type === 'SSL' ? 'Starter (SSL)' : 'Standard (SS)'} Evaluation
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Awaiting
+                        Confirmation
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-400">
+                      Purchased {formatDate(e.purchase_date)} · ID: EVL-
+                      {e.id.toString().padStart(6, '0')}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-black text-gray-900">
+                      ₦{parseFloat(String(e.amount)).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-400">Submitted</div>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <p className="text-xs font-semibold text-blue-800">
+                    Payment Awaiting Confirmation
+                  </p>
+                  <p className="mt-1 text-xs text-blue-700">
+                    Your receipt has been submitted. FT9ja is verifying the payment evidence and
+                    will activate the evaluation after confirmation.
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Pending Payments */}
-      {pending.length > 0 && (
+      {awaitingPayment.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-white overflow-hidden">
           <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-5 py-3">
             <Clock size={14} className="text-amber-600" />
             <span className="text-sm font-semibold text-amber-700">Awaiting Payment</span>
             <span className="ml-auto inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-white">
-              {pending.length}
+              {awaitingPayment.length}
             </span>
           </div>
           <div className="divide-y divide-gray-100">
-            {pending.map((e) => (
+            {awaitingPayment.map((e) => (
               <div key={e.id} className="p-5">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div>
