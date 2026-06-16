@@ -92,6 +92,14 @@ type PaymentRow = {
   partner_brand_color: string;
 };
 
+type EvaluationPaymentRow = PaymentRow & {
+  profit_target: string;
+  max_drawdown: string;
+  required_days: number;
+  partner_id: number;
+  partner_status: string;
+};
+
 type PayoutRow = {
   eval_id: number;
   eval_type: string;
@@ -1258,6 +1266,357 @@ function PaymentsTab({
   );
 }
 
+// ─── Evaluation Payments Tab ─────────────────────────────────────────────────
+
+function EvaluationPaymentsTab({
+  onOpenReceipt,
+  openingReceiptUrl,
+}: {
+  onOpenReceipt: (receiptUrl: string) => void;
+  openingReceiptUrl: string | null;
+}) {
+  const qc = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending_payment' | 'approved'>('all');
+  const [confirming, setConfirming] = useState<number | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery<EvaluationPaymentRow[]>({
+    queryKey: ['admin-evaluation-payments'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/evaluation-payments');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const confirm = useMutation({
+    mutationFn: async (eval_id: number) => {
+      const res = await fetch('/api/admin/evaluation-payments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eval_id }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      setConfirming(null);
+    },
+    onError: () => setConfirming(null),
+  });
+
+  const partners = Array.from(
+    new Map(
+      rows.map((row) => [
+        row.partner_id,
+        {
+          id: row.partner_id,
+          slug: row.partner_slug,
+          firmName: row.partner_firm_name,
+          brandColor: row.partner_brand_color,
+          status: row.partner_status,
+        },
+      ])
+    ).values()
+  );
+
+  const filtered = rows.filter((row) => {
+    const q = search.trim().toLowerCase();
+    const approved = row.status !== 'pending_payment';
+    const matchesSearch =
+      !q ||
+      row.trader_name.toLowerCase().includes(q) ||
+      row.trader_email.toLowerCase().includes(q) ||
+      row.partner_firm_name.toLowerCase().includes(q) ||
+      row.eval_type.toLowerCase().includes(q);
+    const matchesPartner = partnerFilter === 'all' || String(row.partner_id) === partnerFilter;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'pending_payment' && row.status === 'pending_payment') ||
+      (statusFilter === 'approved' && approved);
+    return matchesSearch && matchesPartner && matchesStatus;
+  });
+
+  const grouped = partners
+    .map((partner) => ({
+      partner,
+      payments: filtered.filter((row) => row.partner_id === partner.id),
+    }))
+    .filter((group) => group.payments.length > 0);
+
+  const pending = rows.filter((row) => row.status === 'pending_payment');
+  const approved = rows.filter((row) => row.status !== 'pending_payment');
+  const totalValue = rows.reduce((s, row) => s + parseFloat(row.amount || '0'), 0);
+
+  const getPaymentBadge = (status: string) => {
+    if (status === 'pending_payment') return <Badge color="amber">Awaiting Approval</Badge>;
+    if (status === 'active') return <Badge color="green">Approved</Badge>;
+    if (status === 'passed') return <Badge color="green">Passed</Badge>;
+    if (status === 'failed') return <Badge color="red">Failed</Badge>;
+    if (status === 'suspended') return <Badge color="gray">Suspended</Badge>;
+    return <Badge color="gray">{status}</Badge>;
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        {[
+          {
+            label: 'Evaluation Payments',
+            value: rows.length,
+            color: '#111827',
+            icon: <CreditCard size={16} />,
+          },
+          {
+            label: 'Awaiting Approval',
+            value: pending.length,
+            color: '#F59E0B',
+            icon: <Clock size={16} />,
+          },
+          {
+            label: 'Total Value',
+            value: formatRevenue(totalValue.toString()),
+            color: '#16A34A',
+            icon: <TrendingUp size={16} />,
+          },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-400">{c.label}</span>
+              <span style={{ color: c.color }}>{c.icon}</span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {pending.length > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle size={14} className="shrink-0 text-amber-600 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            <strong>Approve only after matching payment evidence.</strong> Approval activates the
+            evaluation and emails the trader their account activation code.
+          </p>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Evaluation Payments by Partner</h2>
+            <p className="text-xs text-gray-400">
+              {filtered.length} payment{filtered.length !== 1 ? 's' : ''}; {approved.length}{' '}
+              approved, {pending.length} awaiting approval
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#16A34A]"
+                placeholder="Search trader, partner, or evaluation..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              value={partnerFilter}
+              onChange={(e) => setPartnerFilter(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#16A34A]"
+            >
+              <option value="all">All partners</option>
+              {partners.map((partner) => (
+                <option key={partner.id} value={partner.id}>
+                  {partner.firmName}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-gray-200 p-1">
+              {[
+                ['all', 'All'],
+                ['pending_payment', 'Pending'],
+                ['approved', 'Approved'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setStatusFilter(id as typeof statusFilter)}
+                  className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 ${statusFilter === id ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading evaluation payments...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="p-12 text-center">
+            <CreditCard size={28} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm text-gray-400">No evaluation payments yet.</p>
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="p-12 text-center text-sm text-gray-400">No payments match your filters.</div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {grouped.map(({ partner, payments }) => {
+              const sc = getStatusConfig(partner.status);
+              const partnerTotal = payments.reduce((s, row) => s + parseFloat(row.amount || '0'), 0);
+              return (
+                <section key={partner.id}>
+                  <div className="flex flex-col gap-3 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                        style={{ backgroundColor: partner.brandColor || '#16A34A' }}
+                      >
+                        {partner.firmName[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-black text-gray-900">
+                            {partner.firmName}
+                          </h3>
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium"
+                            style={{ color: sc.color }}
+                          >
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+                            {sc.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400">{partner.slug}.ft9ja.com</p>
+                      </div>
+                    </div>
+                    <div className="text-xs font-semibold text-gray-500">
+                      {payments.length} payment{payments.length !== 1 ? 's' : ''} ·{' '}
+                      {formatRevenue(partnerTotal.toString())}
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-gray-100">
+                    {payments.map((row) => (
+                      <div
+                        key={row.eval_id}
+                        className="flex flex-col gap-3 px-4 py-4 hover:bg-gray-50 lg:flex-row lg:items-center lg:gap-4 lg:px-5"
+                      >
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <div
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                            style={{ backgroundColor: row.partner_brand_color || '#16A34A' }}
+                          >
+                            {row.eval_type}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-900">
+                                {row.trader_name}
+                              </span>
+                              <Badge color="gray">{row.eval_type}</Badge>
+                              <Badge color="blue">{formatPaymentMethod(row.payment_method)}</Badge>
+                              {getPaymentBadge(row.status)}
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-gray-400">
+                              {row.trader_email} · {formatDate(row.purchase_date)}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                              <span>
+                                Amount:{' '}
+                                <strong className="text-gray-900">
+                                  ₦{parseFloat(row.amount).toLocaleString()}
+                                </strong>
+                              </span>
+                              <span>
+                                Target: <strong className="text-gray-900">{row.profit_target}%</strong>
+                              </span>
+                              <span>
+                                Days:{' '}
+                                <strong className="text-gray-900">{row.required_days}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                          {row.payment_proof_url ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenReceipt(row.payment_proof_url!)}
+                              disabled={openingReceiptUrl === row.payment_proof_url}
+                              className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 disabled:opacity-50"
+                            >
+                              {openingReceiptUrl === row.payment_proof_url ? (
+                                <Loader2 size={11} className="animate-spin" />
+                              ) : (
+                                <ExternalLink size={11} />
+                              )}
+                              Evidence
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-2 py-1 text-xs font-medium text-red-600">
+                              <AlertTriangle size={11} /> No evidence
+                            </span>
+                          )}
+
+                          {row.status === 'pending_payment' &&
+                            (confirming === row.eval_id ? (
+                              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5">
+                                <button
+                                  onClick={() => setConfirming(null)}
+                                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => confirm.mutate(row.eval_id)}
+                                  disabled={confirm.isPending || !row.payment_proof_url}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                                >
+                                  {confirm.isPending ? (
+                                    <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <CheckCircle size={11} />
+                                  )}
+                                  Approve
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirming(row.eval_id)}
+                                disabled={!row.payment_proof_url}
+                                title={
+                                  !row.payment_proof_url
+                                    ? 'Payment evidence is required before approval'
+                                    : ''
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                              >
+                                <CheckCircle size={12} /> Approve
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Payouts Tab ──────────────────────────────────────────────────────────────
 
 function PayoutsTab() {
@@ -1838,7 +2197,7 @@ export default function AdminPage() {
   const [pwChecking, setPwChecking] = useState(false);
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<
-    'partners' | 'traders' | 'kyc' | 'payments' | 'payouts' | 'requests'
+    'partners' | 'traders' | 'kyc' | 'payments' | 'evaluation-payments' | 'payouts' | 'requests'
   >('partners');
 
   const { data: kycRows = [] } = useQuery<KYCRow[]>({
@@ -1986,6 +2345,12 @@ export default function AdminPage() {
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
     { id: 'kyc', label: 'KYC', icon: <BadgeCheck size={13} />, badge: kycPending },
     { id: 'payments', label: 'Payments', icon: <CreditCard size={13} />, badge: paymentsPending },
+    {
+      id: 'evaluation-payments',
+      label: 'Eval Payments',
+      icon: <CreditCard size={13} />,
+      badge: paymentsPending,
+    },
     { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: payoutsPending },
     {
       id: 'requests',
@@ -2056,6 +2421,12 @@ export default function AdminPage() {
         {tab === 'kyc' && <KYCTab />}
         {tab === 'payments' && (
           <PaymentsTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
+        )}
+        {tab === 'evaluation-payments' && (
+          <EvaluationPaymentsTab
+            onOpenReceipt={openReceipt}
+            openingReceiptUrl={openingReceiptUrl}
+          />
         )}
         {tab === 'payouts' && <PayoutsTab />}
         {tab === 'requests' && <RequestsTab />}

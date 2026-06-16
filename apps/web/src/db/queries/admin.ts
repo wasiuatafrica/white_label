@@ -82,6 +82,34 @@ export async function listPendingPayments() {
     .orderBy(desc(evaluations.purchaseDate));
 }
 
+export async function listAllEvaluationPayments() {
+  return db
+    .select({
+      eval_id: evaluations.id,
+      eval_type: evaluations.evalType,
+      amount: evaluations.amount,
+      payment_method: evaluations.paymentMethod,
+      payment_proof_url: evaluations.paymentProofUrl,
+      status: evaluations.status,
+      purchase_date: evaluations.purchaseDate,
+      profit_target: evaluations.profitTarget,
+      max_drawdown: evaluations.maxDrawdown,
+      required_days: evaluations.requiredDays,
+      trader_id: traders.id,
+      trader_name: traders.name,
+      trader_email: traders.email,
+      partner_id: partners.id,
+      partner_slug: partners.slug,
+      partner_firm_name: partners.firmName,
+      partner_brand_color: partners.brandColor,
+      partner_status: partners.status,
+    })
+    .from(evaluations)
+    .innerJoin(traders, eq(traders.id, evaluations.traderId))
+    .innerJoin(partners, eq(partners.id, evaluations.partnerId))
+    .orderBy(asc(partners.firmName), desc(evaluations.purchaseDate));
+}
+
 export async function getPaymentActivationNotice(evalId: number) {
   const [row] = await db
     .select({
