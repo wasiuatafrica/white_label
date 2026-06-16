@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { evaluations } from '../schema/evaluations';
 import { partners } from '../schema/partners';
@@ -32,6 +32,26 @@ export async function listKycSubmissions() {
       sql`CASE ${traders.kycStatus} WHEN 'submitted' THEN 0 ELSE 1 END`,
       desc(traders.kycSubmittedAt)
     );
+}
+
+export async function listAllTradersByPartner() {
+  return db
+    .select({
+      trader_id: traders.id,
+      trader_name: traders.name,
+      trader_email: traders.email,
+      trader_status: traders.status,
+      kyc_status: traders.kycStatus,
+      trader_created_at: traders.createdAt,
+      partner_id: partners.id,
+      partner_slug: partners.slug,
+      partner_firm_name: partners.firmName,
+      partner_brand_color: partners.brandColor,
+      partner_status: partners.status,
+    })
+    .from(traders)
+    .innerJoin(partners, eq(partners.id, traders.partnerId))
+    .orderBy(asc(partners.firmName), desc(traders.createdAt));
 }
 
 export async function listPendingPayments() {
