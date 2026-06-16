@@ -1,10 +1,11 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
 import {
+  createEvaluationForTrader,
   createEvaluationWithTrader,
   listEvaluationsByPartnerId,
   listEvaluationsByTrader,
 } from '@/db/queries/evaluations';
-import { getTraderByEmail } from '@/db/queries/traders';
+import { getTraderByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -60,8 +61,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const body = await request.json();
     const { name, email, eval_type, amount, payment_method, payment_proof_url } = body;
 
-    if (!name || !email || !eval_type) {
-      return Response.json({ error: 'name, email and eval_type are required' }, { status: 400 });
+    if (eval_type !== 'SS' && eval_type !== 'SSL') {
+      return Response.json({ error: 'eval_type must be SS or SSL' }, { status: 400 });
     }
 
     if (!payment_method || !payment_proof_url) {
@@ -74,6 +75,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
+    }
+
+    const session = parseSessionFromRequest(request, slug);
+    if (session?.partnerId === partnerId) {
+      const trader = await getTraderForSession(session.traderId, partnerId);
+      if (!trader) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+      const evaluation = await createEvaluationForTrader({
+        partnerId,
+        traderId: trader.id,
+        evalType: eval_type,
+        amount: amount || 0,
+        paymentMethod: payment_method,
+        paymentProofUrl: payment_proof_url,
+      });
+
+      return Response.json({ trader, evaluation }, { status: 201 });
+    }
+
+    if (!name || !email) {
+      return Response.json({ error: 'name and email are required' }, { status: 400 });
     }
 
     const result = await createEvaluationWithTrader({

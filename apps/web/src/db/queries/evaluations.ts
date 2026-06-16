@@ -187,6 +187,44 @@ export async function createEvaluationWithTrader(data: {
   });
 }
 
+export async function createEvaluationForTrader(data: {
+  partnerId: number;
+  traderId: number;
+  evalType: 'SS' | 'SSL';
+  amount: string | number;
+  paymentMethod?: string | null;
+  paymentProofUrl?: string | null;
+}) {
+  const isSSL = data.evalType === 'SSL';
+  const profitTarget = isSSL ? '8.0' : '10.0';
+  const maxDrawdown = isSSL ? '8.0' : '10.0';
+  const requiredDays = isSSL ? 21 : 30;
+  const amount = String(data.amount || 0);
+
+  const [evaluation] = await db
+    .insert(evaluations)
+    .values({
+      traderId: data.traderId,
+      partnerId: data.partnerId,
+      evalType: data.evalType,
+      amount,
+      paymentMethod: data.paymentMethod ?? null,
+      paymentProofUrl: data.paymentProofUrl ?? null,
+      status: 'pending_payment',
+      profitTarget,
+      currentProfit: '0',
+      maxDrawdown,
+      currentDrawdown: '0',
+      tradingDays: 0,
+      requiredDays,
+    })
+    .returning();
+
+  await incrementPartnerRevenue(data.partnerId, amount);
+
+  return mapEvaluation(evaluation);
+}
+
 type EvalUpdateFields = Partial<{
   status: 'pending_payment' | 'active' | 'passed' | 'failed' | 'suspended';
   currentProfit: string;

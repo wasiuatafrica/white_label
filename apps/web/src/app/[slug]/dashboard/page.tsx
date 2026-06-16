@@ -5,10 +5,12 @@ import {
     ArrowRight,
     Banknote,
     BarChart3,
+    Bitcoin,
     CheckCircle,
     ChevronDown,
     ChevronUp,
     Clock,
+    Copy,
     CreditCard,
     Eye,
     EyeOff,
@@ -26,11 +28,28 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
+import useUpload from '@/utils/useUpload';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Partner = { firm_name: string; brand_color: string; slug: string; logo_url?: string | null };
+type Partner = {
+  firm_name: string;
+  brand_color: string;
+  slug: string;
+  logo_url?: string | null;
+  fee_markup?: number | string | null;
+};
 type Trader = { id: number; name: string; email: string; status: string; kyc_status: string };
+type EvalProduct = {
+  id: string;
+  name: string;
+  code: 'SS' | 'SSL';
+  price: string;
+  priceNum: number;
+  accountSize: string;
+  profitTarget: string;
+  maxDrawdown: string;
+};
 type Evaluation = {
   id: number;
   eval_type: string;
@@ -106,6 +125,39 @@ const REQUEST_META: Record<string, { label: string; desc: string; icon: string }
   },
 };
 
+const BASE_EVAL_PRODUCTS: EvalProduct[] = [
+  {
+    id: 'ss',
+    name: 'Standard Evaluation',
+    code: 'SS',
+    price: '₦145,000',
+    priceNum: 145000,
+    accountSize: '$10,000',
+    profitTarget: '10%',
+    maxDrawdown: '10%',
+  },
+  {
+    id: 'ssl',
+    name: 'Starter Evaluation',
+    code: 'SSL',
+    price: '₦49,000',
+    priceNum: 49000,
+    accountSize: '$10,000',
+    profitTarget: '8%',
+    maxDrawdown: '8%',
+  },
+];
+const DEFAULT_EVAL_PRODUCT = BASE_EVAL_PRODUCTS[0] as EvalProduct;
+
+function getProducts(feeMarkup: number | string | null | undefined): EvalProduct[] {
+  const markup = Number(feeMarkup || 0);
+  if (!markup) return BASE_EVAL_PRODUCTS;
+  return BASE_EVAL_PRODUCTS.map((p) => {
+    const total = p.priceNum + markup;
+    return { ...p, priceNum: total, price: `₦${total.toLocaleString()}` };
+  });
+}
+
 function getAvailableRequests(evalType: string): string[] {
   if (evalType === 'SSL') return ['talent_bonus', 'aso_payout_ssl'];
   return ['talent_bonus', 'aso_account'];
@@ -161,6 +213,222 @@ function PayoutBadge({ status }: { status: string | null }) {
     <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
       <CheckCircle size={10} /> Paid Out
     </span>
+  );
+}
+
+function DashboardPurchaseModal({
+  products,
+  trader,
+  slug,
+  primary,
+  onClose,
+  onSuccess,
+}: {
+  products: EvalProduct[];
+  trader: Trader;
+  slug: string;
+  primary: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [product, setProduct] = useState<EvalProduct>(products[0] ?? DEFAULT_EVAL_PRODUCT);
+  const [paymentMethod, setPaymentMethod] = useState<Ft9jaPaymentMethod>('transfer');
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [upload, { loading: uploading }] = useUpload();
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!proofFile) throw new Error('Upload payment evidence before submitting.');
+      setError(null);
+      const uploaded = await upload({ file: proofFile });
+      if (uploaded.error || !uploaded.url) {
+        throw new Error(uploaded.error || 'Upload failed');
+      }
+
+      const res = await fetch(`/api/partners/${slug}/evaluations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eval_type: product.code,
+          amount: product.priceNum,
+          payment_method: paymentMethod,
+          payment_proof_url: uploaded.url,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create evaluation');
+      }
+      return res.json();
+    },
+    onSuccess,
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const copyPaymentValue = (value: string) => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              New Evaluation
+            </p>
+            <h3 className="text-base font-black text-gray-900">Buy Evaluation</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="max-h-[80vh] overflow-y-auto px-6 py-5">
+          <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Trader
+            </p>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">{trader.name}</div>
+                <div className="text-xs text-gray-500">{trader.email}</div>
+              </div>
+              <span className="rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                Logged in
+              </span>
+            </div>
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {products.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setProduct(p)}
+                className={`rounded-xl border p-4 text-left transition-colors ${
+                  product.id === p.id
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <div className="text-xs font-semibold uppercase tracking-widest opacity-70">
+                  {p.code}
+                </div>
+                <div className="mt-1 text-sm font-black">{p.name}</div>
+                <div className="mt-2 text-lg font-black">{p.price}</div>
+                <div className="mt-1 text-xs opacity-70">
+                  {p.accountSize} · Target {p.profitTarget} · DD {p.maxDrawdown}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs font-semibold text-amber-800">Payment Instructions</p>
+            <p className="mt-1 text-xs text-amber-700">
+              Pay <strong>{product.price}</strong>, then upload your receipt or transaction
+              screenshot for FT9ja verification.
+            </p>
+          </div>
+
+          <div className="mb-4 grid grid-cols-3 gap-2">
+            {[
+              { id: 'transfer' as const, label: 'Transfer', icon: <Banknote size={14} /> },
+              { id: 'paypal' as const, label: 'PayPal', icon: <CreditCard size={14} /> },
+              { id: 'crypto' as const, label: 'Crypto', icon: <Bitcoin size={14} /> },
+            ].map((method) => (
+              <button
+                key={method.id}
+                type="button"
+                onClick={() => setPaymentMethod(method.id)}
+                className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
+                  paymentMethod === method.id
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {method.icon}
+                {method.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-5 space-y-3">
+            {getFt9jaPaymentRows(paymentMethod, product.price, trader.email).map((r) => (
+              <div
+                key={r.label}
+                className="flex items-center justify-between border-b border-gray-50 py-2"
+              >
+                <span className="text-xs text-gray-400">{r.label}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-semibold text-gray-900">{r.value}</span>
+                  {r.copy && (
+                    <button
+                      onClick={() => copyPaymentValue(r.value)}
+                      className="shrink-0 text-gray-400 hover:text-gray-700"
+                    >
+                      {copied ? (
+                        <CheckCircle size={14} className="text-green-500" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <label className="mb-4 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-xs text-gray-500 hover:border-gray-400">
+            <span className="flex min-w-0 items-center gap-2">
+              <FileText size={14} className="shrink-0 text-gray-400" />
+              <span className="truncate">
+                {proofFile ? proofFile.name : 'Receipt, screenshot, or transaction proof'}
+              </span>
+            </span>
+            <span className="shrink-0 font-semibold text-gray-900">Choose file</span>
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                setProofFile(e.target.files?.[0] ?? null);
+                setError(null);
+              }}
+            />
+          </label>
+
+          {(error || mutation.error) && (
+            <p className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+              {error || (mutation.error as Error).message}
+            </p>
+          )}
+
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={!proofFile || mutation.isPending || uploading}
+            className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: primary }}
+          >
+            {mutation.isPending || uploading ? (
+              <>
+                <Loader2 size={15} className="animate-spin" /> Submitting Payment...
+              </>
+            ) : (
+              <>Submit Payment Evidence</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1250,6 +1518,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const [activeTab, setActiveTab] = useState<
     'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
   >('overview');
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   const sessionQuery = useQuery({
     queryKey: ['session', slug],
@@ -1308,6 +1577,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
   const primary = partner?.brand_color || '#16A34A';
   const firmName = partner?.firm_name || slug;
+  const products = getProducts(partner?.fee_markup);
 
   if (sessionQuery.isLoading || (!email && !sessionQuery.data)) {
     return (
@@ -1413,15 +1683,39 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
             <p className="mb-6 text-sm text-gray-500">
               Welcome, {trader.name}! You have an account but no evaluations yet.
             </p>
-            <Link
-              href={`/${slug}`}
-              className="inline-flex items-center gap-2 rounded-lg py-2.5 px-5 text-sm font-semibold text-white hover:opacity-90"
-              style={{ backgroundColor: primary }}
-            >
-              Buy an Evaluation <ArrowRight size={14} />
-            </Link>
+            {hasSession ? (
+              <button
+                onClick={() => setPurchaseOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg py-2.5 px-5 text-sm font-semibold text-white hover:opacity-90"
+                style={{ backgroundColor: primary }}
+              >
+                Buy an Evaluation <ArrowRight size={14} />
+              </button>
+            ) : (
+              <Link
+                href={`/${slug}`}
+                className="inline-flex items-center gap-2 rounded-lg py-2.5 px-5 text-sm font-semibold text-white hover:opacity-90"
+                style={{ backgroundColor: primary }}
+              >
+                Buy an Evaluation <ArrowRight size={14} />
+              </Link>
+            )}
           </div>
         </div>
+        {purchaseOpen && hasSession && (
+          <DashboardPurchaseModal
+            products={products}
+            trader={displayTrader}
+            slug={slug}
+            primary={primary}
+            onClose={() => setPurchaseOpen(false)}
+            onSuccess={() => {
+              setPurchaseOpen(false);
+              setActiveTab('payments');
+              qc.invalidateQueries({ queryKey: ['evaluations', slug, email] });
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1496,12 +1790,21 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
             <span className="text-sm text-gray-500">{displayTrader.name}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/${slug}`}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-gray-300"
-            >
-              Buy Evaluation
-            </Link>
+            {hasSession ? (
+              <button
+                onClick={() => setPurchaseOpen(true)}
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-gray-300"
+              >
+                Buy Evaluation
+              </button>
+            ) : (
+              <Link
+                href={`/${slug}`}
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:border-gray-300"
+              >
+                Buy Evaluation
+              </Link>
+            )}
             {hasSession && (
               <button
                 onClick={() => logoutMutation.mutate()}
@@ -1790,6 +2093,20 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
           <KYCTab trader={displayTrader} slug={slug} primary={primary} />
         )}
       </div>
+      {purchaseOpen && hasSession && (
+        <DashboardPurchaseModal
+          products={products}
+          trader={displayTrader}
+          slug={slug}
+          primary={primary}
+          onClose={() => setPurchaseOpen(false)}
+          onSuccess={() => {
+            setPurchaseOpen(false);
+            setActiveTab('payments');
+            qc.invalidateQueries({ queryKey: ['evaluations', slug, email] });
+          }}
+        />
+      )}
       <style jsx global>{`
         @keyframes spin {
           to {
