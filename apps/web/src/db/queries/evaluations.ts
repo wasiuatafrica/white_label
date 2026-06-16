@@ -4,6 +4,13 @@ import { mapEvaluation } from '../mappers';
 import { evaluations } from '../schema/evaluations';
 import { tradeAccounts } from '../schema/trade-accounts';
 import { traders } from '../schema/traders';
+import {
+  getTradingTelemetryMetrics,
+  TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT,
+  TRADING_DAILY_DRAWDOWN_LIMIT_PERCENT,
+  TRADING_PROFIT_TARGET_PERCENT,
+  TRADING_REQUIRED_DAYS,
+} from '@/lib/trading-telemetry';
 import { incrementPartnerRevenue, incrementPartnerTraders } from './partners';
 import { createTrader, getTraderByEmail } from './traders';
 import { createTradeAccountActivation } from './trade-accounts';
@@ -79,15 +86,48 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
     .leftJoin(tradeAccounts, eq(tradeAccounts.evaluationId, evaluations.id))
     .where(and(eq(evaluations.traderId, traderId), eq(evaluations.partnerId, partnerId)))
     .orderBy(desc(evaluations.purchaseDate));
-  return rows.map((row) => ({
-    ...mapEvaluation(row),
-    account_creation_code: row.account_creation_code,
-    trade_account_id: row.trade_account_id,
-    trade_account_number: row.trade_account_number,
-    trade_account_platform: row.trade_account_platform,
-    trade_account_broker: row.trade_account_broker,
-    trade_account_completed: row.trade_account_completed,
-  }));
+  const enrichedRows = await Promise.all(
+    rows.map(async (row) => {
+      let telemetry: Awaited<ReturnType<typeof getTradingTelemetryMetrics>> = null;
+      if (row.trade_account_number) {
+        try {
+          telemetry = await getTradingTelemetryMetrics(Number(row.trade_account_number));
+        } catch (error) {
+          console.error('Failed to load trading telemetry', {
+            accountNumber: row.trade_account_number,
+            error,
+          });
+        }
+      }
+      const evaluation = mapEvaluation(row);
+
+      return {
+        ...evaluation,
+        profit_target: telemetry?.profit_target ?? TRADING_PROFIT_TARGET_PERCENT,
+        current_profit: telemetry?.current_profit ?? Number(evaluation.current_profit),
+        max_drawdown:
+          telemetry?.max_account_drawdown ?? TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT,
+        current_drawdown:
+          telemetry?.account_drawdown ?? Number(evaluation.current_drawdown),
+        trading_days: telemetry?.trading_days ?? evaluation.trading_days,
+        required_days: telemetry?.required_days ?? TRADING_REQUIRED_DAYS,
+        daily_drawdown: telemetry?.daily_drawdown ?? 0,
+        max_daily_drawdown:
+          telemetry?.max_daily_drawdown ?? TRADING_DAILY_DRAWDOWN_LIMIT_PERCENT,
+        latest_balance: telemetry?.latest_balance ?? null,
+        latest_equity: telemetry?.latest_equity ?? null,
+        telemetry,
+        account_creation_code: row.account_creation_code,
+        trade_account_id: row.trade_account_id,
+        trade_account_number: row.trade_account_number,
+        trade_account_platform: row.trade_account_platform,
+        trade_account_broker: row.trade_account_broker,
+        trade_account_completed: row.trade_account_completed,
+      };
+    })
+  );
+
+  return enrichedRows;
 }
 
 export async function getEvaluationForTrader(
@@ -153,10 +193,9 @@ export async function createEvaluationWithTrader(data: {
       await incrementPartnerTraders(data.partnerId, tx);
     }
 
-    const isSSL = data.evalType === 'SSL';
-    const profitTarget = isSSL ? '8.0' : '10.0';
-    const maxDrawdown = isSSL ? '8.0' : '10.0';
-    const requiredDays = isSSL ? 21 : 30;
+    const profitTarget = String(TRADING_PROFIT_TARGET_PERCENT);
+    const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
+    const requiredDays = TRADING_REQUIRED_DAYS;
     const amount = String(data.amount || 0);
 
     const [evaluation] = await tx
@@ -195,10 +234,9 @@ export async function createEvaluationForTrader(data: {
   paymentMethod?: string | null;
   paymentProofUrl?: string | null;
 }) {
-  const isSSL = data.evalType === 'SSL';
-  const profitTarget = isSSL ? '8.0' : '10.0';
-  const maxDrawdown = isSSL ? '8.0' : '10.0';
-  const requiredDays = isSSL ? 21 : 30;
+  const profitTarget = String(TRADING_PROFIT_TARGET_PERCENT);
+  const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
+  const requiredDays = TRADING_REQUIRED_DAYS;
   const amount = String(data.amount || 0);
 
   const [evaluation] = await db

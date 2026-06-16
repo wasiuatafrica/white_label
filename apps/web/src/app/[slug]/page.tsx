@@ -61,7 +61,7 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦145,000',
     priceNum: 145000,
     accountSize: '$10,000',
-    profitTarget: '10%',
+    profitTarget: '25%',
     maxDrawdown: '10%',
     tradingDays: '30 days',
     features: [
@@ -78,13 +78,13 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦49,000',
     priceNum: 49000,
     accountSize: '$10,000',
-    profitTarget: '8%',
-    maxDrawdown: '8%',
-    tradingDays: '21 days',
+    profitTarget: '25%',
+    maxDrawdown: '10%',
+    tradingDays: '30 days',
     features: [
-      'Daily drawdown limit: 4%',
-      'Maximum 8% total drawdown',
-      'Minimum 21 trading days',
+      'Daily drawdown limit: 5%',
+      'Maximum 10% total drawdown',
+      'Minimum 30 trading days',
       'No EA restrictions',
     ],
   },
@@ -107,7 +107,7 @@ function getProducts(feeMarkup: number | string | null | undefined): EvalProduct
 const PARTNER_FAQS = [
   {
     q: 'What is a prop trading evaluation?',
-    a: 'An evaluation is a trading challenge where you must reach a profit target (e.g. 10%) while respecting drawdown and daily loss rules over a minimum number of trading days. Pass it → receive a real funded account.',
+    a: 'An evaluation is a trading challenge where you must reach a 25% profit target while respecting drawdown and daily loss rules over a minimum number of trading days. Pass it → receive a real funded account.',
   },
   {
     q: 'How do I access my dashboard after purchasing?',
@@ -141,7 +141,7 @@ const EVAL_RULES = [
     name: 'Standard Evaluation',
     accountSize: '$10,000',
     rules: [
-      { label: 'Profit Target', value: '10% ($1,000)' },
+      { label: 'Profit Target', value: '25% ($2,500)' },
       { label: 'Max Drawdown', value: '10% ($1,000)' },
       { label: 'Daily Loss Limit', value: '5% ($500)' },
       { label: 'Min Trading Days', value: '30 days' },
@@ -155,10 +155,10 @@ const EVAL_RULES = [
     name: 'Starter Evaluation',
     accountSize: '$10,000',
     rules: [
-      { label: 'Profit Target', value: '8% ($800)' },
-      { label: 'Max Drawdown', value: '8% ($800)' },
-      { label: 'Daily Loss Limit', value: '4% ($400)' },
-      { label: 'Min Trading Days', value: '21 days' },
+      { label: 'Profit Target', value: '25% ($2,500)' },
+      { label: 'Max Drawdown', value: '10% ($1,000)' },
+      { label: 'Daily Loss Limit', value: '5% ($500)' },
+      { label: 'Min Trading Days', value: '30 days' },
       { label: 'News Trading', value: '⚠️ Restricted' },
       { label: 'Expert Advisors', value: '✅ Allowed' },
       { label: 'Profit Split', value: 'Up to 90%' },
@@ -217,12 +217,14 @@ function PartnerInfoSections({
           </div>
           <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-500 space-y-1.5">
             <p>
-              <strong className="text-gray-700">Drawdown:</strong> Measured from your highest equity
-              peak. A breach at any point — including during open trades — fails the evaluation.
+              <strong className="text-gray-700">Account drawdown:</strong> Measured against the
+              $10,000 account size using both balance and equity. A breach at any point fails the
+              evaluation.
             </p>
             <p>
-              <strong className="text-gray-700">Daily loss:</strong> Resets at midnight (server
-              time). Reaching the limit triggers an automatic account review.
+              <strong className="text-gray-700">Daily drawdown:</strong> Measured from each
+              day&apos;s starting balance and equity against that day&apos;s lowest balance and
+              equity.
             </p>
             <p>
               <strong className="text-gray-700">Trading days:</strong> Counted when at least one

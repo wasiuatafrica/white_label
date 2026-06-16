@@ -62,6 +62,10 @@ type Evaluation = {
   current_profit: number;
   max_drawdown: number;
   current_drawdown: number;
+  daily_drawdown: number;
+  max_daily_drawdown: number;
+  latest_balance: number | null;
+  latest_equity: number | null;
   trading_days: number;
   required_days: number;
   purchase_date: string;
@@ -71,6 +75,23 @@ type Evaluation = {
   trade_account_platform: string | null;
   trade_account_broker: string | null;
   trade_account_completed: boolean | null;
+  telemetry: {
+    has_telemetry: boolean;
+    latest_balance: number | null;
+    latest_equity: number | null;
+    current_profit: number;
+    profit_target: number;
+    trading_days: number;
+    required_days: number;
+    daily_drawdown: number;
+    max_daily_drawdown: number;
+    account_drawdown: number;
+    max_account_drawdown: number;
+    profit_target_passed: boolean;
+    min_trading_days_passed: boolean;
+    daily_drawdown_breached: boolean;
+    account_drawdown_breached: boolean;
+  } | null;
 };
 type TraderRequest = {
   id: number;
@@ -134,7 +155,7 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦145,000',
     priceNum: 145000,
     accountSize: '$10,000',
-    profitTarget: '10%',
+    profitTarget: '25%',
     maxDrawdown: '10%',
   },
   {
@@ -144,8 +165,8 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦49,000',
     priceNum: 49000,
     accountSize: '$10,000',
-    profitTarget: '8%',
-    maxDrawdown: '8%',
+    profitTarget: '25%',
+    maxDrawdown: '10%',
   },
 ];
 const DEFAULT_EVAL_PRODUCT = BASE_EVAL_PRODUCTS[0] as EvalProduct;
@@ -167,6 +188,29 @@ function getAvailableRequests(evalType: string): string[] {
 function getEvalTypeLabel(evalType: string): string {
   if (evalType === 'SSL') return 'Synthetic Signals Lite (SSL)';
   return 'Synthetic Signals (SS)';
+}
+
+function hasPassedByRules(eval_: Evaluation) {
+  if (eval_.status === 'passed') return true;
+  return Boolean(
+    eval_.telemetry?.profit_target_passed &&
+      eval_.telemetry.min_trading_days_passed &&
+      !eval_.telemetry.daily_drawdown_breached &&
+      !eval_.telemetry.account_drawdown_breached
+  );
+}
+
+function hasFailedByRules(eval_: Evaluation) {
+  if (eval_.status === 'failed') return true;
+  return Boolean(
+    eval_.telemetry?.daily_drawdown_breached || eval_.telemetry?.account_drawdown_breached
+  );
+}
+
+function getEffectiveEvalStatus(eval_: Evaluation) {
+  if (hasFailedByRules(eval_)) return 'failed';
+  if (hasPassedByRules(eval_)) return 'passed';
+  return eval_.status;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -616,7 +660,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                       <span className="text-sm font-black text-gray-900">
                         {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
-                      <StatusBadge status={e.status} />
+                      <StatusBadge status={getEffectiveEvalStatus(e)} />
                     </div>
                     <div className="mt-1 text-xs text-gray-400">
                       Purchased {formatDate(e.purchase_date)} · ID: EVL-
@@ -681,7 +725,7 @@ function PaymentsTab({ evaluations, primary }: { evaluations: Evaluation[]; prim
                     <span className="text-sm font-semibold text-gray-900">
                       {getEvalTypeLabel(e.eval_type)} Evaluation
                     </span>
-                    <StatusBadge status={e.status} />
+                    <StatusBadge status={getEffectiveEvalStatus(e)} />
                   </div>
                   <div className="mt-0.5 text-xs text-gray-400">
                     {formatDate(e.purchase_date)} · EVL-{e.id.toString().padStart(6, '0')}
@@ -977,7 +1021,7 @@ function PayoutsTab({
     onError: (e: Error) => setSubmitError(e.message),
   });
 
-  const passedEvals = evaluations.filter((e) => e.status === 'passed');
+  const passedEvals = evaluations.filter(hasPassedByRules);
 
   const getRequestForEvalType = (evalId: number, reqType: string) =>
     requests.find((r) => r.eval_id === evalId && r.request_type === reqType);
@@ -1044,7 +1088,7 @@ function PayoutsTab({
                       <span className="text-sm font-semibold text-gray-900">
                         {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
-                      <StatusBadge status={e.status} />
+                      <StatusBadge status={getEffectiveEvalStatus(e)} />
                       <PayoutBadge status={e.payout_status ?? null} />
                     </div>
                     <div className="mt-0.5 text-xs text-gray-400">
@@ -1823,11 +1867,25 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     );
   }
 
-  const profitDone = eval_.current_profit >= eval_.profit_target;
-  const daysDone = eval_.trading_days >= eval_.required_days;
-  const dragged = eval_.current_drawdown >= eval_.max_drawdown * 0.8;
-  const accountSize = eval_.eval_type === 'SSL' ? 5000 : 10000;
-  const currentBalance = accountSize * (1 + eval_.current_profit / 100);
+  const profitDone =
+    eval_.telemetry?.profit_target_passed ?? eval_.current_profit >= eval_.profit_target;
+  const daysDone =
+    eval_.telemetry?.min_trading_days_passed ?? eval_.trading_days >= eval_.required_days;
+  const dailyDrawdownBreached =
+    eval_.telemetry?.daily_drawdown_breached ??
+    eval_.daily_drawdown >= eval_.max_daily_drawdown;
+  const accountDrawdownBreached =
+    eval_.telemetry?.account_drawdown_breached ??
+    eval_.current_drawdown >= eval_.max_drawdown;
+  const dragged =
+    dailyDrawdownBreached ||
+    accountDrawdownBreached ||
+    eval_.current_drawdown >= eval_.max_drawdown * 0.8 ||
+    eval_.daily_drawdown >= eval_.max_daily_drawdown * 0.8;
+  const accountSize = 10000;
+  const currentBalance =
+    eval_.latest_balance ?? accountSize * (1 + eval_.current_profit / 100);
+  const currentEquity = eval_.latest_equity ?? currentBalance;
   const pnl = currentBalance - accountSize;
   const evalCode = `EVL-${eval_.id.toString().padStart(6, '0')}`;
   const kycStatus = displayTrader.kyc_status || 'not_started';
@@ -1839,7 +1897,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   };
 
   const pendingPaymentCount = evaluations.filter((e) => e.status === 'pending_payment').length;
-  const passedCount = evaluations.filter((e) => e.status === 'passed').length;
+  const passedCount = evaluations.filter(hasPassedByRules).length;
   const accountSetupCount = evaluations.filter(
     (e) => e.status === 'active' && e.account_creation_code && !e.trade_account_completed
   ).length;
@@ -1998,7 +2056,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <StatusBadge status={eval_.status} />
+                <StatusBadge status={getEffectiveEvalStatus(eval_)} />
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600">
                   {getEvalTypeLabel(eval_.eval_type)} · $
                   {accountSize.toLocaleString()}
@@ -2010,15 +2068,16 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               <div className="mb-6 flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-5 py-4">
                 <AlertCircle size={16} className="shrink-0 text-orange-500" />
                 <p className="text-sm text-orange-700">
-                  <strong>Drawdown Warning:</strong> You&apos;ve used {eval_.current_drawdown}% of
-                  your {eval_.max_drawdown}% max drawdown.
+                  <strong>Drawdown Warning:</strong> Daily drawdown is {eval_.daily_drawdown}% /
+                  {eval_.max_daily_drawdown}% and account drawdown is {eval_.current_drawdown}% /
+                  {eval_.max_drawdown}%.
                 </p>
               </div>
             )}
 
             <div className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
               <h2 className="mb-6 text-base font-semibold text-gray-900">Evaluation Progress</h2>
-              <div className="grid grid-cols-3 gap-8">
+              <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
                 <CircleRing
                   value={eval_.current_profit}
                   max={eval_.profit_target}
@@ -2027,10 +2086,17 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                   sub={`${eval_.current_profit}% / ${eval_.profit_target}%`}
                 />
                 <CircleRing
+                  value={eval_.daily_drawdown}
+                  max={eval_.max_daily_drawdown}
+                  color={dailyDrawdownBreached ? '#DC2626' : '#6B7280'}
+                  label="Daily Drawdown"
+                  sub={`${eval_.daily_drawdown}% / ${eval_.max_daily_drawdown}%`}
+                />
+                <CircleRing
                   value={eval_.current_drawdown}
                   max={eval_.max_drawdown}
-                  color={dragged ? '#EA580C' : '#6B7280'}
-                  label="Drawdown Used"
+                  color={accountDrawdownBreached ? '#DC2626' : '#6B7280'}
+                  label="Account Drawdown"
                   sub={`${eval_.current_drawdown}% / ${eval_.max_drawdown}%`}
                 />
                 <CircleRing
@@ -2059,15 +2125,24 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                       detail: `${eval_.trading_days} days completed`,
                     },
                     {
-                      rule: `Max drawdown (${eval_.max_drawdown}%)`,
-                      done: !dragged,
-                      detail: dragged ? '⚠ Near limit' : `${eval_.current_drawdown}% used`,
-                      warn: dragged,
+                      rule: `Daily drawdown (${eval_.max_daily_drawdown}%)`,
+                      done: !dailyDrawdownBreached,
+                      detail: dailyDrawdownBreached
+                        ? 'Limit breached'
+                        : `${eval_.daily_drawdown}% used`,
+                      warn:
+                        dailyDrawdownBreached ||
+                        eval_.daily_drawdown >= eval_.max_daily_drawdown * 0.8,
                     },
                     {
-                      rule: `Daily loss limit (${eval_.max_drawdown / 2}%)`,
-                      done: true,
-                      detail: 'Within limits',
+                      rule: `Account drawdown (${eval_.max_drawdown}%)`,
+                      done: !accountDrawdownBreached,
+                      detail: accountDrawdownBreached
+                        ? 'Limit breached'
+                        : `${eval_.current_drawdown}% used`,
+                      warn:
+                        accountDrawdownBreached ||
+                        eval_.current_drawdown >= eval_.max_drawdown * 0.8,
                     },
                   ].map((r) => (
                     <div key={r.rule} className="flex items-start gap-3">
@@ -2087,7 +2162,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                     </div>
                   ))}
                 </div>
-                {profitDone && daysDone && !dragged && (
+                {profitDone && daysDone && !dailyDrawdownBreached && !accountDrawdownBreached && (
                   <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                     <CheckCircle size={20} className="mx-auto mb-2 text-[#16A34A]" />
                     <div className="text-sm font-semibold text-green-800">All conditions met!</div>
@@ -2108,14 +2183,22 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                       value: getEvalTypeLabel(eval_.eval_type),
                     },
                     { label: 'Account Size', value: `$${accountSize.toLocaleString()}` },
-                    { label: 'Current Balance', value: `$${currentBalance.toFixed(0)}` },
+                    {
+                      label: 'Current Balance',
+                      value: `$${currentBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+                    },
+                    {
+                      label: 'Current Equity',
+                      value: `$${currentEquity.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+                    },
                     {
                       label: 'P&L',
-                      value: `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}`,
+                      value: `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                       green: pnl >= 0,
                       red: pnl < 0,
                     },
-                    { label: 'Open Drawdown', value: `${eval_.current_drawdown}%` },
+                    { label: 'Daily Drawdown', value: `${eval_.daily_drawdown}%` },
+                    { label: 'Account Drawdown', value: `${eval_.current_drawdown}%` },
                     { label: 'Purchase Date', value: formatDate(eval_.purchase_date) },
                     ...(hasSession
                       ? [{ label: 'KYC Status', value: kycBadgeMap[kycStatus] || kycStatus }]
@@ -2153,7 +2236,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                         </div>
                         <div className="text-xs text-gray-400">{formatDate(e.purchase_date)}</div>
                       </div>
-                      <StatusBadge status={e.status} />
+                      <StatusBadge status={getEffectiveEvalStatus(e)} />
                     </div>
                   ))}
                 </div>
