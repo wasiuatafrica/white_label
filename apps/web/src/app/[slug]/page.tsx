@@ -63,11 +63,11 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     accountSize: '$10,000',
     profitTarget: '25%',
     maxDrawdown: '10%',
-    tradingDays: '30 days',
+    tradingDays: '10 days',
     features: [
       'Daily drawdown limit: 5%',
       'Maximum 10% total drawdown',
-      'Minimum 30 trading days',
+      'Minimum 10 trading days',
       'News trading allowed',
     ],
   },
@@ -80,11 +80,11 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     accountSize: '$10,000',
     profitTarget: '25%',
     maxDrawdown: '10%',
-    tradingDays: '30 days',
+    tradingDays: '10 days',
     features: [
       'Daily drawdown limit: 5%',
       'Maximum 10% total drawdown',
-      'Minimum 30 trading days',
+      'Minimum 10 trading days',
       'No EA restrictions',
     ],
   },
@@ -144,7 +144,7 @@ const EVAL_RULES = [
       { label: 'Profit Target', value: '25% ($2,500)' },
       { label: 'Max Drawdown', value: '10% ($1,000)' },
       { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '30 days' },
+      { label: 'Min Trading Days', value: '10 days' },
       { label: 'News Trading', value: '✅ Allowed' },
       { label: 'Expert Advisors', value: '⚠️ Restricted' },
       { label: 'Profit Split', value: 'Up to 90%' },
@@ -158,7 +158,7 @@ const EVAL_RULES = [
       { label: 'Profit Target', value: '25% ($2,500)' },
       { label: 'Max Drawdown', value: '10% ($1,000)' },
       { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '30 days' },
+      { label: 'Min Trading Days', value: '10 days' },
       { label: 'News Trading', value: '⚠️ Restricted' },
       { label: 'Expert Advisors', value: '✅ Allowed' },
       { label: 'Profit Split', value: 'Up to 90%' },
@@ -227,8 +227,8 @@ function PartnerInfoSections({
               equity.
             </p>
             <p>
-              <strong className="text-gray-700">Trading days:</strong> Counted when at least one
-              trade is fully closed within that calendar day.
+              <strong className="text-gray-700">Trading days:</strong> Counted when the account
+              balance changes at least once within that calendar day.
             </p>
           </div>
           <div className="mt-4 flex items-center gap-2">

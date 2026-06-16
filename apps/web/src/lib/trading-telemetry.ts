@@ -6,7 +6,7 @@ export const TRADING_PROFIT_TARGET_BALANCE =
   TRADING_ACCOUNT_SIZE * (1 + TRADING_PROFIT_TARGET_PERCENT / 100);
 export const TRADING_DAILY_DRAWDOWN_LIMIT_PERCENT = 5;
 export const TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT = 10;
-export const TRADING_REQUIRED_DAYS = 30;
+export const TRADING_REQUIRED_DAYS = 10;
 
 export type BalanceEquityPoint = {
   account: number;
@@ -85,15 +85,18 @@ export function calculateTradingTelemetryMetrics(
   }
 
   let maxDailyDrawdown = 0;
+  let tradingDays = 0;
 
   for (const bucket of dailyBuckets.values()) {
     const first = bucket[0] as BalanceEquityPoint;
     let dayLowestBalance = first.balance;
     let dayLowestEquity = first.equity;
+    let balanceChanged = false;
 
     for (const point of bucket) {
       dayLowestBalance = Math.min(dayLowestBalance, point.balance);
       dayLowestEquity = Math.min(dayLowestEquity, point.equity);
+      balanceChanged ||= point.balance !== first.balance;
     }
 
     const balanceDrawdown =
@@ -102,6 +105,7 @@ export function calculateTradingTelemetryMetrics(
       ((first.equity - dayLowestEquity) / TRADING_ACCOUNT_SIZE) * 100;
 
     maxDailyDrawdown = Math.max(maxDailyDrawdown, balanceDrawdown, equityDrawdown);
+    if (balanceChanged) tradingDays += 1;
   }
 
   const balanceAccountDrawdown =
@@ -110,7 +114,6 @@ export function calculateTradingTelemetryMetrics(
     ((TRADING_ACCOUNT_SIZE - lowestEquity) / TRADING_ACCOUNT_SIZE) * 100;
   const accountDrawdown = Math.max(balanceAccountDrawdown, equityAccountDrawdown);
   const currentProfit = ((latest.balance - TRADING_ACCOUNT_SIZE) / TRADING_ACCOUNT_SIZE) * 100;
-  const tradingDays = dailyBuckets.size;
 
   return {
     has_telemetry: true,
