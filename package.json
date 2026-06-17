@@ -4,6 +4,7 @@
   "scripts": {
     "heroku-postbuild": "yarn workspace web build",
     "db:generate": "yarn workspace web db:generate",
+    "db:migrate": "yarn workspace web db:migrate",
     "db:push": "yarn workspace web db:push"
   },
   "engines": {

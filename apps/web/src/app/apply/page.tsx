@@ -3,9 +3,12 @@ import { getPartnerUrl, normalizePartnerSlug } from '@/lib/tenant';
 import useUpload from '@/utils/useUpload';
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Upload } from 'lucide-react';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STEPS = ['Your Details', 'Branding', 'Payment', 'Review'];
+const TRACKING_STEPS = ['details', 'branding', 'payment', 'review'] as const;
+
+type TrackingStatus = 'started' | 'continued' | 'payment_started' | 'abandoned' | 'submitted';
 
 const BRAND_PRESETS = [
   { name: 'Forest', primary: '#16A34A', secondary: '#F59E0B' },
@@ -22,6 +25,13 @@ export default function ApplyPage() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const proofRef = useRef<HTMLInputElement>(null);
+  const attemptIdRef = useRef(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  const hasTrackedRef = useRef(false);
+  const submittedRef = useRef(false);
   const [upload, { loading: uploading }] = useUpload();
   const [proofFileName, setProofFileName] = useState('');
 
@@ -39,6 +49,76 @@ export default function ApplyPage() {
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const getTrackingPayload = useCallback(
+    (status: TrackingStatus, stepOverride = step) => ({
+      attempt_id: attemptIdRef.current,
+      status,
+      last_step: TRACKING_STEPS[stepOverride] ?? 'details',
+      form_data: {
+        firm_name: form.firm_name,
+        slug: form.slug,
+        owner_name: form.owner_name,
+        owner_email: form.owner_email,
+        tagline: form.tagline,
+        description: form.description,
+        brand_color: form.brand_color,
+        secondary_color: form.secondary_color,
+        payment_method: form.payment_method,
+        has_payment_proof: Boolean(form.payment_proof_url),
+      },
+    }),
+    [form, step]
+  );
+
+  const trackSignup = useCallback(
+    async (status: TrackingStatus, stepOverride = step) => {
+      hasTrackedRef.current = true;
+      try {
+        await fetch('/api/partner-signup-events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getTrackingPayload(status, stepOverride)),
+          keepalive: status === 'abandoned',
+        });
+      } catch (e) {
+        console.error('Failed to track partner signup event', e);
+      }
+    },
+    [getTrackingPayload, step]
+  );
+
+  useEffect(() => {
+    const trackAbandoned = () => {
+      if (!hasTrackedRef.current || submittedRef.current) return;
+      const payload = JSON.stringify(getTrackingPayload('abandoned'));
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(
+          '/api/partner-signup-events',
+          new Blob([payload], { type: 'application/json' })
+        );
+        return;
+      }
+      void fetch('/api/partner-signup-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') trackAbandoned();
+    };
+
+    window.addEventListener('pagehide', trackAbandoned);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', trackAbandoned);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [getTrackingPayload]);
 
   const autoSlug = (name: string) =>
     normalizePartnerSlug(name.replace(/[^a-z0-9]+/gi, '-')).slice(0, 20);
@@ -63,6 +143,8 @@ export default function ApplyPage() {
         const data = await res.json();
         throw new Error(data.error || 'Failed to submit application');
       }
+      submittedRef.current = true;
+      await trackSignup('submitted', 3);
       setSubmitted(true);
     } catch (e: unknown) {
       console.error(e);
@@ -112,10 +194,18 @@ export default function ApplyPage() {
     const result = await upload({ file });
     if (result.url) {
       set('payment_proof_url', result.url);
+      void trackSignup('payment_started', 2);
     } else {
       setError(result.error || 'Upload failed. Please try again.');
     }
   }
+
+  const handleContinue = () => {
+    const nextStep = Math.min(step + 1, STEPS.length - 1);
+    const status: TrackingStatus = nextStep >= 2 ? 'payment_started' : 'continued';
+    void trackSignup(status, nextStep);
+    setStep(nextStep);
+  };
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] font-inter">
@@ -518,7 +608,7 @@ export default function ApplyPage() {
             </button>
             {step < STEPS.length - 1 ? (
               <button
-                onClick={() => setStep((s) => s + 1)}
+                onClick={handleContinue}
                 disabled={!canNext()}
                 className="flex items-center gap-2 rounded-lg bg-[#111827] px-6 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
               >
