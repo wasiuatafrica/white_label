@@ -15,7 +15,6 @@ const TEMPLATE_CASES: Array<{
       FIRM_NAME: 'Prime Traders',
       SLUG: 'prime',
       ADMIN_PIN: '482913',
-      URL: 'https://prime.ft9ja.com/admin',
     },
   },
   {

@@ -19,7 +19,6 @@ type Ft9jaPartnerTemplateVariables = {
     FIRM_NAME: string;
     SLUG: string;
     ADMIN_PIN: string;
-    URL: string;
   };
   'p-02-firm-live': {
     OWNER_NAME: string;
@@ -317,10 +316,11 @@ function licenseReference(partner: PartnerRecipient, date: Date) {
 }
 
 export async function sendPartnerWelcomeEmail(partner: PartnerRecipient) {
+  const { OWNER_NAME, FIRM_NAME, SLUG, ADMIN_PIN } = partnerVariables(partner);
   return sendFt9jaPartnerEmail({
     template: 'p-01-welcome',
     to: partner.owner_email,
-    variables: partnerVariables(partner),
+    variables: { OWNER_NAME, FIRM_NAME, SLUG, ADMIN_PIN },
   });
 }
 
