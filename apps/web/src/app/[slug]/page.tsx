@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { use, useState } from 'react';
+import {
+  DAILY_DRAWDOWN_RULE,
+  FT9JA_EVAL_RULES,
+  FT9JA_PARTNER_FAQS,
+  FT9JA_RULE_NOTES,
+} from '@/lib/ft9ja-support-content';
 import { getFt9jaPaymentRows } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
 
@@ -53,6 +59,12 @@ type EvalProduct = {
   features: string[];
 };
 
+const PARTNER_PRODUCT_CONDUCT_FEATURES = [
+  'Scalping permitted — positions must be held at least 5 minutes',
+  'Copy trading between accounts is strictly forbidden',
+  'One-side betting is prohibited',
+] as const;
+
 const BASE_EVAL_PRODUCTS: EvalProduct[] = [
   {
     id: 'ss',
@@ -65,10 +77,12 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     maxDrawdown: '10%',
     tradingDays: '10 days/mo',
     features: [
-      'Daily drawdown limit: 5%',
+      `Daily drawdown: ${DAILY_DRAWDOWN_RULE}`,
       'Maximum 10% total drawdown',
       'Minimum 10 trading days per month (2 per week)',
+      ...PARTNER_PRODUCT_CONDUCT_FEATURES,
       'Grow to 25% to qualify for Aso account (up to 90% split)',
+      'Payouts processed on Fridays',
     ],
   },
   {
@@ -82,10 +96,12 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     maxDrawdown: '10%',
     tradingDays: '10 days/mo',
     features: [
-      'Daily drawdown limit: 5%',
+      `Daily drawdown: ${DAILY_DRAWDOWN_RULE}`,
       'Maximum 10% total drawdown',
       'Minimum 10 trading days per month (2 per week)',
+      ...PARTNER_PRODUCT_CONDUCT_FEATURES,
       'No evaluation — talent bonus payouts (5% weekly / 15% monthly)',
+      'Payouts processed on Fridays',
     ],
   },
 ];
@@ -104,67 +120,8 @@ function getProducts(feeMarkup: number | string | null | undefined): EvalProduct
 }
 
 // ─── Partner Info Sections (FAQ, Rules, Contact) ──────────────────────────────
-const PARTNER_FAQS = [
-  {
-    q: 'What is a prop trading evaluation?',
-    a: 'Standard (SS) is a one-step evaluation: grow your account to 25% while respecting drawdown and daily loss rules, then qualify for an Aso funded account. Starter (SSL) has no evaluation or profit target — you trade for talent bonus payouts instead.',
-  },
-  {
-    q: 'How do I access my dashboard after purchasing?',
-    a: "Visit the Trader Login page, enter the email you used when purchasing, and you'll be taken directly to your evaluation dashboard. No password needed — your email is your access.",
-  },
-  {
-    q: 'What happens when I pass?',
-    a: 'Once all conditions are met (profit target, min trading days, no rule breaches), contact your firm via the details below. Your funded live account will be set up within 1–3 business days.',
-  },
-  {
-    q: 'Can I trade news events?',
-    a: 'Both Standard (SS) and Starter (SSL) synthetic accounts allow news trading. Copy trading between FT9ja accounts is not permitted on either account type.',
-  },
-  {
-    q: 'Are Expert Advisors (EAs) allowed?',
-    a: 'Expert Advisors and trading signals are allowed on both Standard (SS) and Starter (SSL) accounts. Copy trading from other FT9ja accounts is not permitted.',
-  },
-  {
-    q: 'Is my evaluation fee refundable?',
-    a: 'Evaluation fees are non-refundable once your account has been activated. If you have not received your account credentials within 4 business hours of confirmed payment, contact us immediately.',
-  },
-  {
-    q: 'What is the profit split on funded accounts?',
-    a: 'Funded traders keep up to 90% of their net profits. Payouts are processed within 7 business days of a withdrawal request through your trader dashboard.',
-  },
-];
-
-const EVAL_RULES = [
-  {
-    code: 'SS',
-    name: 'Standard Evaluation',
-    accountSize: '$10,000',
-    rules: [
-      { label: 'Profit Target', value: '25% ($2,500)' },
-      { label: 'Max Drawdown', value: '10% ($1,000)' },
-      { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '10 days/month, 2/week' },
-      { label: 'News Trading', value: '✅ Allowed' },
-      { label: 'Expert Advisors', value: '✅ Allowed' },
-      { label: 'Profit Split', value: 'Up to 90%' },
-    ],
-  },
-  {
-    code: 'SSL',
-    name: 'Starter Evaluation',
-    accountSize: '$10,000',
-    rules: [
-      { label: 'Profit Target', value: 'None (no evaluation)' },
-      { label: 'Max Drawdown', value: '10% ($1,000)' },
-      { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '10 days/month, 2/week' },
-      { label: 'News Trading', value: '✅ Allowed' },
-      { label: 'Expert Advisors', value: '✅ Allowed' },
-      { label: 'Talent Bonus', value: '5% weekly / 15% monthly' },
-    ],
-  },
-];
+const PARTNER_FAQS = FT9JA_PARTNER_FAQS;
+const EVAL_RULES = FT9JA_EVAL_RULES;
 
 function PartnerInfoSections({
   partner,
@@ -216,21 +173,11 @@ function PartnerInfoSections({
             ))}
           </div>
           <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-4 text-xs text-gray-500 space-y-1.5">
-            <p>
-              <strong className="text-gray-700">Account drawdown:</strong> Measured against the
-              $10,000 account size using both balance and equity. A breach at any point fails the
-              evaluation.
-            </p>
-            <p>
-              <strong className="text-gray-700">Daily drawdown:</strong> Measured from each
-              day&apos;s starting balance and equity against that day&apos;s lowest balance and
-              equity.
-            </p>
-            <p>
-              <strong className="text-gray-700">Trading days:</strong> Trade on at least 2 days
-              per week and 10 separate days per month. A day counts when you open and close at
-              least one position.
-            </p>
+            {FT9JA_RULE_NOTES.map((note) => (
+              <p key={note.label}>
+                <strong className="text-gray-700">{note.label}:</strong> {note.text}
+              </p>
+            ))}
           </div>
           <div className="mt-4 flex items-center gap-2">
             <Link
@@ -537,8 +484,8 @@ function PurchaseModal({
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-semibold text-amber-800 mb-0.5">Payment Instructions</p>
               <p className="text-xs text-amber-700">
-                Pay <strong>{product.price}</strong> to FT9ja using any method below, then upload
-                your receipt or transaction screenshot for FT9ja verification.
+                Pay <strong>{product.price}</strong> using any method below, then upload your
+                receipt or transaction screenshot for verification.
               </p>
             </div>
             <div className="mb-4 grid grid-cols-3 gap-2">
@@ -749,14 +696,14 @@ function TemplateMinimal({
               style={{ borderColor: primary + '30', color: primary }}
             >
               <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: primary }} />{' '}
-              Funded by FT9ja Infrastructure
+              Professional Prop Trading
             </div>
             <h1 className="mb-4 text-4xl font-black leading-tight tracking-tight text-gray-900 md:text-5xl">
               {partner.tagline || `Trade with ${partner.firm_name}`}
             </h1>
             <p className="mb-8 text-lg text-gray-500">
               {partner.description ||
-                `Pass our evaluation, get funded, keep up to 90% of your profits. ${partner.firm_name} is powered by FT9ja.`}
+                `Pass our evaluation, get funded, and keep up to 90% of your profits with ${partner.firm_name}.`}
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <a
@@ -920,8 +867,8 @@ function TemplateBold({
         <div className="mx-auto max-w-6xl px-6">
           <div className="max-w-3xl">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-gray-700 px-4 py-1.5 text-xs font-semibold text-gray-400">
-              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: primary }} /> Backed
-              by FT9ja Infrastructure
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: primary }} /> Real
+              capital, real payouts
             </div>
             <h1 className="mb-6 text-5xl font-black leading-[1.05] tracking-tight text-white md:text-7xl">
               {partner.tagline || (
@@ -934,7 +881,7 @@ function TemplateBold({
             </h1>
             <p className="mb-10 text-xl text-gray-400 max-w-xl">
               {partner.description ||
-                `Pass the challenge, trade a real funded account, keep up to 90% of your profits. ${partner.firm_name} is powered by FT9ja.`}
+                `Pass the challenge, trade a real funded account, and keep up to 90% of your profits with ${partner.firm_name}.`}
             </p>
             <div className="flex flex-col gap-4 sm:flex-row">
               <a
@@ -1109,7 +1056,7 @@ function TemplateDark({
         <div className="relative mx-auto max-w-5xl px-6 text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70 backdrop-blur-sm">
             <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: primary }} />{' '}
-            Powered by FT9ja Infrastructure
+            Elite prop trading
           </div>
           <h1 className="mb-6 text-5xl font-black leading-tight text-white md:text-7xl">
             {partner.tagline || (
@@ -1129,7 +1076,7 @@ function TemplateDark({
           </h1>
           <p className="mx-auto mb-10 max-w-xl text-lg text-white/50">
             {partner.description ||
-              `Join ${partner.firm_name} — trade with real capital, keep up to 90% of your profits. Backed by FT9ja.`}
+              `Join ${partner.firm_name} — trade with real capital and keep up to 90% of your profits.`}
           </p>
           <div className="flex justify-center gap-4">
             <a
@@ -1396,8 +1343,8 @@ function TrustStrip({ primary, dark }: { primary: string; dark?: boolean }) {
           {[
             {
               icon: <Shield size={20} />,
-              title: 'FT9ja Backed',
-              desc: "All funded accounts and payouts handled by FT9ja's regulated infrastructure.",
+              title: 'Regulated Infrastructure',
+              desc: 'Funded accounts and payouts handled through established prop-trading infrastructure.',
             },
             {
               icon: <TrendingUp size={20} />,

@@ -28,6 +28,7 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
 import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
 
@@ -2610,7 +2611,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                   max={eval_.max_daily_drawdown}
                   color={dailyDrawdownBreached ? '#DC2626' : '#6B7280'}
                   label="Daily Drawdown"
-                  sub={`${eval_.daily_drawdown}% / ${eval_.max_daily_drawdown}%`}
+                  sub={`${eval_.daily_drawdown}% / ${eval_.max_daily_drawdown}% of starting balance/equity`}
                 />
                 <CircleRing
                   value={eval_.current_drawdown}
@@ -2645,7 +2646,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                       detail: `${eval_.trading_days} days completed`,
                     },
                     {
-                      rule: `Daily drawdown (${eval_.max_daily_drawdown}%)`,
+                      rule: `Daily drawdown (${DAILY_DRAWDOWN_RULE})`,
                       done: !dailyDrawdownBreached,
                       detail: dailyDrawdownBreached
                         ? 'Limit breached'

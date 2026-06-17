@@ -1,5 +1,5 @@
 'use client';
-import FT9jaLogo from '@/components/FT9jaLogo';
+import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
 import {
     AlertCircle,
     ArrowRight,
@@ -104,7 +104,7 @@ const sections: Section[] = [
       },
       {
         q: 'Can I have multiple evaluation types and pricing?',
-        a: 'Yes. You offer both Standard (SS) and Starter (SSL). SS is a one-step 25% evaluation leading to an Aso account. SSL has no evaluation or profit target and pays talent bonuses only. Both use $10,000 accounts with 5% daily and 10% max drawdown. You set one markup amount across both tiers in Settings.',
+        a: 'Yes. You offer both Standard (SS) and Starter (SSL). SS is a one-step 25% evaluation leading to an Aso account. SSL has no evaluation or profit target and pays talent bonuses only. Both use $10,000 accounts with 5% daily drawdown (of that day’s starting balance/equity) and 10% max drawdown. You set one markup amount across both tiers in Settings.',
       },
       {
         q: 'Can I add traders manually to my system?',
@@ -442,7 +442,7 @@ export default function PartnerGuidePage() {
                     ['Aso funded account', 'Yes (up to 90% split)', 'No'],
                     ['Talent bonus', 'Up to 15% of profit target', '5% weekly / 15% monthly'],
                     ['Max drawdown', '10%', '10%'],
-                    ['Daily drawdown', '5%', '5%'],
+                    ['Daily drawdown', DAILY_DRAWDOWN_RULE, DAILY_DRAWDOWN_RULE],
                     ['Min trading days', '10/mo, 2/week', '10/mo, 2/week'],
                     ['Expert advisors', 'Allowed', 'Allowed'],
                     ['Second chance', 'No', 'No'],

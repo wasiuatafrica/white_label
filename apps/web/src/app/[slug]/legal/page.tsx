@@ -1,4 +1,7 @@
 'use client';
+import {
+  FT9JA_LEGAL_EVALUATION_RULES,
+} from '@/lib/ft9ja-support-content';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, FileText } from 'lucide-react';
 import Link from 'next/link';
@@ -61,28 +64,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
     {
       id: 'rules',
       title: 'Evaluation Rules',
-      content: [
-        {
-          heading: 'Standard Evaluation (SS) — $10,000 Account',
-          text: '• Profit Target: 10% ($1,000)\n• Maximum Drawdown: 10% ($1,000)\n• Daily Loss Limit: 5% ($500)\n• Minimum Trading Days: 30\n• News Trading: Allowed\n• Expert Advisors: Restricted',
-        },
-        {
-          heading: 'Starter Evaluation (SSL) — $5,000 Account',
-          text: '• Profit Target: 8% ($400)\n• Maximum Drawdown: 8% ($400)\n• Daily Loss Limit: 4% ($200)\n• Minimum Trading Days: 21\n• News Trading: Restricted during high-impact events\n• Expert Advisors: Allowed',
-        },
-        {
-          heading: 'Drawdown Calculation',
-          text: 'Maximum drawdown is measured from the highest equity peak to the current balance or open equity (whichever is lower). A breach at any point — including during open trades — fails the evaluation immediately.',
-        },
-        {
-          heading: 'Daily Loss Limit',
-          text: "The daily loss limit resets at midnight (server time, GMT+1). Losses are calculated from the day's starting balance. Reaching the daily limit with open positions will trigger an automatic account review.",
-        },
-        {
-          heading: 'Trading Days',
-          text: 'A trading day is counted when at least one trade is fully closed within that calendar day. Partial closes count. The minimum trading days requirement ensures consistency and cannot be waived.',
-        },
-      ],
+      content: FT9JA_LEGAL_EVALUATION_RULES,
     },
     {
       id: 'privacy',

@@ -36,6 +36,7 @@ export function proxy(request: NextRequest) {
     }
 
     // Platform routes (/guide, /legal, /apply, etc.) are not partner pages.
+    // /admin is intentionally excluded: on a partner subdomain it is the partner PIN panel.
     if (isPlatformRoute(pathname)) {
       return NextResponse.next();
     }

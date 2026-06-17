@@ -30,7 +30,6 @@ export const RESERVED_SUBDOMAINS = new Set([
 const PLATFORM_PATH_SEGMENTS = new Set([
   '_next',
   'account',
-  'admin',
   'api',
   'apply',
   'favicon.ico',
