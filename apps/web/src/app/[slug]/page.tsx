@@ -1525,6 +1525,26 @@ export default function PartnerLandingPage({ params }: { params: Promise<{ slug:
   }
 
   if (isError || !partner) return <NotFound slug={slug} />;
+  if (partner.status === 'pending') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <h1 className="text-xl font-black text-gray-900">{partner.firm_name}</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            This partner website is not live yet. It will become available after approval and
+            payment confirmation.
+          </p>
+          <Link
+            href="/"
+            className="mt-6 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
+            Visit FT9ja
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (partner.status === 'suspended') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6">
