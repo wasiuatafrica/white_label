@@ -1262,7 +1262,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const [brandSaved, setBrandSaved] = useState(false);
   const [brandError, setBrandError] = useState<string | null>(null);
   const [logoStyle, setLogoStyle] = useState<'modern' | 'bold' | 'elegant'>('modern');
-  const [generatedLogos, setGeneratedLogos] = useState<string[]>([]);
+  const [generatedLogo, setGeneratedLogo] = useState<string | null>(null);
   const [logoGenError, setLogoGenError] = useState<string | null>(null);
 
   const { data: partner, isLoading: partnerLoading } = useQuery<Partner>({
@@ -1386,10 +1386,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
         throw new Error(err.error || 'Logo generation failed');
       }
       const data = await res.json();
-      return data.logos as string[];
+      return data.logo as string;
     },
-    onSuccess: (logos) => {
-      setGeneratedLogos(logos);
+    onSuccess: (logo) => {
+      setGeneratedLogo(logo);
       qc.invalidateQueries({ queryKey: ['partner', slug] });
     },
     onError: (e: Error) => setLogoGenError(e.message),
@@ -2069,7 +2069,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     ) : (
                       <>
                         <p className="mb-3 text-xs text-gray-500">
-                          One-time AI generation — you can pick from three options.
+                          One-time AI generation — creates a single logo you can apply below.
                         </p>
                         <div className="mb-3 flex gap-2">
                           {(['modern', 'bold', 'elegant'] as const).map((s) => (
@@ -2094,31 +2094,26 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                             </>
                           ) : (
                             <>
-                              <Sparkles size={13} /> Generate Logo Options
+                              <Sparkles size={13} /> Generate Logo
                             </>
                           )}
                         </button>
                         {logoGenError && <p className="mt-2 text-xs text-red-500">{logoGenError}</p>}
-                        {generatedLogos.length > 0 && (
+                        {generatedLogo && (
                           <div className="mt-4">
                             <p className="mb-2 text-xs font-medium text-gray-600">
-                              Click a logo to use it:
+                              Click to use this logo:
                             </p>
-                            <div className="grid grid-cols-3 gap-3">
-                              {generatedLogos.map((url, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => setBrandForm((f) => ({ ...f, logo_url: url }))}
-                                  className={`overflow-hidden rounded-xl border-2 ${brandForm.logo_url === url ? 'border-purple-500' : 'border-gray-200 hover:border-purple-300'}`}
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`Logo ${i + 1}`}
-                                    className="h-24 w-full object-cover"
-                                  />
-                                </button>
-                              ))}
-                            </div>
+                            <button
+                              onClick={() => setBrandForm((f) => ({ ...f, logo_url: generatedLogo }))}
+                              className={`block w-full overflow-hidden rounded-xl border-2 ${brandForm.logo_url === generatedLogo ? 'border-purple-500' : 'border-gray-200 hover:border-purple-300'}`}
+                            >
+                              <img
+                                src={generatedLogo}
+                                alt="Generated logo"
+                                className="mx-auto h-32 w-32 object-contain p-2"
+                              />
+                            </button>
                           </div>
                         )}
                       </>

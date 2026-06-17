@@ -4,24 +4,10 @@ import {
   markPartnerLogoGeneratedIfUnused,
 } from '@/db/queries/partners';
 import { generateLogoImage } from '@/lib/openai/images';
+import { buildLogoPrompt } from '@/lib/openai/logo-prompts';
 import { buildS3ObjectUrl, putObjectToS3 } from '@/lib/storage/s3';
 
-const styleDesc: Record<string, string> = {
-  modern: 'minimalist, clean lines, geometric shapes, modern sans-serif, professional',
-  bold: 'strong, impactful, thick letterforms, high contrast, powerful, confident',
-  elegant: 'sophisticated, refined, serif typography, luxury, premium, timeless',
-};
-
-function buildLogoPrompts(firmName: string, style: string, brandColor?: string) {
-  const styleHint = styleDesc[style] || styleDesc.modern;
-  const colorHint = brandColor ? `, primary color ${brandColor}` : '';
-
-  return [
-    `Professional logo for "${firmName}" prop trading firm. ${styleHint}${colorHint}. Square format, centered, clean white background. Trading/finance theme with abstract symbols (charts, growth arrows, geometric patterns). Icon only, no text. High quality, vector-style.`,
-    `Minimalist logo mark for "${firmName}" trading company. ${styleHint}${colorHint}. Abstract financial symbol, clean white background, modern flat design. No text, icon only.`,
-    `Icon logo for "${firmName}" prop firm. ${styleHint}${colorHint}. Simple geometric shape inspired by trading charts or upward growth. White background, professional. No text.`,
-  ];
-}
+export const runtime = 'nodejs';
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -58,33 +44,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'Logo storage is not configured' }, { status: 500 });
     }
 
-    const prompts = buildLogoPrompts(firm_name, style, brand_color);
+    const prompt = buildLogoPrompt(firm_name, style, brand_color);
+    const buffer = await generateLogoImage(prompt, apiKey);
+    const key = `uploads/logos/${slug}/${randomUUID()}.png`;
 
-    const results = await Promise.allSettled(
-      prompts.map(async (prompt, index) => {
-        const buffer = await generateLogoImage(prompt, apiKey);
-        const key = `uploads/logos/${slug}/${randomUUID()}-${index + 1}.png`;
-        await putObjectToS3({
-          bucket,
-          region,
-          accessKeyId,
-          secretAccessKey,
-          key,
-          contentType: 'image/png',
-          body: buffer,
-        });
-        return buildS3ObjectUrl(bucket, region, key);
-      })
-    );
+    await putObjectToS3({
+      bucket,
+      region,
+      accessKeyId,
+      secretAccessKey,
+      key,
+      contentType: 'image/png',
+      body: buffer,
+    });
 
-    const logos = results
-      .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value)
-      .map((r) => r.value);
-
-    if (logos.length === 0) {
-      return Response.json({ error: 'Failed to generate logos' }, { status: 500 });
-    }
-
+    const logo = buildS3ObjectUrl(bucket, region, key);
     const marked = await markPartnerLogoGeneratedIfUnused(slug);
     if (!marked) {
       return Response.json(
@@ -93,9 +67,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    return Response.json({ logos });
+    return Response.json({ logo });
   } catch (e) {
     console.error(e);
-    return Response.json({ error: 'Logo generation failed' }, { status: 500 });
+    const message = e instanceof Error ? e.message : 'Logo generation failed';
+    return Response.json({ error: message }, { status: 500 });
   }
 }
