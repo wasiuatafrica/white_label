@@ -1,4 +1,5 @@
 'use client';
+import FT9jaLogo from '@/components/FT9jaLogo';
 import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
 import {
     AlertCircle,
