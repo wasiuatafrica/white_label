@@ -22,6 +22,7 @@ type Partner = {
   secondary_color: string;
   tagline: string;
   logo_url: string | null;
+  logo_display_url?: string | null;
   status: string;
 };
 
@@ -208,7 +209,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
           <Link href={`/${slug}`} className="flex items-center gap-2">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={firmName}
                 className="h-8 w-8 rounded-lg object-cover"
               />
@@ -236,7 +237,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
           <div className="mb-8 text-center">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={firmName}
                 className="mx-auto mb-4 h-14 w-14 rounded-2xl object-cover shadow-sm"
               />

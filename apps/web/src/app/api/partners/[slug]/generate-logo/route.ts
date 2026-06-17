@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
 import {
   getPartnerPrivateBySlug,
-  incrementPartnerLogoGenerationCount,
+  recordPartnerLogoGeneration,
 } from '@/db/queries/partners';
 import { generateLogoImage } from '@/lib/openai/images';
 import { buildLogoPrompt } from '@/lib/openai/logo-prompts';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
+import { partnerLogoProxyPath } from '@/lib/partner-logo';
 import { buildS3ObjectUrl, putObjectToS3 } from '@/lib/storage/s3';
 
 export const runtime = 'nodejs';
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     });
 
     const logo = buildS3ObjectUrl(bucket, region, key);
-    const updated = await incrementPartnerLogoGenerationCount(slug);
+    const updated = await recordPartnerLogoGeneration(slug, logo);
     if (!updated) {
       return Response.json(
         {
@@ -74,6 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     return Response.json({
       logo,
+      preview_url: partnerLogoProxyPath(slug, key),
       generations_used: updated.logoGenerationCount,
       generations_remaining: MAX_PARTNER_LOGO_GENERATIONS - updated.logoGenerationCount,
     });

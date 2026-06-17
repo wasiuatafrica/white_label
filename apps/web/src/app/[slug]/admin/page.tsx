@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
+import { partnerLogoImageSrc } from '@/lib/partner-logo';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,9 @@ type Partner = {
   total_revenue: string;
   description: string;
   logo_url: string;
+  logo_display_url?: string | null;
+  last_generated_logo_url?: string | null;
+  last_generated_logo_display_url?: string | null;
   logo_generation_count: number;
   template: string;
   fee_markup: number | string | null;
@@ -1263,7 +1267,8 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const [brandSaved, setBrandSaved] = useState(false);
   const [brandError, setBrandError] = useState<string | null>(null);
   const [logoStyle, setLogoStyle] = useState<'modern' | 'bold' | 'elegant'>('modern');
-  const [generatedLogo, setGeneratedLogo] = useState<string | null>(null);
+  const [generatedLogoPreview, setGeneratedLogoPreview] = useState<string | null>(null);
+  const [generatedLogoStorageUrl, setGeneratedLogoStorageUrl] = useState<string | null>(null);
   const [logoGenError, setLogoGenError] = useState<string | null>(null);
 
   const { data: partner, isLoading: partnerLoading } = useQuery<Partner>({
@@ -1291,6 +1296,19 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       });
     }
   }, [partner]);
+
+  const lastGeneratedStorageUrl =
+    generatedLogoStorageUrl ?? partner?.last_generated_logo_url ?? null;
+  const lastGeneratedPreviewSrc =
+    generatedLogoPreview ??
+    partner?.last_generated_logo_display_url ??
+    (lastGeneratedStorageUrl ? partnerLogoImageSrc(slug, lastGeneratedStorageUrl) : null);
+  const lastGeneratedInUse =
+    Boolean(lastGeneratedStorageUrl) && brandForm.logo_url === lastGeneratedStorageUrl;
+  const canApplyLastGenerated = Boolean(lastGeneratedStorageUrl && !lastGeneratedInUse);
+  const activeSavedLogoPreviewSrc =
+    partnerLogoImageSrc(slug, brandForm.logo_url) ?? partner?.logo_display_url ?? null;
+  const logoPreviewSrc = lastGeneratedPreviewSrc ?? activeSavedLogoPreviewSrc;
 
   const { data: traders = [], isLoading: tradersLoading } = useQuery<Trader[]>({
     queryKey: ['traders', slug],
@@ -1387,10 +1405,14 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
         throw new Error(err.error || 'Logo generation failed');
       }
       const data = await res.json();
-      return data.logo as string;
+      return data as {
+        logo: string;
+        preview_url: string;
+      };
     },
-    onSuccess: (logo) => {
-      setGeneratedLogo(logo);
+    onSuccess: (data) => {
+      setGeneratedLogoPreview(data.preview_url);
+      setGeneratedLogoStorageUrl(data.logo);
       qc.invalidateQueries({ queryKey: ['partner', slug] });
     },
     onError: (e: Error) => setLogoGenError(e.message),
@@ -2063,10 +2085,48 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                       <span className="text-xs font-semibold text-gray-900">AI Logo Generator</span>
                     </div>
                     {(partner?.logo_generation_count ?? 0) >= MAX_PARTNER_LOGO_GENERATIONS ? (
-                      <p className="text-xs text-gray-500">
-                        Logo generation limit reached ({MAX_PARTNER_LOGO_GENERATIONS} per partner).
-                        Upload a logo URL below or keep your current logo.
-                      </p>
+                      <>
+                        <p className="text-xs text-gray-500">
+                          Logo generation limit reached ({MAX_PARTNER_LOGO_GENERATIONS} per partner).
+                          Upload a logo URL below or keep your current logo.
+                        </p>
+                        {logoPreviewSrc && (
+                          <div className="mt-4">
+                            <p className="mb-2 text-xs font-medium text-gray-600">
+                              {lastGeneratedPreviewSrc
+                                ? canApplyLastGenerated
+                                  ? 'Click to use this logo:'
+                                  : 'Latest generated logo (in use):'
+                                : 'Current logo:'}
+                            </p>
+                            {lastGeneratedPreviewSrc && canApplyLastGenerated ? (
+                              <button
+                                onClick={() =>
+                                  setBrandForm((f) => ({
+                                    ...f,
+                                    logo_url: lastGeneratedStorageUrl!,
+                                  }))
+                                }
+                                className="block w-full overflow-hidden rounded-xl border-2 border-gray-200 hover:border-purple-300"
+                              >
+                                <img
+                                  src={lastGeneratedPreviewSrc}
+                                  alt="Generated logo"
+                                  className="mx-auto h-32 w-32 object-contain p-2"
+                                />
+                              </button>
+                            ) : (
+                              <div className="overflow-hidden rounded-xl border-2 border-purple-500">
+                                <img
+                                  src={logoPreviewSrc}
+                                  alt="Logo preview"
+                                  className="mx-auto h-32 w-32 object-contain p-2"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <>
                         <p className="mb-3 text-xs text-gray-500">
@@ -2102,21 +2162,40 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                           )}
                         </button>
                         {logoGenError && <p className="mt-2 text-xs text-red-500">{logoGenError}</p>}
-                        {generatedLogo && (
+                        {logoPreviewSrc && (
                           <div className="mt-4">
                             <p className="mb-2 text-xs font-medium text-gray-600">
-                              Click to use this logo:
+                              {lastGeneratedPreviewSrc
+                                ? canApplyLastGenerated
+                                  ? 'Click to use this logo:'
+                                  : 'Latest generated logo (in use):'
+                                : 'Current logo:'}
                             </p>
-                            <button
-                              onClick={() => setBrandForm((f) => ({ ...f, logo_url: generatedLogo }))}
-                              className={`block w-full overflow-hidden rounded-xl border-2 ${brandForm.logo_url === generatedLogo ? 'border-purple-500' : 'border-gray-200 hover:border-purple-300'}`}
-                            >
-                              <img
-                                src={generatedLogo}
-                                alt="Generated logo"
-                                className="mx-auto h-32 w-32 object-contain p-2"
-                              />
-                            </button>
+                            {lastGeneratedPreviewSrc && canApplyLastGenerated ? (
+                              <button
+                                onClick={() =>
+                                  setBrandForm((f) => ({
+                                    ...f,
+                                    logo_url: lastGeneratedStorageUrl!,
+                                  }))
+                                }
+                                className="block w-full overflow-hidden rounded-xl border-2 border-gray-200 hover:border-purple-300"
+                              >
+                                <img
+                                  src={lastGeneratedPreviewSrc}
+                                  alt="Generated logo"
+                                  className="mx-auto h-32 w-32 object-contain p-2"
+                                />
+                              </button>
+                            ) : (
+                              <div className="overflow-hidden rounded-xl border-2 border-purple-500">
+                                <img
+                                  src={logoPreviewSrc}
+                                  alt="Logo preview"
+                                  className="mx-auto h-32 w-32 object-contain p-2"
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </>

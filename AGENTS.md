@@ -14,7 +14,7 @@
 - Web app is deployed to Heroku app `landingpage-june` (`Procfile`: `yarn workspace web start`, `heroku-postbuild` builds web); partner sites use `{slug}.ft9ja.com` subdomains.
 - On `{slug}.ft9ja.com`, `/admin` uses the partner PIN gate; reserved subdomains (e.g. `partners.ft9ja.com`) still hit Super Admin at `/admin`.
 - Partner AI logo generation uses OpenAI directly (`OPENAI_API_KEY`); `ANYTHING_PROJECT_TOKEN` and `NEXT_PUBLIC_CREATE_BASE_URL` are not required.
-- Generated logos upload to S3 at `uploads/logos/{slug}/`; each partner may generate up to 3 logos (`logo_generation_count` on `partners`).
+- Generated logos upload to private S3 at `uploads/logos/{slug}/`, served via `/api/partners/[slug]/logo`; up to 3 generations per partner (`logo_generation_count`). Store canonical S3 URL in `logo_url`.
 - OpenAI image generation should use `gpt-image-2` (not deprecated `dall-e-3`).
 - Production Next.js builds use `next build --webpack` because Turbopack breaks Better Auth / Kysely bundling.
 - Heroku requires `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` (use a Neon URL, not Heroku Postgres, for auth).

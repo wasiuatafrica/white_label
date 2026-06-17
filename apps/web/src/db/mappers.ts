@@ -26,6 +26,7 @@ export function mapPartner(row: Partner) {
     total_revenue: row.totalRevenue,
     payment_proof_url: row.paymentProofUrl,
     logo_generation_count: row.logoGenerationCount,
+    last_generated_logo_url: row.lastGeneratedLogoUrl,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

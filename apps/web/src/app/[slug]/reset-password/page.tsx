@@ -9,6 +9,7 @@ type Partner = {
   firm_name: string;
   brand_color: string;
   logo_url: string | null;
+  logo_display_url?: string | null;
 };
 
 export default function ResetPasswordPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -92,7 +93,7 @@ export default function ResetPasswordPage({ params }: { params: Promise<{ slug: 
           <div className="mb-8 text-center">
             {partner?.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={firmName}
                 className="mx-auto mb-4 h-14 w-14 rounded-2xl object-cover shadow-sm"
               />

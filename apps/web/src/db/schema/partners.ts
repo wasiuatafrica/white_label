@@ -39,6 +39,7 @@ export const partners = pgTable(
     totalRevenue: numeric('total_revenue', { precision: 14, scale: 2 }).notNull().default('0'),
     paymentProofUrl: text('payment_proof_url'),
     logoGenerationCount: integer('logo_generation_count').notNull().default(0),
+    lastGeneratedLogoUrl: text('last_generated_logo_url'),
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
   },

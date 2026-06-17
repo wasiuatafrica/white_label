@@ -149,11 +149,12 @@ export async function incrementPartnerTraders(partnerId: number, tx: DbOrTx = db
     .where(eq(partners.id, partnerId));
 }
 
-export async function incrementPartnerLogoGenerationCount(slug: string) {
+export async function recordPartnerLogoGeneration(slug: string, logoUrl: string) {
   const [row] = await db
     .update(partners)
     .set({
       logoGenerationCount: sql`${partners.logoGenerationCount} + 1`,
+      lastGeneratedLogoUrl: logoUrl,
       updatedAt: sql`NOW()`,
     })
     .where(

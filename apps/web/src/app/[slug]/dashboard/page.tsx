@@ -39,6 +39,7 @@ type Partner = {
   brand_color: string;
   slug: string;
   logo_url?: string | null;
+  logo_display_url?: string | null;
   fee_markup?: number | string | null;
 };
 type Trader = { id: number; name: string; email: string; status: string; kyc_status: string };
@@ -2409,7 +2410,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
           <div className="flex items-center gap-2">
             {partner?.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={firmName}
                 className="h-8 w-8 rounded-lg object-cover"
               />

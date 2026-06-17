@@ -15,6 +15,24 @@ import {
   sendPartnerSuspensionEmail,
   sendPartnerWelcomeEmail,
 } from '@/lib/email/ft9ja-to-partner';
+import { partnerLogoImageSrc } from '@/lib/partner-logo';
+
+function withPartnerLogoDisplayUrl<
+  T extends {
+    slug: string;
+    logo_url: string | null;
+    last_generated_logo_url?: string | null;
+  },
+>(partner: T) {
+  return {
+    ...partner,
+    logo_display_url: partnerLogoImageSrc(partner.slug, partner.logo_url),
+    last_generated_logo_display_url: partnerLogoImageSrc(
+      partner.slug,
+      partner.last_generated_logo_url ?? null
+    ),
+  };
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -23,7 +41,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
-    return Response.json(partner);
+    return Response.json(withPartnerLogoDisplayUrl(partner));
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to fetch partner' }, { status: 500 });
@@ -104,7 +122,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     }
 
     const { admin_pin: _adminPin, ...partnerResponse } = partner;
-    return Response.json(partnerResponse);
+    return Response.json(withPartnerLogoDisplayUrl(partnerResponse));
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to update partner' }, { status: 500 });

@@ -12,6 +12,7 @@ type Partner = {
   firm_name: string;
   brand_color: string;
   logo_url: string | null;
+  logo_display_url?: string | null;
   owner_email: string;
 };
 
@@ -138,7 +139,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
           <Link href={`/${slug}`} className="flex items-center gap-2">
             {partner?.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={firmName}
                 className="h-8 w-8 rounded-lg object-cover"
               />
@@ -277,7 +278,7 @@ export default function PartnerLegalPage({ params }: { params: Promise<{ slug: s
         <div className="mx-auto max-w-5xl px-6 flex flex-col items-center justify-between gap-3 md:flex-row">
           <div className="flex items-center gap-2">
             {partner?.logo_url ? (
-              <img src={partner.logo_url} alt={firmName} className="h-5 w-5 rounded object-cover" />
+              <img src={partner.logo_display_url ?? partner.logo_url} alt={firmName} className="h-5 w-5 rounded object-cover" />
             ) : (
               <div
                 className="h-5 w-5 rounded flex items-center justify-center text-white text-xs font-black"

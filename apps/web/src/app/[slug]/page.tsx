@@ -42,6 +42,7 @@ type Partner = {
   status: string;
   total_traders: number;
   logo_url: string | null;
+  logo_display_url?: string | null;
   template: string | null;
   fee_markup: number | string | null;
 };
@@ -644,7 +645,7 @@ function TemplateMinimal({
           <div className="flex items-center gap-2">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={partner.firm_name}
                 className="h-9 w-9 rounded-lg object-cover"
               />
@@ -812,7 +813,7 @@ function TemplateBold({
           <div className="flex items-center gap-3">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={partner.firm_name}
                 className="h-8 w-8 rounded-lg object-cover"
               />
@@ -995,7 +996,7 @@ function TemplateDark({
           <div className="flex items-center gap-3">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={partner.firm_name}
                 className="h-8 w-8 rounded-lg object-cover"
               />
@@ -1232,7 +1233,7 @@ function TemplateDark({
           <div className="flex items-center gap-2">
             {partner.logo_url ? (
               <img
-                src={partner.logo_url}
+                src={partner.logo_display_url ?? partner.logo_url}
                 alt={partner.firm_name}
                 className="h-6 w-6 rounded object-cover"
               />
@@ -1395,7 +1396,7 @@ function PageFooter({
         <div className="flex items-center gap-2">
           {partner.logo_url ? (
             <img
-              src={partner.logo_url}
+              src={partner.logo_display_url ?? partner.logo_url}
               alt={partner.firm_name}
               className="h-6 w-6 rounded object-cover"
             />
