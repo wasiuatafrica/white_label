@@ -11,7 +11,11 @@
 
 - Yarn 4 workspaces monorepo: `apps/web` (Next.js) and `apps/mobile` (Expo); `publisher/` is outside workspaces.
 - Web app targets Neon PostgreSQL via `DATABASE_URL`; Better Auth stays on its Neon `Pool` adapter (separate from the Drizzle app data layer).
-- Web app is deployed to Heroku (`Procfile`: `yarn workspace web start`, `heroku-postbuild` builds web).
+- Web app is deployed to Heroku app `landingpage-june` (`Procfile`: `yarn workspace web start`, `heroku-postbuild` builds web); partner sites use `{slug}.ft9ja.com` subdomains.
+- On `{slug}.ft9ja.com`, `/admin` uses the partner PIN gate; reserved subdomains (e.g. `partners.ft9ja.com`) still hit Super Admin at `/admin`.
+- Partner AI logo generation uses OpenAI directly (`OPENAI_API_KEY`); `ANYTHING_PROJECT_TOKEN` and `NEXT_PUBLIC_CREATE_BASE_URL` are not required.
+- Generated logos upload to S3 at `uploads/logos/{slug}/`; each partner may generate logos only once (`logo_generated_at` on `partners`).
+- OpenAI image generation should use `gpt-image-2` (not deprecated `dall-e-3`).
 - Production Next.js builds use `next build --webpack` because Turbopack breaks Better Auth / Kysely bundling.
 - Heroku requires `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` (use a Neon URL, not Heroku Postgres, for auth).
 - Do not use `HEROKU_SKIP_INSTALL=1` with Yarn 4 on Heroku; it breaks install before scripts run.

@@ -8,11 +8,12 @@ export async function generateLogoImage(prompt: string, apiKey: string): Promise
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'dall-e-3',
+      model: 'gpt-image-2',
       prompt,
       n: 1,
       size: '1024x1024',
-      response_format: 'b64_json',
+      quality: 'medium',
+      output_format: 'png',
     }),
   });
 
