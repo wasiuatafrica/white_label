@@ -1,24 +1,24 @@
 'use client';
 import {
-    AlertTriangle,
-    ArrowLeft,
-    BookOpen,
-    Building2,
-    CheckCircle2,
-    ChevronDown,
-    ChevronRight,
-    Code2,
-    Database,
-    Globe,
-    Key,
-    LayoutDashboard,
-    Mail,
-    Server,
-    Shield,
-    Terminal,
-    TrendingUp,
-    Users,
-    Zap,
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Building2,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Code2,
+  Database,
+  Globe,
+  Key,
+  LayoutDashboard,
+  Mail,
+  Server,
+  Shield,
+  Terminal,
+  TrendingUp,
+  Users,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -765,8 +765,8 @@ export default function DocsPage() {
 
           <H3 id="partner-pricing">Pricing & Fee Markup</H3>
           <P>
-            FT9ja sets two base evaluation prices: <strong>₦149,000 (SS — Standard)</strong> and{' '}
-            <strong>₦52,000 (SSL — Starter)</strong>. Partners can add a flat naira markup via the{' '}
+            FT9ja sets two base evaluation prices: <strong>₦145,000 (SS — Standard)</strong> and{' '}
+            <strong>₦49,000 (SSL — Starter)</strong>. Partners can add a flat naira markup via the{' '}
             <Code>fee_markup</Code> field. The markup is applied to both products equally at display
             time. All revenue is remitted through FT9ja; the partner earns the difference.
           </P>
@@ -877,7 +877,7 @@ export default function DocsPage() {
           {/* ── EVALUATION RULES ──────────────────────────────────────── */}
           <H2 id="eval-rules">Evaluation Rules</H2>
 
-          <H3 id="rules-ss">Standard Evaluation (SS) — ₦149,000</H3>
+          <H3 id="rules-ss">Standard Evaluation (SS) — ₦145,000</H3>
           <Table
             headers={['Rule', 'Value', 'Notes']}
             rows={[
@@ -893,7 +893,7 @@ export default function DocsPage() {
             ]}
           />
 
-          <H3 id="rules-ssl">Starter Evaluation (SSL) — ₦52,000</H3>
+          <H3 id="rules-ssl">Starter Evaluation (SSL) — ₦49,000</H3>
           <Table
             headers={['Rule', 'Value', 'Notes']}
             rows={[

@@ -10,6 +10,11 @@ function isStaticAsset(pathname: string) {
   return pathname.includes('.') || pathname.startsWith('/_next') || pathname.startsWith('/fontawesome');
 }
 
+function isPlatformRoute(pathname: string) {
+  const firstSegment = pathname.split('/').filter(Boolean)[0];
+  return Boolean(firstSegment && isPlatformPathSegment(firstSegment));
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -28,6 +33,11 @@ export function proxy(request: NextRequest) {
       canonicalUrl.pathname = `/${segments.slice(1).join('/')}`;
       if (canonicalUrl.pathname === '/') canonicalUrl.pathname = '/';
       return NextResponse.redirect(canonicalUrl);
+    }
+
+    // Platform routes (/guide, /legal, /apply, etc.) are not partner pages.
+    if (isPlatformRoute(pathname)) {
+      return NextResponse.next();
     }
 
     const rewriteUrl = request.nextUrl.clone();

@@ -21,11 +21,11 @@ const sections = [
     faqs: [
       {
         q: 'What is a prop trading firm?',
-        a: "A proprietary (prop) trading firm provides traders with capital to trade financial markets. Instead of risking your own money, you trade the firm's capital and keep a share of the profits — typically 70–80%. You pass an evaluation first to prove your skill.",
+        a: "A proprietary (prop) trading firm provides traders with capital to trade financial markets. Instead of risking your own money, you trade the firm's capital and keep a share of the profits — up to 90% on FT9ja. Standard (SS) accounts require a one-step evaluation; Starter (SSL) accounts have no evaluation and pay talent bonuses instead.",
       },
       {
         q: 'What is an evaluation / challenge?',
-        a: 'An evaluation is a simulated trading challenge where you must hit a profit target (e.g. 10%) within set risk rules (max drawdown, daily loss limit) over a minimum number of trading days. Pass the challenge → receive a funded account.',
+        a: 'Standard (SS) is a one-step evaluation on a $10,000 account: grow the account to 25% while staying within drawdown and daily loss rules, then qualify for an Aso funded account. Starter (SSL) has no evaluation or profit target — you trade for talent bonus payouts (5% weekly or 15% monthly) with no path to an Aso account.',
       },
       {
         q: 'Do I need experience to start?',
@@ -33,11 +33,11 @@ const sections = [
       },
       {
         q: 'What markets can I trade?',
-        a: 'Depending on your chosen partner firm, you can trade Forex pairs (EUR/USD, GBP/JPY, etc.), commodities (XAUUSD, Oil), indices (NAS100, US30), and sometimes crypto. Each partner firm may have specific allowed instruments.',
+        a: 'SS and SSL synthetic accounts trade on Deriv and focus on synthetic indices. Depending on your partner firm, you may also have access to volatility indices and related instruments. Check your account details after purchase for the exact instrument list.',
       },
       {
         q: 'How long does it take to get funded?',
-        a: 'Once you purchase an evaluation, it activates within 2–4 hours of payment confirmation. From there, how quickly you get funded depends on your trading — some traders pass in under a week, others take the full 30 days.',
+        a: 'Account credentials are typically issued within 24 hours of purchase. For SS, there is no time limit to reach the 25% profit target — you qualify for an Aso funded account once you hit 25% without breaching drawdown rules. SSL does not lead to a funded Aso account.',
       },
     ],
   },
@@ -48,31 +48,31 @@ const sections = [
     faqs: [
       {
         q: 'What is the profit target?',
-        a: 'Standard Evaluation (SS): 10% profit on a $10,000 account = $1,000 gain target. Starter Evaluation (SSL): 8% profit on a $10,000 account = $800 gain target. You must hit this target while staying within all risk rules.',
+        a: 'Standard (SS): grow your $10,000 account to 25% ($2,500 profit) to qualify for an Aso funded account. There is no time limit. Starter (SSL): no profit target and no evaluation — you earn talent bonuses on profits made instead of working toward an Aso account.',
       },
       {
         q: 'What is maximum drawdown?',
-        a: 'Maximum drawdown is the most your account can decline from its peak before the evaluation fails. SS: 10% ($1,000). SSL: 8% ($800). This is measured as the difference between your highest equity peak and your current balance/equity.',
+        a: 'Both SS and SSL allow a maximum overall account drawdown of 10% ($1,000 on a $10,000 account). Drawdown is measured from your highest equity peak using balance and/or equity. Breaching this limit fails the account.',
       },
       {
         q: 'What is the daily loss limit?',
-        a: 'You cannot lose more than 5% of your account balance in a single trading day (SS) or 4% (SSL). This resets at midnight server time. Exceeding the daily loss limit fails the evaluation immediately.',
+        a: 'Both SS and SSL have a 5% daily drawdown limit ($500 on a $10,000 account). Daily drawdown is recalculated each trading day from your starting balance/equity at 00:00 WAT. Exceeding the daily limit fails the account.',
       },
       {
         q: 'What are minimum trading days?',
-        a: 'You must trade on at least 30 calendar days (SS) or 21 days (SSL) before your evaluation can be passed. A trading day counts when you have at least one closed trade. This ensures consistency over time, not just lucky one-day trades.',
+        a: 'Both account types require trading on at least 2 days per week and 10 separate days per month. A trading day counts when you open and close at least one position. Accounts become ineligible for payout after two consecutive weeks of inactivity.',
       },
       {
         q: 'Is there a time limit?',
-        a: "Most evaluations do not have a hard expiry deadline — you trade at your own pace as long as your account is within risk rules. However, inactivity for extended periods may void the evaluation. Check your specific partner firm's terms.",
+        a: 'No. FT9ja SS and SSL accounts have no time limit to reach profit targets or earn payouts. You trade at your own pace as long as you stay within drawdown and minimum activity rules.',
       },
       {
         q: 'Are Expert Advisors (EAs) and bots allowed?',
-        a: 'SSL (Starter) evaluations allow EAs without restriction. SS (Standard) evaluations may have restrictions on certain high-frequency or latency-sensitive EAs. Copy trading from another funded account is not allowed.',
+        a: 'Expert Advisors and trading signals are allowed on both SS and SSL accounts. Copy trading between FT9ja accounts is strictly prohibited. Positions held for less than 5 minutes are not allowed.',
       },
       {
         q: 'Is news trading allowed?',
-        a: "Standard (SS) evaluations allow news trading. Starter (SSL) may have restrictions during high-impact news events. Check your partner firm's specific rules page for the latest policy.",
+        a: 'News trading is allowed on both Standard (SS) and Starter (SSL) synthetic accounts. You must still follow all other trading conduct rules, including drawdown limits and the minimum hold-time rule.',
       },
     ],
   },
@@ -83,19 +83,23 @@ const sections = [
     faqs: [
       {
         q: 'What happens when I pass the evaluation?',
-        a: "Congratulations! You will be contacted by your partner firm within 1–3 business days to set up your funded live account. You'll receive login credentials for a real account funded by FT9ja.",
+        a: 'For SS: once you grow your account to 25% without breaching drawdown rules, you qualify for an Aso funded account with up to 90% profit split. Your partner firm and FT9ja will provision access. SSL has no evaluation stage and does not lead to an Aso account — traders earn talent bonus payouts on profits instead.',
       },
       {
         q: 'What is the profit split?',
-        a: "Funded traders receive up to 90% of profits generated. The exact split depends on your partner firm's agreement. There is no cap on how much you can earn — the more you profit, the more you keep.",
+        a: 'SS traders who qualify for an Aso account receive up to 90% of profits. The exact split tier depends on how quickly you qualify (90% within 4 weeks, 60% within 5–8 weeks, 40% after 8 weeks). SSL traders do not receive an Aso profit split — they earn a talent bonus of 5% weekly or 15% monthly on profits made.',
+      },
+      {
+        q: 'What is the talent bonus?',
+        a: 'During the SS evaluation (before Aso), you can earn up to 15% of the profit target as a talent bonus. On SSL, talent bonus is 5% of weekly profits or 15% of monthly profits. You are eligible for your first payout after at least 10 trading days.',
       },
       {
         q: 'How do I request a payout?',
-        a: 'Payouts are requested through your trader dashboard. Submit a withdrawal request and it will be processed within 7 business days. Minimum payout amounts and supported payment methods vary by partner firm.',
+        a: 'Payouts are requested through your trader dashboard or partner firm. FT9ja processes payouts on Fridays. Submit your request with your preferred payment method (bank transfer or PayPal). Your partner firm can confirm supported methods and any minimum amounts.',
       },
       {
         q: 'Are the same risk rules in effect on the funded account?',
-        a: 'Yes. The funded account has ongoing risk rules — maximum drawdown and daily loss limits remain active. Breaching these rules on the funded account will result in account termination, though some partners offer account resets.',
+        a: 'Yes. Aso funded accounts keep drawdown and daily loss rules active. SS and SSL evaluation accounts also have no second-chance option — if you breach rules, the account fails. Classic FT9ja accounts offer a free second chance; synthetic SS/SSL accounts do not.',
       },
       {
         q: 'Can I scale my funded account?',
@@ -110,7 +114,7 @@ const sections = [
     faqs: [
       {
         q: 'How do I pay for an evaluation?',
-        a: "Evaluation fees are paid via bank transfer to your partner firm's account. After purchasing, you'll receive payment instructions including account number, amount, and reference (your email). Your account activates within 2 hours of confirmation.",
+        a: "Evaluation fees are paid via bank transfer, PayPal, or crypto to FT9ja using the instructions on your partner firm's checkout page. After purchasing, upload your payment proof for verification. Account details are typically issued within 24 hours of confirmed payment.",
       },
       {
         q: 'Are evaluation fees refundable?',
@@ -318,13 +322,15 @@ export default function GuidePage() {
                     {[
                       ['Account Size', '$10,000', '$10,000'],
                       ['Evaluation Fee', '₦145,000', '₦49,000'],
-                      ['Profit Target', '10%', '8%'],
-                      ['Max Drawdown', '10%', '8%'],
-                      ['Daily Loss Limit', '5%', '4%'],
-                      ['Min Trading Days', '30 days', '21 days'],
-                      ['News Trading', '✅ Allowed', '⚠️ Restricted'],
-                      ['EA / Bots', '⚠️ Restricted', '✅ Allowed'],
-                      ['Profit Split (funded)', 'Up to 90%', 'Up to 90%'],
+                      ['Evaluation', '25% profit target', 'No evaluation'],
+                      ['Profit Target', '25% ($2,500)', 'None'],
+                      ['Max Drawdown', '10% ($1,000)', '10% ($1,000)'],
+                      ['Daily Loss Limit', '5% ($500)', '5% ($500)'],
+                      ['Min Trading Days', '10/mo, 2/week', '10/mo, 2/week'],
+                      ['News Trading', '✅ Allowed', '✅ Allowed'],
+                      ['EA / Bots', '✅ Allowed', '✅ Allowed'],
+                      ['Payouts', 'Up to 90% (Aso)', 'Talent bonus only'],
+                      ['Second Chance', '❌ No', '❌ No'],
                     ].map(([rule, ss, ssl]) => (
                       <tr key={rule}>
                         <td className="py-3 pr-6 text-xs font-medium text-gray-500">{rule}</td>

@@ -64,7 +64,7 @@ const sections: Section[] = [
       },
       {
         q: 'What are the wholesale prices?',
-        a: 'Standard Evaluation (SS) — $10,000 account: FT9ja retail ₦145,000, your wholesale ₦108,750 (25% off). Starter Evaluation (SSL) — $10,000 account: FT9ja retail ₦49,000, your wholesale ₦36,750 (25% off). You set your own retail price — your markup is 100% yours.',
+        a: 'Standard Evaluation (SS) — $10,000 account, 25% evaluation to qualify for Aso (up to 90% split): FT9ja retail ₦145,000, your wholesale ₦108,750 (25% off). Starter Evaluation (SSL) — $10,000 account, no evaluation, talent bonus payouts only: FT9ja retail ₦49,000, your wholesale ₦36,750 (25% off). You set your own retail price — your markup is 100% yours.',
       },
       {
         q: 'Is there a revenue share or commission to FT9ja?',
@@ -100,11 +100,11 @@ const sections: Section[] = [
       },
       {
         q: 'What happens when a trader passes their evaluation?',
-        a: "FT9ja is notified automatically. We provision the trader's funded live account and notify them. You see the status update in your dashboard. You have already earned your markup on the evaluation fee — passing does not cost you anything.",
+        a: 'For SS: when a trader grows their account to 25% without breaching drawdown rules, they qualify for an Aso funded account (up to 90% profit split). FT9ja provisions the Aso account and you see the status in your dashboard. For SSL: there is no evaluation or Aso account — traders earn talent bonus payouts (5% weekly / 15% monthly) on profits. You have already earned your markup on the purchase fee either way.',
       },
       {
         q: 'Can I have multiple evaluation types and pricing?',
-        a: 'Yes. You offer both Standard (SS) and Starter (SSL) evaluations. You set one markup amount that applies across both tiers. This is configurable in your Settings tab.',
+        a: 'Yes. You offer both Standard (SS) and Starter (SSL). SS is a one-step 25% evaluation leading to an Aso account. SSL has no evaluation or profit target and pays talent bonuses only. Both use $10,000 accounts with 5% daily and 10% max drawdown. You set one markup amount across both tiers in Settings.',
       },
       {
         q: 'Can I add traders manually to my system?',
@@ -120,7 +120,7 @@ const sections: Section[] = [
     faqs: [
       {
         q: "How much can I customise my firm's branding?",
-        a: 'Almost everything: firm name, logo, brand colors (primary + accent), tagline, description, and landing page template (minimal, bold, or dark). Your subdomain is yourfirmname.ft9ja.com. Traders only see your brand.',
+        a: 'Almost everything: firm name, logo, brand colors (primary + accent), tagline, description, and landing page template (minimal, bold, or dark). Your subdomain is yourfirmname.ft9ja.com. Traders only see your brand. Your landing page shows accurate SS/SSL rules sourced from FT9ja pricing — including the 25% SS evaluation path and SSL talent-bonus model.',
       },
       {
         q: 'Can I generate a logo with AI?',
@@ -128,7 +128,7 @@ const sections: Section[] = [
       },
       {
         q: 'What does my trader-facing landing page look like?',
-        a: "Your landing page shows your logo, tagline, evaluation packages with your pricing, how it works, rules comparison, payment instructions, and a login portal for traders. It's clean, professional, and conversion-optimised.",
+        a: "Your landing page shows your logo, tagline, evaluation packages with your pricing, how it works, rules comparison (SS vs SSL), payment instructions, and a login portal for traders. It's clean, professional, and conversion-optimised.",
       },
     ],
   },
@@ -410,6 +410,56 @@ export default function PartnerGuidePage() {
               <p className="text-xs text-[#16A34A] font-medium">
                 Set any markup above wholesale — 100% of the difference is yours to keep.
               </p>
+            </div>
+          </div>
+
+          {/* Product rules reference */}
+          <div className="mb-6 rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="border-b border-gray-100 bg-gray-50 px-5 py-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+                What you are selling — FT9ja rules (per ft9ja.com/pricing)
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400">
+                      Rule
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-900">
+                      Standard (SS)
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-900">
+                      Starter (SSL)
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {[
+                    ['Account size', '$10,000', '$10,000'],
+                    ['Evaluation', '25% profit target', 'No evaluation'],
+                    ['Aso funded account', 'Yes (up to 90% split)', 'No'],
+                    ['Talent bonus', 'Up to 15% of profit target', '5% weekly / 15% monthly'],
+                    ['Max drawdown', '10%', '10%'],
+                    ['Daily drawdown', '5%', '5%'],
+                    ['Min trading days', '10/mo, 2/week', '10/mo, 2/week'],
+                    ['Expert advisors', 'Allowed', 'Allowed'],
+                    ['Second chance', 'No', 'No'],
+                    ['Broker', 'Deriv', 'Deriv'],
+                  ].map(([rule, ss, ssl]) => (
+                    <tr key={rule}>
+                      <td className="px-5 py-3 text-xs font-medium text-gray-500">{rule}</td>
+                      <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900">
+                        {ss}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900">
+                        {ssl}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

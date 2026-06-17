@@ -63,12 +63,12 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     accountSize: '$10,000',
     profitTarget: '25%',
     maxDrawdown: '10%',
-    tradingDays: '10 days',
+    tradingDays: '10 days/mo',
     features: [
       'Daily drawdown limit: 5%',
       'Maximum 10% total drawdown',
-      'Minimum 10 trading days',
-      'News trading allowed',
+      'Minimum 10 trading days per month (2 per week)',
+      'Grow to 25% to qualify for Aso account (up to 90% split)',
     ],
   },
   {
@@ -78,14 +78,14 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦49,000',
     priceNum: 49000,
     accountSize: '$10,000',
-    profitTarget: '25%',
+    profitTarget: 'None',
     maxDrawdown: '10%',
-    tradingDays: '10 days',
+    tradingDays: '10 days/mo',
     features: [
       'Daily drawdown limit: 5%',
       'Maximum 10% total drawdown',
-      'Minimum 10 trading days',
-      'No EA restrictions',
+      'Minimum 10 trading days per month (2 per week)',
+      'No evaluation — talent bonus payouts (5% weekly / 15% monthly)',
     ],
   },
 ];
@@ -107,7 +107,7 @@ function getProducts(feeMarkup: number | string | null | undefined): EvalProduct
 const PARTNER_FAQS = [
   {
     q: 'What is a prop trading evaluation?',
-    a: 'An evaluation is a trading challenge where you must reach a 25% profit target while respecting drawdown and daily loss rules over a minimum number of trading days. Pass it → receive a real funded account.',
+    a: 'Standard (SS) is a one-step evaluation: grow your account to 25% while respecting drawdown and daily loss rules, then qualify for an Aso funded account. Starter (SSL) has no evaluation or profit target — you trade for talent bonus payouts instead.',
   },
   {
     q: 'How do I access my dashboard after purchasing?',
@@ -119,11 +119,11 @@ const PARTNER_FAQS = [
   },
   {
     q: 'Can I trade news events?',
-    a: 'Standard (SS) evaluations allow news trading. Starter (SSL) evaluations restrict trading during high-impact news events. Check the Rules section for full details.',
+    a: 'Both Standard (SS) and Starter (SSL) synthetic accounts allow news trading. Copy trading between FT9ja accounts is not permitted on either account type.',
   },
   {
     q: 'Are Expert Advisors (EAs) allowed?',
-    a: 'Starter (SSL) evaluations allow all EAs. Standard (SS) evaluations have restrictions on certain high-frequency EAs. Copy trading from other funded accounts is not permitted in either.',
+    a: 'Expert Advisors and trading signals are allowed on both Standard (SS) and Starter (SSL) accounts. Copy trading from other FT9ja accounts is not permitted.',
   },
   {
     q: 'Is my evaluation fee refundable?',
@@ -144,9 +144,9 @@ const EVAL_RULES = [
       { label: 'Profit Target', value: '25% ($2,500)' },
       { label: 'Max Drawdown', value: '10% ($1,000)' },
       { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '10 days' },
+      { label: 'Min Trading Days', value: '10 days/month, 2/week' },
       { label: 'News Trading', value: '✅ Allowed' },
-      { label: 'Expert Advisors', value: '⚠️ Restricted' },
+      { label: 'Expert Advisors', value: '✅ Allowed' },
       { label: 'Profit Split', value: 'Up to 90%' },
     ],
   },
@@ -155,13 +155,13 @@ const EVAL_RULES = [
     name: 'Starter Evaluation',
     accountSize: '$10,000',
     rules: [
-      { label: 'Profit Target', value: '25% ($2,500)' },
+      { label: 'Profit Target', value: 'None (no evaluation)' },
       { label: 'Max Drawdown', value: '10% ($1,000)' },
       { label: 'Daily Loss Limit', value: '5% ($500)' },
-      { label: 'Min Trading Days', value: '10 days' },
-      { label: 'News Trading', value: '⚠️ Restricted' },
+      { label: 'Min Trading Days', value: '10 days/month, 2/week' },
+      { label: 'News Trading', value: '✅ Allowed' },
       { label: 'Expert Advisors', value: '✅ Allowed' },
-      { label: 'Profit Split', value: 'Up to 90%' },
+      { label: 'Talent Bonus', value: '5% weekly / 15% monthly' },
     ],
   },
 ];
@@ -227,8 +227,9 @@ function PartnerInfoSections({
               equity.
             </p>
             <p>
-              <strong className="text-gray-700">Trading days:</strong> Counted when the account
-              balance changes at least once within that calendar day.
+              <strong className="text-gray-700">Trading days:</strong> Trade on at least 2 days
+              per week and 10 separate days per month. A day counts when you open and close at
+              least one position.
             </p>
           </div>
           <div className="mt-4 flex items-center gap-2">
