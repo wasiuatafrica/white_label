@@ -2486,6 +2486,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
           />
         )}
 
+        <div
+          key={activeTab === 'overview' ? `overview-${resolvedEvalId}` : activeTab}
+        >
         {/* ── Overview Tab ── */}
         {activeTab === 'overview' && (
           <>
@@ -2592,7 +2595,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             )}
 
-            <div key={resolvedEvalId} className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
+            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
               <h2 className="mb-6 text-base font-semibold text-gray-900">Evaluation Progress</h2>
               <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
                 <CircleRing
@@ -2626,7 +2629,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             </div>
 
-            <div key={resolvedEvalId} className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="rounded-xl border border-gray-200 bg-white p-6">
                 <h3 className="mb-4 text-base font-semibold text-gray-900">Rules Checklist</h3>
                 <div className="space-y-3">
@@ -2778,6 +2781,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
         {activeTab === 'kyc' && hasSession && (
           <KYCTab trader={displayTrader} slug={slug} primary={primary} />
         )}
+        </div>
       </div>
       {purchaseOpen && hasSession && (
         <DashboardPurchaseModal
