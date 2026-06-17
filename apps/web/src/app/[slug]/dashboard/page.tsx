@@ -17,6 +17,7 @@ import {
     FileText,
     KeyRound,
     Loader2,
+    Lock,
     LogOut,
     Send,
     Shield,
@@ -1366,6 +1367,13 @@ function PayoutsTab({
   });
 
   const passedEvals = evaluations.filter(hasPassedByRules);
+  const isLocked = passedEvals.length === 0;
+  const inProgressEvals = evaluations.filter(
+    (e) => e.status !== 'pending_payment' && e.status !== 'failed'
+  );
+  const displayEvals = isLocked ? inProgressEvals : passedEvals;
+  const showPlaceholder = isLocked && displayEvals.length === 0;
+  const previewEvalType = displayEvals[0]?.eval_type ?? 'SSL';
 
   const getRequestForEvalType = (evalId: number, reqType: string) =>
     requests.find((r) => r.eval_id === evalId && r.request_type === reqType);
@@ -1396,53 +1404,132 @@ function PayoutsTab({
         ))}
       </div>
 
-      {/* Passed evaluations with requests */}
-      {passedEvals.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
-          <Banknote size={28} className="mx-auto mb-3 text-gray-200" />
-          <p className="text-sm font-semibold text-gray-500">No passed evaluations yet</p>
-          <p className="mt-1 text-xs text-gray-400">
-            Payout requests unlock once you pass an evaluation.
-          </p>
+      {isLocked && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 flex items-start gap-3">
+          <Lock size={16} className="mt-0.5 shrink-0 text-gray-400" />
+          <div>
+            <p className="text-sm font-semibold text-gray-700">Payout requests are locked</p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Pass an evaluation to unlock the buttons below. The preview shows where you&apos;ll
+              click once you&apos;re eligible.
+            </p>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {passedEvals.map((e) => {
-            const isExpanded = expandedEval === e.id;
+      )}
+
+      {/* Evaluations with payout requests */}
+      <div className="space-y-4">
+        {showPlaceholder ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 overflow-hidden opacity-80">
+            <div className="flex items-center gap-4 px-5 py-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-300 text-sm font-black text-white">
+                {previewEvalType}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-500">
+                    {getEvalTypeLabel(previewEvalType)} Evaluation
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                    <Lock size={10} /> Locked
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs text-gray-400">
+                  Available after you purchase and pass an evaluation
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-gray-200 px-5 py-5 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                Available Requests
+              </p>
+              {getAvailableRequests(previewEvalType).map((reqType) => {
+                const meta = REQUEST_META[reqType];
+                return (
+                  <div
+                    key={reqType}
+                    className="rounded-xl border border-gray-200 bg-white/70 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 opacity-70">
+                        <span className="text-xl grayscale">{meta?.icon}</span>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-500">{meta?.label}</div>
+                          <div className="text-xs text-gray-400">{meta?.desc}</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500"
+                      >
+                        <Lock size={11} /> Make Request
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          displayEvals.map((e) => {
+            const isEligible = hasPassedByRules(e);
+            const isExpanded = expandedEval === e.id || (isLocked && displayEvals[0]?.id === e.id);
             const availableTypes = getAvailableRequests(e.eval_type);
 
             return (
               <div
                 key={e.id}
-                className="rounded-xl border border-gray-200 bg-white overflow-hidden"
+                className={`rounded-xl border overflow-hidden ${
+                  isEligible
+                    ? 'border-gray-200 bg-white'
+                    : 'border-dashed border-gray-300 bg-gray-50 opacity-80'
+                }`}
               >
                 {/* Eval header */}
                 <div
-                  className="flex cursor-pointer items-center gap-4 px-5 py-4 hover:bg-gray-50"
-                  onClick={() => setExpandedEval(isExpanded ? null : e.id)}
+                  className={`flex items-center gap-4 px-5 py-4 ${
+                    isEligible ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'
+                  }`}
+                  onClick={() => {
+                    if (!isEligible) return;
+                    setExpandedEval(isExpanded ? null : e.id);
+                  }}
                 >
                   <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white"
-                    style={{ backgroundColor: primary }}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white ${
+                      isEligible ? '' : 'bg-gray-300'
+                    }`}
+                    style={isEligible ? { backgroundColor: primary } : undefined}
                   >
                     {e.eval_type}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span
+                        className={`text-sm font-semibold ${isEligible ? 'text-gray-900' : 'text-gray-500'}`}
+                      >
                         {getEvalTypeLabel(e.eval_type)} Evaluation
                       </span>
                       <StatusBadge status={getEffectiveEvalStatus(e)} />
-                      <PayoutBadge status={e.payout_status ?? null} />
+                      {isEligible ? (
+                        <PayoutBadge status={e.payout_status ?? null} />
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                          <Lock size={10} /> Locked
+                        </span>
+                      )}
                     </div>
                     <div className="mt-0.5 text-xs text-gray-400">
                       EVL-{e.id.toString().padStart(6, '0')} · Profit: +{e.current_profit}% ·{' '}
                       {e.trading_days} days
                     </div>
                   </div>
-                  <div className="shrink-0 text-gray-400">
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
+                  {isEligible && (
+                    <div className="shrink-0 text-gray-400">
+                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  )}
                 </div>
 
                 {/* Expanded: requests */}
@@ -1460,13 +1547,21 @@ function PayoutsTab({
                       return (
                         <div
                           key={reqType}
-                          className="rounded-xl border border-gray-100 bg-gray-50 p-4"
+                          className={`rounded-xl border p-4 ${
+                            isEligible
+                              ? 'border-gray-100 bg-gray-50'
+                              : 'border-gray-200 bg-white/70'
+                          }`}
                         >
                           <div className="flex items-start justify-between gap-4">
-                            <div className="flex items-start gap-3">
-                              <span className="text-xl">{meta?.icon}</span>
+                            <div className={`flex items-start gap-3 ${isEligible ? '' : 'opacity-70'}`}>
+                              <span className={`text-xl ${isEligible ? '' : 'grayscale'}`}>
+                                {meta?.icon}
+                              </span>
                               <div>
-                                <div className="text-sm font-semibold text-gray-900">
+                                <div
+                                  className={`text-sm font-semibold ${isEligible ? 'text-gray-900' : 'text-gray-500'}`}
+                                >
                                   {meta?.label}
                                 </div>
                                 <div className="text-xs text-gray-500">{meta?.desc}</div>
@@ -1475,6 +1570,14 @@ function PayoutsTab({
                             <div className="shrink-0">
                               {existingReq ? (
                                 <RequestStatusBadge status={existingReq.status} />
+                              ) : !isEligible ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-500"
+                                >
+                                  <Lock size={11} /> Make Request
+                                </button>
                               ) : (
                                 !isThisRequesting && (
                                   <button
@@ -1501,7 +1604,7 @@ function PayoutsTab({
                           )}
 
                           {/* Inline request form */}
-                          {isThisRequesting && !existingReq && (
+                          {isEligible && isThisRequesting && !existingReq && (
                             <div className="mt-4 space-y-3 border-t border-gray-200 pt-4">
                               <div>
                                 <label className="mb-1.5 block text-xs font-medium text-gray-600">
@@ -1510,7 +1613,7 @@ function PayoutsTab({
                                 <textarea
                                   rows={3}
                                   value={notes}
-                                  onChange={(e) => setNotes(e.target.value)}
+                                  onChange={(ev) => setNotes(ev.target.value)}
                                   placeholder="Any additional information for your request..."
                                   className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
                                 />
@@ -1557,9 +1660,9 @@ function PayoutsTab({
                 )}
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* All requests history */}
       {requests.length > 0 && (
