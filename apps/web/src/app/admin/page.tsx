@@ -25,6 +25,7 @@ import {
   FileText,
   ZoomIn,
   MessageSquare,
+  Shield,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -130,6 +131,28 @@ type RequestRow = {
   amount: string;
   eval_status: string;
   payout_status: string | null;
+  trader_id: number;
+  trader_name: string;
+  trader_email: string;
+  kyc_status: string;
+  partner_slug: string;
+  partner_firm_name: string;
+  partner_brand_color: string;
+};
+type AsoRequestRow = {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  ss_account_id: number;
+  ss_account_number: number;
+  requested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  rejection_reason: string | null;
+  eligibility_profit: string | null;
+  eligibility_profit_target: string | null;
+  approval_token_expires_at: string | null;
+  approval_token_used_at: string | null;
+  aso_account_id: number | null;
   trader_id: number;
   trader_name: string;
   trader_email: string;
@@ -2187,6 +2210,311 @@ function RequestsTab() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+function AsoRequestsTab() {
+  const qc = useQueryClient();
+  const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'completed' | 'all'>(
+    'pending'
+  );
+  const [selected, setSelected] = useState<AsoRequestRow | null>(null);
+  const [adminNotes, setAdminNotes] = useState('');
+  const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery<AsoRequestRow[]>({
+    queryKey: ['admin-aso-requests'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/aso-requests');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const decide = useMutation({
+    mutationFn: async ({
+      request_id,
+      status,
+      admin_notes,
+    }: {
+      request_id: number;
+      status: 'approved' | 'rejected';
+      admin_notes?: string;
+    }) => {
+      const res = await fetch('/api/admin/aso-requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id, status, admin_notes }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed');
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-aso-requests'] });
+      setSelected(null);
+      setAdminNotes('');
+      setDeciding(null);
+    },
+  });
+
+  const filtered = filter === 'all' ? rows : rows.filter((r) => r.status === filter);
+  const pendingCount = rows.filter((r) => r.status === 'pending').length;
+
+  return (
+    <div className="space-y-5">
+      {selected && (
+        <div className="fixed inset-0 z-50 flex">
+          <div
+            className="flex-1 bg-black/40 backdrop-blur-sm"
+            onClick={() => {
+              setSelected(null);
+              setAdminNotes('');
+              setDeciding(null);
+            }}
+          />
+          <div className="w-full max-w-lg overflow-y-auto bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-widest text-gray-400">
+                  ASO Request
+                </p>
+                <h2 className="text-base font-black text-gray-900">
+                  SS {selected.ss_account_number}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setSelected(null);
+                  setAdminNotes('');
+                  setDeciding(null);
+                }}
+                className="rounded-full p-1.5 hover:bg-gray-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-6 py-5">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <div
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                  style={{ backgroundColor: selected.partner_brand_color || '#16A34A' }}
+                >
+                  {selected.partner_firm_name[0]}
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-gray-900">
+                    {selected.partner_firm_name}
+                  </div>
+                  <div className="text-xs text-gray-400">{selected.partner_slug}.ft9ja.com</div>
+                </div>
+                <div className="ml-auto">
+                  {selected.status === 'pending' && <Badge color="amber">Pending</Badge>}
+                  {selected.status === 'approved' && <Badge color="green">Approved</Badge>}
+                  {selected.status === 'completed' && <Badge color="blue">Completed</Badge>}
+                  {selected.status === 'rejected' && <Badge color="red">Rejected</Badge>}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
+                {[
+                  ['Trader', `${selected.trader_name} · ${selected.trader_email}`],
+                  ['SS Account', String(selected.ss_account_number)],
+                  [
+                    'Profit',
+                    `${selected.eligibility_profit ?? '0'}% / ${
+                      selected.eligibility_profit_target ?? '0'
+                    }%`,
+                  ],
+                  ['Requested', formatDate(selected.requested_at)],
+                  [
+                    'Token',
+                    selected.approval_token_used_at
+                      ? `Used ${formatDate(selected.approval_token_used_at)}`
+                      : selected.approval_token_expires_at
+                        ? `Expires ${formatDate(selected.approval_token_expires_at)}`
+                        : 'Not issued',
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex justify-between border-b border-gray-50 px-4 py-2.5 last:border-0"
+                  >
+                    <span className="w-24 shrink-0 text-xs font-medium text-gray-400">
+                      {label}
+                    </span>
+                    <span className="text-right text-xs text-gray-800">{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {selected.status === 'pending' ? (
+                <div className="space-y-3 pt-2">
+                  <textarea
+                    rows={3}
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    placeholder="Approval note or rejection reason..."
+                    className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2"
+                  />
+                  {decide.error && (
+                    <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                      {(decide.error as Error).message}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        setDeciding('rejected');
+                        decide.mutate({
+                          request_id: selected.id,
+                          status: 'rejected',
+                          admin_notes: adminNotes,
+                        });
+                      }}
+                      disabled={decide.isPending}
+                      className="flex items-center justify-center gap-2 rounded-xl border-2 border-red-200 bg-red-50 py-3 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {decide.isPending && deciding === 'rejected' ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <X size={13} />
+                      )}
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeciding('approved');
+                        decide.mutate({
+                          request_id: selected.id,
+                          status: 'approved',
+                          admin_notes: adminNotes,
+                        });
+                      }}
+                      disabled={decide.isPending}
+                      className="flex items-center justify-center gap-2 rounded-xl bg-[#16A34A] py-3 text-sm font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                    >
+                      {decide.isPending && deciding === 'approved' ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <CheckCircle size={13} />
+                      )}
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 py-3 text-center text-xs text-gray-400">
+                  This ASO request is <strong>{selected.status}</strong>.
+                  {selected.rejection_reason && (
+                    <div className="mt-1 italic text-gray-500">
+                      Note: {selected.rejection_reason}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 sm:gap-4">
+        {[
+          { label: 'Pending', value: pendingCount, color: '#F59E0B', icon: <Clock size={16} /> },
+          {
+            label: 'Approved',
+            value: rows.filter((r) => r.status === 'approved').length,
+            color: '#16A34A',
+            icon: <CheckCircle size={16} />,
+          },
+          {
+            label: 'Completed',
+            value: rows.filter((r) => r.status === 'completed').length,
+            color: '#2563EB',
+            icon: <Shield size={16} />,
+          },
+          {
+            label: 'Rejected',
+            value: rows.filter((r) => r.status === 'rejected').length,
+            color: '#DC2626',
+            icon: <X size={16} />,
+          },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-400">{c.label}</span>
+              <span style={{ color: c.color }}>{c.icon}</span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">ASO Requests</h2>
+            <p className="text-xs text-gray-400">
+              {pendingCount > 0 ? `${pendingCount} awaiting review` : 'All up to date'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto rounded-lg border border-gray-200 p-1">
+            {(['pending', 'approved', 'completed', 'rejected', 'all'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilter(s)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors sm:px-3 ${filter === s ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <Shield size={28} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm text-gray-400">No {filter === 'all' ? '' : filter} ASO requests.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filtered.map((row) => (
+              <div
+                key={row.id}
+                className="flex cursor-pointer items-center gap-4 px-5 py-4 hover:bg-gray-50"
+                onClick={() => {
+                  setSelected(row);
+                  setAdminNotes(row.rejection_reason || '');
+                  setDeciding(null);
+                }}
+              >
+                <Shield size={18} className="shrink-0 text-gray-400" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-semibold text-gray-900">
+                      SS {row.ss_account_number}
+                    </span>
+                    {row.status === 'pending' && <Badge color="amber">Pending</Badge>}
+                    {row.status === 'approved' && <Badge color="green">Approved</Badge>}
+                    {row.status === 'completed' && <Badge color="blue">Completed</Badge>}
+                    {row.status === 'rejected' && <Badge color="red">Rejected</Badge>}
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-400">
+                    {row.trader_name} · {row.partner_firm_name} · {formatDate(row.requested_at)}
+                  </div>
+                </div>
+                <ChevronRight size={16} className="shrink-0 text-gray-300" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const LOGO_LIGHT =
   'https://dtvoeevhaseb5.cloudfront.net/user-uploads/4eccdbc1-dabd-439b-8e76-68c9cf5bb8a4.png';
 
@@ -2197,7 +2525,14 @@ export default function AdminPage() {
   const [pwChecking, setPwChecking] = useState(false);
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<
-    'partners' | 'traders' | 'kyc' | 'payments' | 'evaluation-payments' | 'payouts' | 'requests'
+    | 'partners'
+    | 'traders'
+    | 'kyc'
+    | 'payments'
+    | 'evaluation-payments'
+    | 'payouts'
+    | 'requests'
+    | 'aso-requests'
   >('partners');
 
   const { data: kycRows = [] } = useQuery<KYCRow[]>({
@@ -2236,10 +2571,20 @@ export default function AdminPage() {
     },
     enabled: authed,
   });
+  const { data: asoRequestRows = [] } = useQuery<AsoRequestRow[]>({
+    queryKey: ['admin-aso-requests'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/aso-requests');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    enabled: authed,
+  });
   const kycPending = kycRows.filter((r) => r.kyc_status === 'submitted').length;
   const paymentsPending = paymentRows.length;
   const payoutsPending = payoutRows.filter((r) => !r.payout_status).length;
   const requestsPending = requestRows.filter((r) => r.status === 'pending').length;
+  const asoRequestsPending = asoRequestRows.filter((r) => r.status === 'pending').length;
 
   const checkPw = async () => {
     setPwChecking(true);
@@ -2358,6 +2703,12 @@ export default function AdminPage() {
       icon: <MessageSquare size={13} />,
       badge: requestsPending,
     },
+    {
+      id: 'aso-requests',
+      label: 'ASO Requests',
+      icon: <Shield size={13} />,
+      badge: asoRequestsPending,
+    },
   ] as const;
 
   return (
@@ -2430,6 +2781,7 @@ export default function AdminPage() {
         )}
         {tab === 'payouts' && <PayoutsTab />}
         {tab === 'requests' && <RequestsTab />}
+        {tab === 'aso-requests' && <AsoRequestsTab />}
       </div>
     </div>
   );

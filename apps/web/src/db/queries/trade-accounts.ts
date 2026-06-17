@@ -23,6 +23,9 @@ function mapTradeAccount(row: typeof tradeAccounts.$inferSelect) {
     acc_size: row.accSize,
     payout: row.payout,
     has_aso: row.hasAso,
+    aso_account_id: row.asoAccountId,
+    aso_source_account_id: row.asoSourceAccountId,
+    aso_account_number: row.asoAccountNumber,
     time_to_aso: row.timeToAso,
     profit_target: row.profitTarget,
     creation_code: row.creationCode,
@@ -110,4 +113,67 @@ export async function completeTradeAccount(data: {
     )
     .returning();
   return row ? mapTradeAccount(row) : null;
+}
+
+export async function createAsoTradeAccount(
+  data: {
+    traderId: number;
+    partnerId: number;
+    ssAccountId: number;
+    number: number;
+    password: string;
+    investorPassword: string;
+  },
+  tx: DbOrTx = db
+) {
+  const [existingSource] = await tx
+    .select({ id: tradeAccounts.id })
+    .from(tradeAccounts)
+    .where(eq(tradeAccounts.asoSourceAccountId, data.ssAccountId))
+    .limit(1);
+  if (existingSource) return null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const [aso] = await tx
+      .insert(tradeAccounts)
+      .values({
+        traderId: data.traderId,
+        partnerId: data.partnerId,
+        evaluationId: null,
+        number: data.number,
+        password: data.password,
+        investorPassword: data.investorPassword,
+        typeOfAccount: 'Aso',
+        accSize: '$10,000',
+        profitTarget: null,
+        hasAso: null,
+        asoSourceAccountId: data.ssAccountId,
+        asoAccountNumber: data.number,
+        creationCode: generateCreationCode(),
+      })
+      .onConflictDoNothing({ target: tradeAccounts.creationCode })
+      .returning();
+
+    if (!aso) continue;
+
+    await tx
+      .update(tradeAccounts)
+      .set({
+        hasAso: 1,
+        asoAccountId: aso.id,
+        asoAccountNumber: aso.number,
+        updatedAt: sql`NOW()`,
+      })
+      .where(
+        and(
+          eq(tradeAccounts.id, data.ssAccountId),
+          eq(tradeAccounts.traderId, data.traderId),
+          eq(tradeAccounts.partnerId, data.partnerId)
+        )
+      );
+
+    return mapTradeAccount(aso);
+  }
+
+  throw new Error('Unable to generate a unique ASO account creation code');
 }

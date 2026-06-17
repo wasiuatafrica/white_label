@@ -34,3 +34,9 @@ export const partnerPayoutRequestStatusEnum = pgEnum('partner_payout_request_sta
   'rejected',
   'paid',
 ]);
+export const asoRequestStatusEnum = pgEnum('aso_request_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'completed',
+]);

@@ -46,6 +46,9 @@ export async function listEvaluationsByPartnerId(partnerId: number) {
       trade_account_number: tradeAccounts.number,
       trade_account_platform: tradeAccounts.platform,
       trade_account_broker: tradeAccounts.broker,
+      trade_account_has_aso: tradeAccounts.hasAso,
+      trade_account_aso_account_id: tradeAccounts.asoAccountId,
+      trade_account_aso_account_number: tradeAccounts.asoAccountNumber,
       trade_account_completed: sql<boolean>`CASE WHEN ${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> '' THEN true ELSE false END`,
     })
     .from(evaluations)
@@ -80,6 +83,9 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
       trade_account_number: tradeAccounts.number,
       trade_account_platform: tradeAccounts.platform,
       trade_account_broker: tradeAccounts.broker,
+      trade_account_has_aso: tradeAccounts.hasAso,
+      trade_account_aso_account_id: tradeAccounts.asoAccountId,
+      trade_account_aso_account_number: tradeAccounts.asoAccountNumber,
       trade_account_completed: sql<boolean>`CASE WHEN ${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> '' THEN true ELSE false END`,
     })
     .from(evaluations)
@@ -122,6 +128,9 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
         trade_account_number: row.trade_account_number,
         trade_account_platform: row.trade_account_platform,
         trade_account_broker: row.trade_account_broker,
+        trade_account_has_aso: row.trade_account_has_aso,
+        trade_account_aso_account_id: row.trade_account_aso_account_id,
+        trade_account_aso_account_number: row.trade_account_aso_account_number,
         trade_account_completed: row.trade_account_completed,
       };
     })

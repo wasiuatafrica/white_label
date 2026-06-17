@@ -74,6 +74,9 @@ type Evaluation = {
   trade_account_number: number | null;
   trade_account_platform: string | null;
   trade_account_broker: string | null;
+  trade_account_has_aso: number | null;
+  trade_account_aso_account_id: number | null;
+  trade_account_aso_account_number: number | null;
   trade_account_completed: boolean | null;
   telemetry: {
     has_telemetry: boolean;
@@ -104,6 +107,22 @@ type TraderRequest = {
   notes: string | null;
   admin_notes: string | null;
   created_at: string;
+};
+type AsoRequest = {
+  id: number;
+  trader_id: number;
+  partner_id: number;
+  ss_account_id: number;
+  ss_account_number: number;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  requested_at: string;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  eligibility_profit: string | null;
+  eligibility_profit_target: string | null;
+  approval_token_expires_at: string | null;
+  approval_token_used_at: string | null;
+  aso_account_id: number | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -182,7 +201,7 @@ function getProducts(feeMarkup: number | string | null | undefined): EvalProduct
 
 function getAvailableRequests(evalType: string): string[] {
   if (evalType === 'SSL') return ['talent_bonus', 'aso_payout_ssl'];
-  return ['talent_bonus', 'aso_account'];
+  return ['talent_bonus'];
 }
 
 function getEvalTypeLabel(evalType: string): string {
@@ -767,10 +786,22 @@ function TradingAccountTab({
   primary: string;
 }) {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const eligible = evaluations.filter((e) => e.status === 'active' && e.account_creation_code);
   const [selectedEvalId, setSelectedEvalId] = useState<number | null>(eligible[0]?.id ?? null);
+  const ssAccounts = evaluations.filter(
+    (e) => e.eval_type === 'SS' && e.trade_account_completed && e.trade_account_id
+  );
+  const initialSsAccountId = Number(searchParams.get('ss_account_id')) || ssAccounts[0]?.trade_account_id || null;
+  const [selectedSsAccountId, setSelectedSsAccountId] = useState<number | null>(initialSsAccountId);
   const [form, setForm] = useState({
     activation_code: '',
+    number: '',
+    password: '',
+    investor_password: '',
+  });
+  const [asoForm, setAsoForm] = useState({
+    token: searchParams.get('aso_token') || '',
     number: '',
     password: '',
     investor_password: '',
@@ -778,10 +809,28 @@ function TradingAccountTab({
   const [visiblePasswords, setVisiblePasswords] = useState({
     password: false,
     investor_password: false,
+    aso_password: false,
+    aso_investor_password: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const [asoError, setAsoError] = useState<string | null>(null);
 
   const selected = eligible.find((e) => e.id === selectedEvalId) ?? eligible[0];
+  const selectedSsAccount =
+    ssAccounts.find((e) => e.trade_account_id === selectedSsAccountId) ?? ssAccounts[0];
+
+  const { data: asoData } = useQuery<{ requests: AsoRequest[] }>({
+    queryKey: ['aso-requests', slug],
+    queryFn: async () => {
+      const res = await fetch(`/api/partners/${slug}/aso-requests`);
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+  const asoRequests = asoData?.requests ?? [];
+  const selectedAsoRequest = selectedSsAccount?.trade_account_id
+    ? asoRequests.find((r) => r.ss_account_id === selectedSsAccount.trade_account_id)
+    : null;
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -809,7 +858,53 @@ function TradingAccountTab({
     onError: (e: Error) => setError(e.message),
   });
 
-  if (eligible.length === 0) {
+  const requestAso = useMutation({
+    mutationFn: async () => {
+      if (!selectedSsAccount?.trade_account_id) throw new Error('Select a Synthetic Signals account');
+      const res = await fetch(`/api/partners/${slug}/aso-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ss_account_id: selectedSsAccount.trade_account_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to request ASO');
+      return data;
+    },
+    onSuccess: () => {
+      setAsoError(null);
+      qc.invalidateQueries({ queryKey: ['aso-requests', slug] });
+    },
+    onError: (e: Error) => setAsoError(e.message),
+  });
+
+  const addAso = useMutation({
+    mutationFn: async () => {
+      if (!selectedSsAccount?.trade_account_id) throw new Error('Select a Synthetic Signals account');
+      const res = await fetch(`/api/partners/${slug}/aso-accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ss_account_id: selectedSsAccount.trade_account_id,
+          token: asoForm.token,
+          number: asoForm.number,
+          password: asoForm.password,
+          investor_password: asoForm.investor_password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add ASO account');
+      return data;
+    },
+    onSuccess: () => {
+      setAsoError(null);
+      setAsoForm({ token: '', number: '', password: '', investor_password: '' });
+      qc.invalidateQueries({ queryKey: ['evaluations', slug] });
+      qc.invalidateQueries({ queryKey: ['aso-requests', slug] });
+    },
+    onError: (e: Error) => setAsoError(e.message),
+  });
+
+  if (eligible.length === 0 && ssAccounts.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
         <KeyRound size={28} className="mx-auto mb-3 text-gray-200" />
@@ -822,155 +917,272 @@ function TradingAccountTab({
     );
   }
 
+  const ssProfitDone = selectedSsAccount
+    ? selectedSsAccount.current_profit >= selectedSsAccount.profit_target
+    : false;
+  const ssBlown = selectedSsAccount
+    ? selectedSsAccount.daily_drawdown >= selectedSsAccount.max_daily_drawdown ||
+      selectedSsAccount.current_drawdown >= selectedSsAccount.max_drawdown ||
+      getEffectiveEvalStatus(selectedSsAccount) === 'failed'
+    : false;
+  const ssHasAso = Boolean(
+    selectedSsAccount?.trade_account_has_aso ||
+      selectedSsAccount?.trade_account_aso_account_id ||
+      selectedAsoRequest?.status === 'completed'
+  );
+  const canRequestAso =
+    Boolean(selectedSsAccount?.trade_account_id) &&
+    ssProfitDone &&
+    !ssBlown &&
+    !ssHasAso &&
+    !selectedAsoRequest;
+  const canAddAso = selectedAsoRequest?.status === 'approved' && !ssHasAso;
+
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
-        <p className="text-sm font-semibold text-blue-800">Add your MT5 trading account</p>
-        <p className="mt-1 text-xs text-blue-700">
-          Use the activation code sent to your email. The code is tied to your account and cannot be
-          used by another trader.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="mb-5">
-          <label className="mb-1.5 block text-xs font-semibold text-gray-600">Evaluation</label>
-          <select
-            value={selected?.id ?? ''}
-            onChange={(e) => setSelectedEvalId(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
-          >
-            {eligible.map((e) => (
-              <option key={e.id} value={e.id}>
-                EVL-{e.id.toString().padStart(6, '0')} ·{' '}
-                {getEvalTypeLabel(e.eval_type)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selected?.trade_account_completed ? (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-green-800">
-              <CheckCircle size={15} /> Trading account added
-            </div>
-            <div className="grid gap-2 text-xs sm:grid-cols-3">
-              <div>
-                <span className="block text-green-700/70">Account Number</span>
-                <strong className="text-green-900">{selected.trade_account_number}</strong>
-              </div>
-              <div>
-                <span className="block text-green-700/70">Platform</span>
-                <strong className="text-green-900">
-                  {selected.trade_account_platform || 'MT5'}
-                </strong>
-              </div>
-              <div>
-                <span className="block text-green-700/70">Broker</span>
-                <strong className="text-green-900">
-                  {selected.trade_account_broker || 'Deriv-Demo'}
-                </strong>
-              </div>
-            </div>
+      {eligible.length > 0 && (
+        <>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
+            <p className="text-sm font-semibold text-blue-800">Add your MT5 trading account</p>
+            <p className="mt-1 text-xs text-blue-700">
+              Use the activation code sent to your email. The code is tied to your account and cannot be
+              used by another trader.
+            </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {[
-                {
-                  label: 'Activation Code',
-                  key: 'activation_code',
-                  placeholder: '8-character code',
-                },
-                { label: 'MT5 Account Number', key: 'number', placeholder: 'e.g. 12345678' },
-                { label: 'Password', key: 'password', placeholder: 'Trading password' },
-                {
-                  label: 'Investor Password',
-                  key: 'investor_password',
-                  placeholder: 'Read-only investor password',
-                },
-              ].map((field) => {
-                const isPasswordField =
-                  field.key === 'password' || field.key === 'investor_password';
-                const inputType =
-                  isPasswordField && !visiblePasswords[field.key as keyof typeof visiblePasswords]
-                    ? 'password'
-                    : 'text';
 
-                return (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="mb-5">
+              <label className="mb-1.5 block text-xs font-semibold text-gray-600">Evaluation</label>
+              <select
+                value={selected?.id ?? ''}
+                onChange={(e) => setSelectedEvalId(Number(e.target.value))}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
+              >
+                {eligible.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    EVL-{e.id.toString().padStart(6, '0')} · {getEvalTypeLabel(e.eval_type)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selected?.trade_account_completed ? (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-green-800">
+                  <CheckCircle size={15} /> Trading account added
+                </div>
+                <div className="grid gap-2 text-xs sm:grid-cols-3">
+                  <div>
+                    <span className="block text-green-700/70">Account Number</span>
+                    <strong className="text-green-900">{selected.trade_account_number}</strong>
+                  </div>
+                  <div>
+                    <span className="block text-green-700/70">Platform</span>
+                    <strong className="text-green-900">{selected.trade_account_platform || 'MT5'}</strong>
+                  </div>
+                  <div>
+                    <span className="block text-green-700/70">Broker</span>
+                    <strong className="text-green-900">{selected.trade_account_broker || 'Deriv-Demo'}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {[
+                    { label: 'Activation Code', key: 'activation_code', placeholder: '8-character code' },
+                    { label: 'MT5 Account Number', key: 'number', placeholder: 'e.g. 12345678' },
+                    { label: 'Password', key: 'password', placeholder: 'Trading password' },
+                    {
+                      label: 'Investor Password',
+                      key: 'investor_password',
+                      placeholder: 'Read-only investor password',
+                    },
+                  ].map((field) => {
+                    const isPasswordField = field.key === 'password' || field.key === 'investor_password';
+                    const inputType =
+                      isPasswordField && !visiblePasswords[field.key as keyof typeof visiblePasswords]
+                        ? 'password'
+                        : 'text';
+
+                    return (
+                      <div key={field.key}>
+                        <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+                          {field.label}
+                        </label>
+                        <input
+                          type={inputType}
+                          value={form[field.key as keyof typeof form]}
+                          onChange={(e) =>
+                            setForm((v) => ({
+                              ...v,
+                              [field.key]:
+                                field.key === 'activation_code'
+                                  ? e.target.value.toUpperCase()
+                                  : e.target.value,
+                            }))
+                          }
+                          placeholder={field.placeholder}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {error && (
+                  <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => submit.mutate()}
+                  disabled={submit.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: primary }}
+                >
+                  {submit.isPending ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                  Save Trading Account
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {ssAccounts.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">ASO upgrade</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Eligible Synthetic Signals accounts can request admin approval, then add the approved ASO account here.
+              </p>
+            </div>
+            {selectedAsoRequest && <RequestStatusBadge status={selectedAsoRequest.status} />}
+          </div>
+
+          <div className="mb-5">
+            <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+              Synthetic Signals account
+            </label>
+            <select
+              value={selectedSsAccount?.trade_account_id ?? ''}
+              onChange={(e) => setSelectedSsAccountId(Number(e.target.value))}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
+            >
+              {ssAccounts.map((e) => (
+                <option key={e.trade_account_id} value={e.trade_account_id ?? ''}>
+                  {e.trade_account_number} · Profit {e.current_profit}% / {e.profit_target}%
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedSsAccount?.trade_account_aso_account_number ? (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+              ASO account {selectedSsAccount.trade_account_aso_account_number} is attached.
+            </div>
+          ) : canAddAso ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs text-green-700">
+                Your ASO request is approved. Use the token from your approval email to add the ASO account.
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {[
+                  { label: 'ASO Approval Token', key: 'token', placeholder: 'Token from email' },
+                  { label: 'ASO Account Number', key: 'number', placeholder: 'New account number' },
+                  { label: 'Password', key: 'password', placeholder: 'Trading password' },
+                  {
+                    label: 'Investor Password',
+                    key: 'investor_password',
+                    placeholder: 'Read-only investor password',
+                  },
+                ].map((field) => (
                   <div key={field.key}>
                     <label className="mb-1.5 block text-xs font-semibold text-gray-600">
                       {field.label}
                     </label>
-                    <div className="relative">
-                      <input
-                        type={inputType}
-                        value={form[field.key as keyof typeof form]}
-                        onChange={(e) =>
-                          setForm((v) => ({
-                            ...v,
-                            [field.key]:
-                              field.key === 'activation_code'
-                                ? e.target.value.toUpperCase()
-                                : e.target.value,
-                          }))
-                        }
-                        placeholder={field.placeholder}
-                        className={`w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none ${
-                          isPasswordField ? 'pr-10' : ''
-                        }`}
-                      />
-                      {isPasswordField && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setVisiblePasswords((v) => ({
-                              ...v,
-                              [field.key]: !v[field.key as keyof typeof visiblePasswords],
-                            }))
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-                          aria-label={
-                            visiblePasswords[field.key as keyof typeof visiblePasswords]
-                              ? `Hide ${field.label}`
-                              : `Show ${field.label}`
-                          }
-                        >
-                          {visiblePasswords[field.key as keyof typeof visiblePasswords] ? (
-                            <EyeOff size={15} />
-                          ) : (
-                            <Eye size={15} />
-                          )}
-                        </button>
-                      )}
-                    </div>
+                    <input
+                      type={field.key.includes('password') ? 'password' : 'text'}
+                      value={asoForm[field.key as keyof typeof asoForm]}
+                      onChange={(e) =>
+                        setAsoForm((v) => ({ ...v, [field.key]: e.target.value.trim() }))
+                      }
+                      placeholder={field.placeholder}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                    />
                   </div>
-                );
-              })}
-            </div>
-
-            {error && (
-              <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
-                {error}
+                ))}
               </div>
-            )}
-
-            <button
-              onClick={() => submit.mutate()}
-              disabled={submit.isPending}
-              className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: primary }}
-            >
-              {submit.isPending ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
-              Save Trading Account
-            </button>
-          </div>
-        )}
-      </div>
+              {asoError && (
+                <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                  {asoError}
+                </div>
+              )}
+              <button
+                onClick={() => addAso.mutate()}
+                disabled={addAso.isPending}
+                className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: primary }}
+              >
+                {addAso.isPending ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+                Add ASO Account
+              </button>
+            </div>
+          ) : selectedAsoRequest?.status === 'pending' ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+              Your ASO request is awaiting admin review.
+            </div>
+          ) : selectedAsoRequest?.status === 'rejected' ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600">
+                ASO request rejected{selectedAsoRequest.rejection_reason ? `: ${selectedAsoRequest.rejection_reason}` : '.'}
+              </div>
+              {ssProfitDone && !ssBlown && (
+                <button
+                  onClick={() => requestAso.mutate()}
+                  disabled={requestAso.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: primary }}
+                >
+                  {requestAso.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                  Request Again
+                </button>
+              )}
+            </div>
+          ) : canRequestAso ? (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+              <p className="text-sm font-semibold text-green-800">You qualify for ASO</p>
+              <p className="mt-1 text-xs text-green-700">
+                This SS account has met the profit target and has not breached drawdown limits.
+              </p>
+              {asoError && (
+                <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                  {asoError}
+                </div>
+              )}
+              <button
+                onClick={() => requestAso.mutate()}
+                disabled={requestAso.isPending}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: primary }}
+              >
+                {requestAso.isPending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                Request ASO Access
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+              ASO unlocks when this SS account meets the profit target without breaching drawdown limits.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
 // ─── Payouts Tab ──────────────────────────────────────────────────────────────
 
 function PayoutsTab({
@@ -1660,11 +1872,12 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get('email');
+  const tabParam = searchParams.get('tab');
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<
     'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
-  >('overview');
+  >(tabParam === 'account' ? 'account' : 'overview');
   const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   const sessionQuery = useQuery({
