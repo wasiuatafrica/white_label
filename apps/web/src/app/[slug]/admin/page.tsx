@@ -45,6 +45,7 @@ type Partner = {
   total_revenue: string;
   description: string;
   logo_url: string;
+  logo_generated_at: string | null;
   template: string;
   fee_markup: number | string | null;
 };
@@ -1380,11 +1381,17 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
           style: logoStyle,
         }),
       });
-      if (!res.ok) throw new Error('Logo generation failed');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Logo generation failed');
+      }
       const data = await res.json();
       return data.logos as string[];
     },
-    onSuccess: (logos) => setGeneratedLogos(logos),
+    onSuccess: (logos) => {
+      setGeneratedLogos(logos);
+      qc.invalidateQueries({ queryKey: ['partner', slug] });
+    },
     onError: (e: Error) => setLogoGenError(e.message),
   });
 
@@ -2054,55 +2061,67 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                       <Sparkles size={14} className="text-purple-500" />
                       <span className="text-xs font-semibold text-gray-900">AI Logo Generator</span>
                     </div>
-                    <div className="mb-3 flex gap-2">
-                      {(['modern', 'bold', 'elegant'] as const).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setLogoStyle(s)}
-                          className={`flex-1 rounded-lg border py-1.5 text-xs font-medium capitalize ${logoStyle === s ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-500'}`}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => generateLogos.mutate()}
-                      disabled={generateLogos.isPending}
-                      className="w-full flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
-                    >
-                      {generateLogos.isPending ? (
-                        <>
-                          <Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} />{' '}
-                          Generating…
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={13} /> Generate Logo Options
-                        </>
-                      )}
-                    </button>
-                    {logoGenError && <p className="mt-2 text-xs text-red-500">{logoGenError}</p>}
-                    {generatedLogos.length > 0 && (
-                      <div className="mt-4">
-                        <p className="mb-2 text-xs font-medium text-gray-600">
-                          Click a logo to use it:
+                    {partner?.logo_generated_at ? (
+                      <p className="text-xs text-gray-500">
+                        Logo generation has already been used for this partner. Upload a logo URL
+                        below or keep your current logo.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="mb-3 text-xs text-gray-500">
+                          One-time AI generation — you can pick from three options.
                         </p>
-                        <div className="grid grid-cols-3 gap-3">
-                          {generatedLogos.map((url, i) => (
+                        <div className="mb-3 flex gap-2">
+                          {(['modern', 'bold', 'elegant'] as const).map((s) => (
                             <button
-                              key={i}
-                              onClick={() => setBrandForm((f) => ({ ...f, logo_url: url }))}
-                              className={`overflow-hidden rounded-xl border-2 ${brandForm.logo_url === url ? 'border-purple-500' : 'border-gray-200 hover:border-purple-300'}`}
+                              key={s}
+                              onClick={() => setLogoStyle(s)}
+                              className={`flex-1 rounded-lg border py-1.5 text-xs font-medium capitalize ${logoStyle === s ? 'border-purple-300 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-500'}`}
                             >
-                              <img
-                                src={url}
-                                alt={`Logo ${i + 1}`}
-                                className="h-24 w-full object-cover"
-                              />
+                              {s}
                             </button>
                           ))}
                         </div>
-                      </div>
+                        <button
+                          onClick={() => generateLogos.mutate()}
+                          disabled={generateLogos.isPending}
+                          className="w-full flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-60"
+                        >
+                          {generateLogos.isPending ? (
+                            <>
+                              <Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} />{' '}
+                              Generating…
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={13} /> Generate Logo Options
+                            </>
+                          )}
+                        </button>
+                        {logoGenError && <p className="mt-2 text-xs text-red-500">{logoGenError}</p>}
+                        {generatedLogos.length > 0 && (
+                          <div className="mt-4">
+                            <p className="mb-2 text-xs font-medium text-gray-600">
+                              Click a logo to use it:
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                              {generatedLogos.map((url, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setBrandForm((f) => ({ ...f, logo_url: url }))}
+                                  className={`overflow-hidden rounded-xl border-2 ${brandForm.logo_url === url ? 'border-purple-500' : 'border-gray-200 hover:border-purple-300'}`}
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`Logo ${i + 1}`}
+                                    className="h-24 w-full object-cover"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 

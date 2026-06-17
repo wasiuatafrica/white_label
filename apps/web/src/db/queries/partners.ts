@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { generatePartnerAdminPin } from '@/lib/admin-pin';
 import type { DbOrTx } from '../types';
@@ -146,6 +146,15 @@ export async function incrementPartnerTraders(partnerId: number, tx: DbOrTx = db
       updatedAt: sql`NOW()`,
     })
     .where(eq(partners.id, partnerId));
+}
+
+export async function markPartnerLogoGeneratedIfUnused(slug: string) {
+  const [row] = await db
+    .update(partners)
+    .set({ logoGeneratedAt: sql`NOW()`, updatedAt: sql`NOW()` })
+    .where(and(eq(partners.slug, slug), isNull(partners.logoGeneratedAt)))
+    .returning({ id: partners.id });
+  return row ?? null;
 }
 
 export async function incrementPartnerRevenue(

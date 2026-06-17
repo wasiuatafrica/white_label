@@ -36,6 +36,13 @@
       "when": 1781664000000,
       "tag": "0005_aso_upgrade_flow",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781722228271,
+      "tag": "0006_ordinary_black_queen",
+      "breakpoints": true
     }
   ]
 }

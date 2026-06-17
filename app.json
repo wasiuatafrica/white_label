@@ -24,24 +24,8 @@
       "description": "Canonical app URL, e.g. https://your-app.herokuapp.com",
       "required": true
     },
-    "NEXT_PUBLIC_CREATE_BASE_URL": {
-      "description": "Base URL for Anything platform integrations",
-      "required": false
-    },
-    "NEXT_PUBLIC_CREATE_HOST": {
-      "description": "Published host for the app",
-      "required": false
-    },
-    "NEXT_PUBLIC_PROJECT_GROUP_ID": {
-      "description": "Anything project group ID",
-      "required": false
-    },
-    "RESEND_API_KEY": {
-      "description": "Resend API key for transactional email",
-      "required": false
-    },
-    "ANYTHING_PROJECT_TOKEN": {
-      "description": "Bearer token for Anything platform API calls",
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for partner AI logo generation",
       "required": false
     }
   },
