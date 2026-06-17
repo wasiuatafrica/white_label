@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { sendEmail } from '@/app/api/utils/send-email';
 import { getPartnerUrl } from '@/lib/tenant';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 type PartnerRecipient = {
   slug: string;
@@ -269,7 +269,7 @@ export async function sendFt9jaPartnerEmail<T extends Ft9jaPartnerTemplate>({
     from:
       process.env.SENDGRID_FT9JA_PARTNER_FROM_EMAIL ||
       process.env.SENDGRID_FROM_EMAIL ||
-      'FT9ja Partners <partners@ft9ja.com>',
+      'FT9ja Partners <accounts@ft9ja.com>',
     ...rendered,
   });
 }

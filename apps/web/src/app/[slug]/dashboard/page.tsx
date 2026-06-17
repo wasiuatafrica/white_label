@@ -209,6 +209,111 @@ function getEvalTypeLabel(evalType: string): string {
   return 'Synthetic Signals (SS)';
 }
 
+function formatEvaluationCode(id: number) {
+  return `EVL-${id.toString().padStart(6, '0')}`;
+}
+
+function getDefaultEvaluationId(
+  evaluations: Evaluation[],
+  preferredId?: number | null
+) {
+  if (preferredId && evaluations.some((e) => e.id === preferredId)) return preferredId;
+  return (
+    evaluations.find((e) => e.status === 'active' && e.trade_account_completed)?.id ??
+    evaluations.find((e) => e.status === 'active')?.id ??
+    evaluations[0]?.id ??
+    null
+  );
+}
+
+function EvaluationAccountSwitcher({
+  evaluations,
+  selectedId,
+  onSelect,
+  primary,
+}: {
+  evaluations: Evaluation[];
+  selectedId: number;
+  onSelect: (id: number) => void;
+  primary: string;
+}) {
+  if (evaluations.length === 0) return null;
+
+  return (
+    <div className="mb-6">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-sm font-semibold text-gray-900">
+          {evaluations.length > 1 ? 'Select account' : 'Active account'}
+        </h2>
+        <p className="text-xs text-gray-400">
+          Metrics and actions apply only to the selected account
+        </p>
+      </div>
+      <div
+        className={`grid gap-3 ${evaluations.length > 1 ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}
+        role="listbox"
+        aria-label="Trading accounts"
+      >
+        {evaluations.map((evaluation) => {
+          const isSelected = evaluation.id === selectedId;
+          const status = getEffectiveEvalStatus(evaluation);
+          const hasLiveMetrics = Boolean(
+            evaluation.trade_account_number && evaluation.telemetry?.has_telemetry
+          );
+
+          return (
+            <button
+              key={evaluation.id}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              onClick={() => onSelect(evaluation.id)}
+              className={`rounded-xl border p-4 text-left transition-all ${
+                isSelected
+                  ? 'border-2 bg-white shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              }`}
+              style={isSelected ? { borderColor: primary } : undefined}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900">
+                    {getEvalTypeLabel(evaluation.eval_type)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-400">
+                    {formatEvaluationCode(evaluation.id)}
+                  </div>
+                </div>
+                <StatusBadge status={status} />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                {evaluation.trade_account_number ? (
+                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">
+                    MT5 {evaluation.trade_account_number}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700">
+                    Account not linked
+                  </span>
+                )}
+                {hasLiveMetrics ? (
+                  <span className="rounded-full bg-green-50 px-2.5 py-1 font-medium text-green-700">
+                    +{evaluation.current_profit}% profit
+                  </span>
+                ) : evaluation.trade_account_completed ? (
+                  <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
+                    Awaiting trade data
+                  </span>
+                ) : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function hasPassedByRules(eval_: Evaluation) {
   if (eval_.status === 'passed') return true;
   return Boolean(
@@ -780,15 +885,21 @@ function TradingAccountTab({
   evaluations,
   slug,
   primary,
+  selectedEvalId: controlledEvalId,
+  onSelectEvalId,
 }: {
   evaluations: Evaluation[];
   slug: string;
   primary: string;
+  selectedEvalId?: number | null;
+  onSelectEvalId?: (id: number) => void;
 }) {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const eligible = evaluations.filter((e) => e.status === 'active' && e.account_creation_code);
-  const [selectedEvalId, setSelectedEvalId] = useState<number | null>(eligible[0]?.id ?? null);
+  const [localEvalId, setLocalEvalId] = useState<number | null>(eligible[0]?.id ?? null);
+  const selectedEvalId = controlledEvalId ?? localEvalId;
+  const setSelectedEvalId = onSelectEvalId ?? setLocalEvalId;
   const ssAccounts = evaluations.filter(
     (e) => e.eval_type === 'SS' && e.trade_account_completed && e.trade_account_id
   );
@@ -814,6 +925,25 @@ function TradingAccountTab({
   });
   const [error, setError] = useState<string | null>(null);
   const [asoError, setAsoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setForm({ activation_code: '', number: '', password: '', investor_password: '' });
+    setError(null);
+  }, [selectedEvalId]);
+
+  useEffect(() => {
+    if (!controlledEvalId) return;
+    const matchingSs = evaluations.find(
+      (e) =>
+        e.id === controlledEvalId &&
+        e.eval_type === 'SS' &&
+        e.trade_account_completed &&
+        e.trade_account_id
+    );
+    if (matchingSs?.trade_account_id) {
+      setSelectedSsAccountId(matchingSs.trade_account_id);
+    }
+  }, [controlledEvalId, evaluations]);
 
   const selected = eligible.find((e) => e.id === selectedEvalId) ?? eligible[0];
   const selectedSsAccount =
@@ -951,20 +1081,22 @@ function TradingAccountTab({
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="mb-5">
-              <label className="mb-1.5 block text-xs font-semibold text-gray-600">Evaluation</label>
-              <select
-                value={selected?.id ?? ''}
-                onChange={(e) => setSelectedEvalId(Number(e.target.value))}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
-              >
-                {eligible.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    EVL-{e.id.toString().padStart(6, '0')} · {getEvalTypeLabel(e.eval_type)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!onSelectEvalId && (
+              <div className="mb-5">
+                <label className="mb-1.5 block text-xs font-semibold text-gray-600">Evaluation</label>
+                <select
+                  value={selected?.id ?? ''}
+                  onChange={(e) => setSelectedEvalId(Number(e.target.value))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none"
+                >
+                  {eligible.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {formatEvaluationCode(e.id)} · {getEvalTypeLabel(e.eval_type)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {selected?.trade_account_completed ? (
               <div className="rounded-xl border border-green-200 bg-green-50 p-5">
@@ -1879,6 +2011,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
   >(tabParam === 'account' ? 'account' : 'overview');
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [selectedEvalId, setSelectedEvalId] = useState<number | null>(null);
 
   const sessionQuery = useQuery({
     queryKey: ['session', slug],
@@ -1924,6 +2057,22 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     },
     enabled: !!email && !!slug,
   });
+
+  useEffect(() => {
+    const evaluations = traderData?.evaluations;
+    if (!evaluations?.length) return;
+
+    const urlEvalId = Number(searchParams.get('eval_id'));
+    if (urlEvalId && evaluations.some((e) => e.id === urlEvalId)) {
+      setSelectedEvalId((current) => (current === urlEvalId ? current : urlEvalId));
+      return;
+    }
+
+    setSelectedEvalId((current) => {
+      if (current && evaluations.some((e) => e.id === current)) return current;
+      return getDefaultEvaluationId(evaluations);
+    });
+  }, [traderData?.evaluations, searchParams]);
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -2010,7 +2159,17 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const { trader, evaluations } = traderData;
   const sessionTrader = sessionQuery.data?.trader;
   const displayTrader = sessionTrader || trader;
-  const eval_ = evaluations.find((e) => e.status === 'active') || evaluations[0];
+  const resolvedEvalId = selectedEvalId ?? getDefaultEvaluationId(evaluations);
+  const eval_ =
+    evaluations.find((e) => e.id === resolvedEvalId) ?? evaluations[0];
+
+  const handleSelectEvaluation = (id: number) => {
+    setSelectedEvalId(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('eval_id', String(id));
+    if (activeTab !== 'overview') params.set('tab', activeTab);
+    router.replace(`/${slug}/dashboard?${params.toString()}`, { scroll: false });
+  };
 
   if (!eval_) {
     return (
@@ -2100,7 +2259,6 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     eval_.latest_balance ?? accountSize * (1 + eval_.current_profit / 100);
   const currentEquity = eval_.latest_equity ?? currentBalance;
   const pnl = currentBalance - accountSize;
-  const evalCode = `EVL-${eval_.id.toString().padStart(6, '0')}`;
   const kycStatus = displayTrader.kyc_status || 'not_started';
   const kycBadgeMap: Record<string, string> = {
     not_started: '⚪ KYC Required',
@@ -2216,6 +2374,15 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       </nav>
 
       <div className="mx-auto max-w-6xl px-6 py-8">
+        {hasSession && evaluations.length > 0 && resolvedEvalId && (
+          <EvaluationAccountSwitcher
+            evaluations={evaluations}
+            selectedId={resolvedEvalId}
+            onSelect={handleSelectEvaluation}
+            primary={primary}
+          />
+        )}
+
         {/* ── Overview Tab ── */}
         {activeTab === 'overview' && (
           <>
@@ -2264,8 +2431,13 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 <p className="mt-1 text-sm text-gray-500">
                   ID:{' '}
                   <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
-                    {evalCode}
+                    {formatEvaluationCode(eval_.id)}
                   </code>
+                  {eval_.trade_account_number ? (
+                    <span className="ml-2 text-xs text-gray-400">
+                      · MT5 {eval_.trade_account_number}
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-wrap">
@@ -2276,6 +2448,35 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 </div>
               </div>
             </div>
+
+            {!eval_.trade_account_completed && (
+              <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4">
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-blue-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-800">Link your MT5 account</p>
+                  <p className="mt-0.5 text-xs text-blue-700">
+                    Live metrics for this evaluation appear after you add your trading account
+                    credentials.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('account')}
+                  className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  Set up account →
+                </button>
+              </div>
+            )}
+
+            {eval_.trade_account_completed && !eval_.telemetry?.has_telemetry && (
+              <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
+                <Clock size={16} className="mt-0.5 shrink-0 text-gray-400" />
+                <p className="text-sm text-gray-600">
+                  Account linked. Waiting for the first trade data sync — metrics refresh every
+                  15 minutes.
+                </p>
+              </div>
+            )}
 
             {dragged && eval_.status === 'active' && (
               <div className="mb-6 flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-5 py-4">
@@ -2288,7 +2489,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             )}
 
-            <div className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
+            <div key={resolvedEvalId} className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
               <h2 className="mb-6 text-base font-semibold text-gray-900">Evaluation Progress</h2>
               <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
                 <CircleRing
@@ -2322,7 +2523,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             </div>
 
-            <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div key={resolvedEvalId} className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="rounded-xl border border-gray-200 bg-white p-6">
                 <h3 className="mb-4 text-base font-semibold text-gray-900">Rules Checklist</h3>
                 <div className="space-y-3">
@@ -2433,29 +2634,6 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             </div>
 
-            {evaluations.length > 1 && (
-              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6">
-                <h3 className="mb-4 text-base font-semibold text-gray-900">All Evaluations</h3>
-                <div className="space-y-2">
-                  {evaluations.map((e) => (
-                    <div
-                      key={e.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-3"
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-gray-900">
-                          {getEvalTypeLabel(e.eval_type)} · $
-                          {e.eval_type === 'SSL' ? '5,000' : '10,000'}
-                        </div>
-                        <div className="text-xs text-gray-400">{formatDate(e.purchase_date)}</div>
-                      </div>
-                      <StatusBadge status={getEffectiveEvalStatus(e)} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400">
               <Shield size={12} /> Powered by{' '}
               <span className="font-semibold text-[#16A34A]">FT9ja</span> — Trade data updates every
@@ -2469,7 +2647,13 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
         {/* ── Trading Account Tab ── */}
         {activeTab === 'account' && hasSession && (
-          <TradingAccountTab evaluations={evaluations} slug={slug} primary={primary} />
+          <TradingAccountTab
+            evaluations={evaluations}
+            slug={slug}
+            primary={primary}
+            selectedEvalId={resolvedEvalId}
+            onSelectEvalId={handleSelectEvaluation}
+          />
         )}
 
         {/* ── Payouts Tab ── */}

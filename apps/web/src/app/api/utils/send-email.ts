@@ -38,7 +38,7 @@ export async function sendEmail({ to, from, subject, html, text, replyTo }: Send
     throw new Error('SENDGRID_API_KEY is required to send email');
   }
 
-  const sender = from || process.env.SENDGRID_FROM_EMAIL || 'FT9ja <partners@ft9ja.com>';
+  const sender = from || process.env.SENDGRID_FROM_EMAIL || 'FT9ja <accounts@ft9ja.com>';
   const replyToEmail = replyTo || process.env.SENDGRID_REPLY_TO_EMAIL;
   const recipients = (Array.isArray(to) ? to : [to]).map((email) => ({ email }));
   const content = [

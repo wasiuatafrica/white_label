@@ -64,7 +64,7 @@ const P01 = wrap(
       dr('License Type', 'Monthly — &#8358;95,000')
     ) +
     btn('#16A34A', 'Access Partner Admin &rarr;') +
-    note('Questions? Contact your partner success manager at partners@ft9ja.com')
+    note('Questions? Contact your partner success manager at accounts@ft9ja.com')
 );
 
 const P02 = wrap(
@@ -171,7 +171,7 @@ const P06 = wrap(
     ) +
     p('To restore your firm immediately, complete payment and confirm via your admin panel.') +
     btn('#16A34A', 'Pay &amp; Reinstate &rarr;') +
-    note('Contact partners@ft9ja.com if you believe this suspension was made in error.')
+    note('Contact accounts@ft9ja.com if you believe this suspension was made in error.')
 );
 
 const P07 = wrap(
@@ -215,7 +215,7 @@ const P08 = wrap(
       'You are building something real. Keep your firm page updated and consider boosting marketing to sustain the growth.'
     ) +
     btn('#16A34A', 'View Dashboard &rarr;') +
-    note('Share your success story at partners@ft9ja.com — we feature top partners every month.')
+    note('Share your success story at accounts@ft9ja.com — we feature top partners every month.')
 );
 
 const P09 = wrap(

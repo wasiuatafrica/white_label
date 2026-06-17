@@ -1,4 +1,7 @@
 import { MongoClient } from 'mongodb';
+import { getRedisClient } from './redis';
+
+const CACHE_TTL_SECONDS = 300;
 
 export const TRADING_ACCOUNT_SIZE = 10000;
 export const TRADING_PROFIT_TARGET_PERCENT = 25;
@@ -138,6 +141,18 @@ export function calculateTradingTelemetryMetrics(
 export async function getTradingTelemetryMetrics(accountNumber: number) {
   if (!Number.isFinite(accountNumber) || accountNumber <= 0) return null;
 
+  const cacheKey = `telemetry:${accountNumber}`;
+  const redis = getRedisClient();
+
+  if (redis) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as TradingTelemetryMetrics;
+    } catch (err) {
+      console.error('[redis] cache read error', err);
+    }
+  }
+
   const clientPromise = getMongoClient();
   if (!clientPromise) return null;
 
@@ -160,5 +175,15 @@ export async function getTradingTelemetryMetrics(accountNumber: number) {
     .sort({ timestamp: 1 })
     .toArray();
 
-  return calculateTradingTelemetryMetrics(points);
+  const metrics = calculateTradingTelemetryMetrics(points);
+
+  if (redis && metrics) {
+    try {
+      await redis.set(cacheKey, JSON.stringify(metrics), 'EX', CACHE_TTL_SECONDS);
+    } catch (err) {
+      console.error('[redis] cache write error', err);
+    }
+  }
+
+  return metrics;
 }
