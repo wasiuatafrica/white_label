@@ -1,0 +1,1 @@
+export const MAX_PARTNER_LOGO_GENERATIONS = 3;

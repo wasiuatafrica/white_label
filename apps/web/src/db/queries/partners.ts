@@ -1,6 +1,7 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { generatePartnerAdminPin } from '@/lib/admin-pin';
+import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import type { DbOrTx } from '../types';
 import { mapPartner, mapPartnerPublic } from '../mappers';
 import { partners } from '../schema/partners';
@@ -148,12 +149,20 @@ export async function incrementPartnerTraders(partnerId: number, tx: DbOrTx = db
     .where(eq(partners.id, partnerId));
 }
 
-export async function markPartnerLogoGeneratedIfUnused(slug: string) {
+export async function incrementPartnerLogoGenerationCount(slug: string) {
   const [row] = await db
     .update(partners)
-    .set({ logoGeneratedAt: sql`NOW()`, updatedAt: sql`NOW()` })
-    .where(and(eq(partners.slug, slug), isNull(partners.logoGeneratedAt)))
-    .returning({ id: partners.id });
+    .set({
+      logoGenerationCount: sql`${partners.logoGenerationCount} + 1`,
+      updatedAt: sql`NOW()`,
+    })
+    .where(
+      and(
+        eq(partners.slug, slug),
+        sql`${partners.logoGenerationCount} < ${MAX_PARTNER_LOGO_GENERATIONS}`
+      )
+    )
+    .returning({ logoGenerationCount: partners.logoGenerationCount });
   return row ?? null;
 }
 

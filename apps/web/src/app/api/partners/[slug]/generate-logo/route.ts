@@ -1,10 +1,11 @@
 import { randomUUID } from 'crypto';
 import {
   getPartnerPrivateBySlug,
-  markPartnerLogoGeneratedIfUnused,
+  incrementPartnerLogoGenerationCount,
 } from '@/db/queries/partners';
 import { generateLogoImage } from '@/lib/openai/images';
 import { buildLogoPrompt } from '@/lib/openai/logo-prompts';
+import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import { buildS3ObjectUrl, putObjectToS3 } from '@/lib/storage/s3';
 
 export const runtime = 'nodejs';
@@ -20,9 +21,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    if (partner.logo_generated_at) {
+    if (partner.logo_generation_count >= MAX_PARTNER_LOGO_GENERATIONS) {
       return Response.json(
-        { error: 'Logo generation is only available once per partner' },
+        {
+          error: `Logo generation limit reached (${MAX_PARTNER_LOGO_GENERATIONS} per partner)`,
+        },
         { status: 403 }
       );
     }
@@ -59,15 +62,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     });
 
     const logo = buildS3ObjectUrl(bucket, region, key);
-    const marked = await markPartnerLogoGeneratedIfUnused(slug);
-    if (!marked) {
+    const updated = await incrementPartnerLogoGenerationCount(slug);
+    if (!updated) {
       return Response.json(
-        { error: 'Logo generation is only available once per partner' },
+        {
+          error: `Logo generation limit reached (${MAX_PARTNER_LOGO_GENERATIONS} per partner)`,
+        },
         { status: 403 }
       );
     }
 
-    return Response.json({ logo });
+    return Response.json({
+      logo,
+      generations_used: updated.logoGenerationCount,
+      generations_remaining: MAX_PARTNER_LOGO_GENERATIONS - updated.logoGenerationCount,
+    });
   } catch (e) {
     console.error(e);
     const message = e instanceof Error ? e.message : 'Logo generation failed';

@@ -29,6 +29,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
+import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ type Partner = {
   total_revenue: string;
   description: string;
   logo_url: string;
-  logo_generated_at: string | null;
+  logo_generation_count: number;
   template: string;
   fee_markup: number | string | null;
 };
@@ -2061,15 +2062,17 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                       <Sparkles size={14} className="text-purple-500" />
                       <span className="text-xs font-semibold text-gray-900">AI Logo Generator</span>
                     </div>
-                    {partner?.logo_generated_at ? (
+                    {(partner?.logo_generation_count ?? 0) >= MAX_PARTNER_LOGO_GENERATIONS ? (
                       <p className="text-xs text-gray-500">
-                        Logo generation has already been used for this partner. Upload a logo URL
-                        below or keep your current logo.
+                        Logo generation limit reached ({MAX_PARTNER_LOGO_GENERATIONS} per partner).
+                        Upload a logo URL below or keep your current logo.
                       </p>
                     ) : (
                       <>
                         <p className="mb-3 text-xs text-gray-500">
-                          One-time AI generation — creates a single logo you can apply below.
+                          {MAX_PARTNER_LOGO_GENERATIONS - (partner?.logo_generation_count ?? 0)} of{' '}
+                          {MAX_PARTNER_LOGO_GENERATIONS} AI generations remaining — preview below,
+                          then save branding to go live.
                         </p>
                         <div className="mb-3 flex gap-2">
                           {(['modern', 'bold', 'elegant'] as const).map((s) => (
