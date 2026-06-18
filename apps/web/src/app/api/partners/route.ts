@@ -1,5 +1,5 @@
 import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
-import { isReservedPartnerSlug, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
+import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export async function GET() {
   try {
@@ -36,10 +36,7 @@ export async function POST(request: Request) {
     }
 
     if (!isValidPartnerSlug(slug)) {
-      const error = isReservedPartnerSlug(slug)
-        ? 'That subdomain is reserved. Please choose another.'
-        : 'Subdomain must use only letters, numbers, or hyphens.';
-      return Response.json({ error }, { status: 400 });
+      return Response.json({ error: 'That subdomain is unavailable.' }, { status: 400 });
     }
 
     if (!payment_proof_url) {

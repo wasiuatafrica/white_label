@@ -1,9 +1,5 @@
 import { slugExists } from '@/db/queries/partners';
-import {
-  isReservedPartnerSlug,
-  isValidPartnerSlug,
-  normalizePartnerSlug,
-} from '@/lib/tenant';
+import { isReservedPartnerSlug, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export const runtime = 'nodejs';
 
@@ -19,12 +15,9 @@ export async function GET(request: Request) {
       return Response.json({ available: false, reason: 'empty' satisfies SlugCheckReason });
     }
 
-    if (isReservedPartnerSlug(slug)) {
-      return Response.json({ available: false, reason: 'reserved' satisfies SlugCheckReason });
-    }
-
     if (!isValidPartnerSlug(slug)) {
-      return Response.json({ available: false, reason: 'invalid' satisfies SlugCheckReason });
+      const reason: SlugCheckReason = isReservedPartnerSlug(slug) ? 'reserved' : 'invalid';
+      return Response.json({ available: false, reason });
     }
 
     const taken = await slugExists(slug);

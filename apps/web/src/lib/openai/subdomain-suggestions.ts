@@ -1,3 +1,9 @@
+import {
+  extractResponsesOutputText,
+  getResponsesApiFailureMessage,
+  type ResponsesApiPayload,
+} from '@/lib/openai/responses';
+
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_RESPONSE_TIMEOUT_MS = 15_000;
 const SUBDOMAIN_MODEL = 'gpt-5.4-mini';
@@ -25,10 +31,6 @@ const SUBDOMAIN_SUGGESTIONS_SCHEMA = {
 export type SubdomainSuggestion = {
   slug: string;
   label: string;
-};
-
-type ResponsesApiPayload = {
-  output_text?: string;
 };
 
 function buildSubdomainPrompt(input: {
@@ -92,8 +94,7 @@ export async function generateSubdomainSuggestions(
             strict: true,
           },
         },
-        max_output_tokens: 300,
-        reasoning: { effort: 'low' },
+        max_output_tokens: 1024,
       }),
       signal: controller.signal,
     });
@@ -105,8 +106,15 @@ export async function generateSubdomainSuggestions(
     }
 
     const data = (await res.json()) as ResponsesApiPayload;
-    const raw = data.output_text;
+    const failure = getResponsesApiFailureMessage(data);
+    if (failure) {
+      console.error('OpenAI responses incomplete:', failure, JSON.stringify(data.output ?? []));
+      throw new Error('Subdomain suggestion failed');
+    }
+
+    const raw = extractResponsesOutputText(data);
     if (!raw) {
+      console.error('OpenAI responses missing output text:', JSON.stringify(data));
       throw new Error('Subdomain suggestion returned no data');
     }
 

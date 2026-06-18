@@ -54,12 +54,18 @@ export function normalizePartnerSlug(value: string) {
     .slice(0, 63);
 }
 
-export function isValidPartnerSlug(slug: string) {
-  return SLUG_PATTERN.test(slug) && !RESERVED_SUBDOMAINS.has(slug);
+export function isReservedPartnerSlug(slug: string) {
+  if (RESERVED_SUBDOMAINS.has(slug)) return true;
+
+  for (const reserved of RESERVED_SUBDOMAINS) {
+    if (slug.startsWith(reserved)) return true;
+  }
+
+  return false;
 }
 
-export function isReservedPartnerSlug(slug: string) {
-  return RESERVED_SUBDOMAINS.has(slug);
+export function isValidPartnerSlug(slug: string) {
+  return SLUG_PATTERN.test(slug) && !isReservedPartnerSlug(slug);
 }
 
 export function getPartnerBaseUrl(slug: string) {

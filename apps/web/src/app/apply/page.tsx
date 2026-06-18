@@ -1,5 +1,5 @@
 'use client';
-import { getPartnerUrl, isReservedPartnerSlug, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
+import { getPartnerUrl, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 import useUpload from '@/utils/useUpload';
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Sparkles, Upload } from 'lucide-react';
 import Link from 'next/link';
@@ -142,7 +142,7 @@ export default function ApplyPage() {
       return;
     }
 
-    if (isReservedPartnerSlug(slug) || !isValidPartnerSlug(slug)) {
+    if (!isValidPartnerSlug(slug)) {
       setSlugAvailability('unavailable');
       return;
     }
@@ -187,6 +187,7 @@ export default function ApplyPage() {
 
     setSuggestingSlugs(true);
     setSlugSuggestError(null);
+    setSlugSuggestions([]);
 
     try {
       const res = await fetch('/api/partners/suggest-slug', {
@@ -204,13 +205,15 @@ export default function ApplyPage() {
         throw new Error(data.error || 'Could not load suggestions');
       }
 
-      setSlugSuggestions(data.suggestions ?? []);
+      if (!data.suggestions?.length) {
+        throw new Error('No suggestions returned');
+      }
+
+      setSlugSuggestions(data.suggestions);
     } catch (e: unknown) {
       console.error(e);
       setSlugSuggestions([]);
-      setSlugSuggestError(
-        e instanceof Error ? e.message : 'Could not load suggestions'
-      );
+      setSlugSuggestError("Couldn't load suggestions. Try again.");
     } finally {
       setSuggestingSlugs(false);
     }
@@ -219,7 +222,10 @@ export default function ApplyPage() {
   const applySlugSuggestion = (slug: string) => {
     set('slug', slug);
     setSlugSuggestions([]);
+    setSlugSuggestError(null);
   };
+
+  const showSlugAvailability = !suggestingSlugs && slugSuggestions.length === 0 && !slugSuggestError;
 
   const canNext = () => {
     if (step === 0) {
@@ -415,9 +421,9 @@ export default function ApplyPage() {
                   </div>
                   <div
                     className={`flex items-center rounded-lg border overflow-hidden focus-within:ring-2 ${
-                      slugAvailability === 'available'
+                      !showSlugAvailability || slugAvailability === 'checking' || slugAvailability === 'idle'
                         ? 'border-gray-200 focus-within:border-[#16A34A] focus-within:ring-[#16A34A]/20'
-                        : slugAvailability === 'checking' || slugAvailability === 'idle'
+                        : slugAvailability === 'available'
                           ? 'border-gray-200 focus-within:border-[#16A34A] focus-within:ring-[#16A34A]/20'
                           : 'border-red-300 focus-within:border-red-400 focus-within:ring-red-100'
                     }`}
@@ -436,46 +442,52 @@ export default function ApplyPage() {
                       .ft9ja.com
                     </span>
                   </div>
-                  {form.slug && (
+                  {form.slug && !suggestingSlugs && slugSuggestions.length === 0 && (
                     <p className="mt-1 text-xs text-gray-400">
                       Your public URL:{' '}
                       <strong className="text-gray-600">{getPartnerUrl(form.slug)}</strong>
                     </p>
                   )}
-                  {slugAvailability === 'checking' && (
+                  {suggestingSlugs && (
+                    <p className="mt-1 text-xs text-gray-400">Finding name ideas…</p>
+                  )}
+                  {!suggestingSlugs && slugSuggestError && (
+                    <p className="mt-1 text-xs text-red-500">{slugSuggestError}</p>
+                  )}
+                  {showSlugAvailability && slugAvailability === 'checking' && (
                     <p className="mt-1 text-xs text-gray-400">Checking availability…</p>
                   )}
-                  {slugAvailability === 'available' && (
+                  {showSlugAvailability && slugAvailability === 'available' && (
                     <p className="mt-1 text-xs text-[#16A34A]">This subdomain is available.</p>
                   )}
-                  {slugAvailability === 'unavailable' && (
+                  {showSlugAvailability && slugAvailability === 'unavailable' && (
                     <p className="mt-1 text-xs text-red-500">This subdomain is unavailable.</p>
                   )}
-                  {slugSuggestError && (
-                    <p className="mt-2 text-xs text-red-500">{slugSuggestError}</p>
-                  )}
-                  {slugSuggestions.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {slugSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.slug}
-                          type="button"
-                          title={suggestion.label}
-                          onClick={() => applySlugSuggestion(suggestion.slug)}
-                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                            suggestion.available
-                              ? 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#16A34A] hover:bg-[#16A34A]/5 hover:text-gray-900'
-                              : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
-                          }`}
-                        >
-                          {suggestion.slug}
-                          {!suggestion.available && (
-                            <span className="ml-1 text-[10px] uppercase tracking-wide">
-                              taken
-                            </span>
-                          )}
-                        </button>
-                      ))}
+                  {slugSuggestions.length > 0 && !suggestingSlugs && (
+                    <div className="mt-2">
+                      <p className="mb-1.5 text-xs text-gray-500">Suggested handles</p>
+                      <div className="flex flex-wrap gap-2">
+                        {slugSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion.slug}
+                            type="button"
+                            title={suggestion.label}
+                            onClick={() => applySlugSuggestion(suggestion.slug)}
+                            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                              suggestion.available
+                                ? 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#16A34A] hover:bg-[#16A34A]/5 hover:text-gray-900'
+                                : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+                            }`}
+                          >
+                            {suggestion.slug}
+                            {!suggestion.available && (
+                              <span className="ml-1 text-[10px] uppercase tracking-wide">
+                                taken
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
