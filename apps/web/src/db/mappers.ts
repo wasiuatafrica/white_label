@@ -1,6 +1,7 @@
 import type { Evaluation } from './schema/evaluations';
 import type { Partner } from './schema/partners';
 import type { PartnerPayoutRequest } from './schema/partner-payout-requests';
+import type { PartnerSignupEvent } from './schema/partner-signup-events';
 import type { Trader } from './schema/traders';
 import type { TraderRequest } from './schema/trader-requests';
 
@@ -94,6 +95,26 @@ export function mapTraderRequest(row: TraderRequest) {
     status: row.status,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
+  };
+}
+
+export function mapPartnerSignupEvent(row: PartnerSignupEvent) {
+  return {
+    id: row.id,
+    attempt_id: row.attemptId,
+    status: row.status,
+    last_step: row.lastStep,
+    firm_name: row.firmName,
+    slug: row.slug,
+    owner_name: row.ownerName,
+    owner_email: row.ownerEmail,
+    payment_method: row.paymentMethod,
+    form_data: row.formData,
+    user_agent: row.userAgent,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    abandoned_at: row.abandonedAt,
+    submitted_at: row.submittedAt,
   };
 }
 

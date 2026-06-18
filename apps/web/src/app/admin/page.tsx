@@ -26,6 +26,7 @@ import {
   ZoomIn,
   MessageSquare,
   Shield,
+  UserPlus,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -75,6 +76,34 @@ type TraderRow = {
   partner_firm_name: string;
   partner_brand_color: string;
   partner_status: string;
+};
+
+type PartnerSignupRow = {
+  id: number;
+  attempt_id: string;
+  status: string;
+  last_step: string;
+  firm_name: string | null;
+  slug: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  payment_method: string | null;
+  form_data: {
+    firm_name?: string;
+    slug?: string;
+    owner_name?: string;
+    owner_email?: string;
+    tagline?: string;
+    brand_color?: string;
+    secondary_color?: string;
+    payment_method?: string;
+    has_payment_proof?: boolean;
+  };
+  user_agent: string | null;
+  created_at: string;
+  updated_at: string;
+  abandoned_at: string | null;
+  submitted_at: string | null;
 };
 
 type PaymentRow = {
@@ -205,7 +234,24 @@ function formatDate(d: string) {
 function formatPaymentMethod(method: string | null) {
   if (method === 'paypal') return 'PayPal';
   if (method === 'crypto') return 'Crypto';
-  return 'Transfer';
+  if (method === 'bank') return 'Bank Transfer';
+  return method ? 'Transfer' : '—';
+}
+
+function formatSignupStep(step: string) {
+  if (step === 'details') return 'Details';
+  if (step === 'branding') return 'Branding';
+  if (step === 'payment') return 'Payment';
+  if (step === 'review') return 'Review';
+  return step;
+}
+
+function getSignupStatusBadge(status: string) {
+  if (status === 'abandoned') return <Badge color="amber">Abandoned</Badge>;
+  if (status === 'submitted') return <Badge color="green">Submitted</Badge>;
+  if (status === 'payment_started') return <Badge color="blue">Payment started</Badge>;
+  if (status === 'continued') return <Badge color="gray">In progress</Badge>;
+  return <Badge color="gray">Started</Badge>;
 }
 
 const REQUEST_META_ADMIN: Record<string, { label: string; icon: string }> = {
@@ -1080,6 +1126,203 @@ function TradersTab() {
                 </section>
               );
             })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Partner Signups Tab ──────────────────────────────────────────────────────
+
+function PartnerSignupsTab() {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const { data: rows = [], isLoading } = useQuery<PartnerSignupRow[]>({
+    queryKey: ['admin-partner-signups'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/partner-signup-events');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const filtered = rows.filter((row) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      (row.firm_name || '').toLowerCase().includes(q) ||
+      (row.owner_email || '').toLowerCase().includes(q) ||
+      (row.owner_name || '').toLowerCase().includes(q) ||
+      (row.slug || '').toLowerCase().includes(q);
+    const matchesStatus = statusFilter === 'all' || row.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const abandoned = rows.filter((row) => row.status === 'abandoned').length;
+  const submitted = rows.filter((row) => row.status === 'submitted').length;
+  const reachedPayment = rows.filter(
+    (row) => row.last_step === 'payment' || row.last_step === 'review' || row.status === 'payment_started'
+  ).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 sm:gap-4">
+        {[
+          {
+            label: 'Total Attempts',
+            value: rows.length,
+            color: '#111827',
+            icon: <UserPlus size={16} />,
+          },
+          {
+            label: 'Abandoned',
+            value: abandoned,
+            color: '#F59E0B',
+            icon: <AlertTriangle size={16} />,
+          },
+          {
+            label: 'Reached Payment',
+            value: reachedPayment,
+            color: '#2563EB',
+            icon: <CreditCard size={16} />,
+          },
+          {
+            label: 'Submitted',
+            value: submitted,
+            color: '#16A34A',
+            icon: <CheckCircle size={16} />,
+          },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-400">{c.label}</span>
+              <span style={{ color: c.color }}>{c.icon}</span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Partner Application Funnel</h2>
+            <p className="text-xs text-gray-400">
+              Partial applications from /apply — people who continued but may not have paid or
+              submitted.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#16A34A] sm:w-56"
+                placeholder="Search signups..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#16A34A]"
+            >
+              <option value="all">All statuses</option>
+              <option value="abandoned">Abandoned</option>
+              <option value="payment_started">Payment started</option>
+              <option value="continued">In progress</option>
+              <option value="submitted">Submitted</option>
+            </select>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading partner signups...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="p-12 text-center">
+            <UserPlus size={28} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm text-gray-400">No partner signup attempts tracked yet.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-sm text-gray-400">No signups match your filters.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 sm:px-5">Firm</th>
+                  <th className="px-4 py-3">Contact</th>
+                  <th className="px-4 py-3">Subdomain</th>
+                  <th className="px-4 py-3">Last step</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((row) => (
+                  <tr key={row.id} className="hover:bg-gray-50/80">
+                    <td className="px-4 py-3 sm:px-5">
+                      <div className="font-semibold text-gray-900">
+                        {row.firm_name || row.form_data.firm_name || '—'}
+                      </div>
+                      {row.form_data.tagline ? (
+                        <div className="mt-0.5 max-w-[220px] truncate text-xs text-gray-400">
+                          {row.form_data.tagline}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-gray-900">
+                        {row.owner_name || row.form_data.owner_name || '—'}
+                      </div>
+                      <div className="mt-0.5 text-xs text-gray-400">
+                        {row.owner_email || row.form_data.owner_email || '—'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.slug ? (
+                        <a
+                          href={getPartnerUrl(row.slug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-[#16A34A] hover:underline"
+                        >
+                          {row.slug}.ft9ja.com <ExternalLink size={11} />
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{formatSignupStep(row.last_step)}</td>
+                    <td className="px-4 py-3">{getSignupStatusBadge(row.status)}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-gray-700">
+                        {formatPaymentMethod(row.payment_method || row.form_data.payment_method || null)}
+                      </div>
+                      <div className="mt-0.5 text-xs text-gray-400">
+                        {row.form_data.has_payment_proof ? 'Receipt uploaded' : 'No receipt'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      <div>{formatDate(row.updated_at)}</div>
+                      {row.abandoned_at ? (
+                        <div className="mt-0.5 text-amber-600">
+                          Left {formatDate(row.abandoned_at)}
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -2526,6 +2769,7 @@ export default function AdminPage() {
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<
     | 'partners'
+    | 'partner-signups'
     | 'traders'
     | 'kyc'
     | 'payments'
@@ -2580,11 +2824,21 @@ export default function AdminPage() {
     },
     enabled: authed,
   });
+  const { data: partnerSignupRows = [] } = useQuery<PartnerSignupRow[]>({
+    queryKey: ['admin-partner-signups'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/partner-signup-events');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    enabled: authed,
+  });
   const kycPending = kycRows.filter((r) => r.kyc_status === 'submitted').length;
   const paymentsPending = paymentRows.length;
   const payoutsPending = payoutRows.filter((r) => !r.payout_status).length;
   const requestsPending = requestRows.filter((r) => r.status === 'pending').length;
   const asoRequestsPending = asoRequestRows.filter((r) => r.status === 'pending').length;
+  const partnerSignupsAbandoned = partnerSignupRows.filter((r) => r.status === 'abandoned').length;
 
   const checkPw = async () => {
     setPwChecking(true);
@@ -2687,6 +2941,12 @@ export default function AdminPage() {
 
   const tabs = [
     { id: 'partners', label: 'Partners', icon: <Users size={13} />, badge: 0 },
+    {
+      id: 'partner-signups',
+      label: 'Partner Signups',
+      icon: <UserPlus size={13} />,
+      badge: partnerSignupsAbandoned,
+    },
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
     { id: 'kyc', label: 'KYC', icon: <BadgeCheck size={13} />, badge: kycPending },
     { id: 'payments', label: 'Payments', icon: <CreditCard size={13} />, badge: paymentsPending },
@@ -2768,6 +3028,7 @@ export default function AdminPage() {
         {tab === 'partners' && (
           <PartnersTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
         )}
+        {tab === 'partner-signups' && <PartnerSignupsTab />}
         {tab === 'traders' && <TradersTab />}
         {tab === 'kyc' && <KYCTab />}
         {tab === 'payments' && (

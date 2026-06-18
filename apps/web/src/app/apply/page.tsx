@@ -1,7 +1,7 @@
 'use client';
-import { getPartnerUrl, normalizePartnerSlug } from '@/lib/tenant';
+import { getPartnerUrl, isReservedPartnerSlug, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 import useUpload from '@/utils/useUpload';
-import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Sparkles, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -19,6 +19,16 @@ const BRAND_PRESETS = [
   { name: 'Crimson', primary: '#BE185D', secondary: '#F59E0B' },
 ];
 
+type SlugSuggestion = {
+  slug: string;
+  label: string;
+  available: boolean;
+};
+
+type SlugAvailability = 'idle' | 'checking' | 'available' | 'unavailable';
+
+const SLUG_CHECK_DEBOUNCE_MS = 500;
+
 export default function ApplyPage() {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +44,10 @@ export default function ApplyPage() {
   const submittedRef = useRef(false);
   const [upload, { loading: uploading }] = useUpload();
   const [proofFileName, setProofFileName] = useState('');
+  const [slugSuggestions, setSlugSuggestions] = useState<SlugSuggestion[]>([]);
+  const [suggestingSlugs, setSuggestingSlugs] = useState(false);
+  const [slugSuggestError, setSlugSuggestError] = useState<string | null>(null);
+  const [slugAvailability, setSlugAvailability] = useState<SlugAvailability>('idle');
 
   const [form, setForm] = useState({
     firm_name: '',
@@ -120,11 +134,103 @@ export default function ApplyPage() {
     };
   }, [getTrackingPayload]);
 
+  useEffect(() => {
+    const slug = form.slug;
+
+    if (!slug) {
+      setSlugAvailability('idle');
+      return;
+    }
+
+    if (isReservedPartnerSlug(slug) || !isValidPartnerSlug(slug)) {
+      setSlugAvailability('unavailable');
+      return;
+    }
+
+    setSlugAvailability('checking');
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/partners/check-slug?slug=${encodeURIComponent(slug)}`,
+            { signal: controller.signal }
+          );
+          const data = await res.json();
+          if (!res.ok) {
+            setSlugAvailability('idle');
+            return;
+          }
+
+          setSlugAvailability(data.available ? 'available' : 'unavailable');
+        } catch (e: unknown) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setSlugAvailability('idle');
+        }
+      })();
+    }, SLUG_CHECK_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.slug]);
+
   const autoSlug = (name: string) =>
     normalizePartnerSlug(name.replace(/[^a-z0-9]+/gi, '-')).slice(0, 20);
 
+  const canSuggestSlugs = Boolean(form.firm_name.trim() || form.tagline.trim());
+
+  const handleSuggestSlugs = async () => {
+    if (!canSuggestSlugs || suggestingSlugs) return;
+
+    setSuggestingSlugs(true);
+    setSlugSuggestError(null);
+
+    try {
+      const res = await fetch('/api/partners/suggest-slug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firm_name: form.firm_name,
+          tagline: form.tagline,
+          idea: form.slug,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not load suggestions');
+      }
+
+      setSlugSuggestions(data.suggestions ?? []);
+    } catch (e: unknown) {
+      console.error(e);
+      setSlugSuggestions([]);
+      setSlugSuggestError(
+        e instanceof Error ? e.message : 'Could not load suggestions'
+      );
+    } finally {
+      setSuggestingSlugs(false);
+    }
+  };
+
+  const applySlugSuggestion = (slug: string) => {
+    set('slug', slug);
+    setSlugSuggestions([]);
+  };
+
   const canNext = () => {
-    if (step === 0) return form.firm_name && form.owner_name && form.owner_email && form.slug;
+    if (step === 0) {
+      return (
+        form.firm_name &&
+        form.owner_name &&
+        form.owner_email &&
+        form.slug &&
+        slugAvailability === 'available'
+      );
+    }
     if (step === 1) return form.brand_color;
     if (step === 2) return form.payment_method && form.payment_proof_url;
     return true;
@@ -287,15 +393,44 @@ export default function ApplyPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-gray-700">
-                    Subdomain Handle *
-                  </label>
-                  <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden focus-within:border-[#16A34A] focus-within:ring-2 focus-within:ring-[#16A34A]/20">
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Subdomain Handle *
+                    </label>
+                    {canSuggestSlugs && (
+                      <button
+                        type="button"
+                        onClick={handleSuggestSlugs}
+                        disabled={suggestingSlugs}
+                        className="flex shrink-0 items-center gap-1 text-xs font-medium text-gray-500 transition-colors hover:text-[#16A34A] disabled:opacity-50"
+                      >
+                        {suggestingSlugs ? (
+                          <Loader2 size={12} style={{ animation: 'spin 0.8s linear infinite' }} />
+                        ) : (
+                          <Sparkles size={12} />
+                        )}
+                        Suggest names
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    className={`flex items-center rounded-lg border overflow-hidden focus-within:ring-2 ${
+                      slugAvailability === 'available'
+                        ? 'border-gray-200 focus-within:border-[#16A34A] focus-within:ring-[#16A34A]/20'
+                        : slugAvailability === 'checking' || slugAvailability === 'idle'
+                          ? 'border-gray-200 focus-within:border-[#16A34A] focus-within:ring-[#16A34A]/20'
+                          : 'border-red-300 focus-within:border-red-400 focus-within:ring-red-100'
+                    }`}
+                  >
                     <input
                       className="flex-1 px-4 py-2.5 text-sm text-gray-900 outline-none"
                       placeholder="apexfunds"
                       value={form.slug}
-                      onChange={(e) => set('slug', normalizePartnerSlug(e.target.value))}
+                      onChange={(e) => {
+                        set('slug', normalizePartnerSlug(e.target.value));
+                        setSlugSuggestions([]);
+                        setSlugSuggestError(null);
+                      }}
                     />
                     <span className="border-l border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
                       .ft9ja.com
@@ -306,6 +441,42 @@ export default function ApplyPage() {
                       Your public URL:{' '}
                       <strong className="text-gray-600">{getPartnerUrl(form.slug)}</strong>
                     </p>
+                  )}
+                  {slugAvailability === 'checking' && (
+                    <p className="mt-1 text-xs text-gray-400">Checking availability…</p>
+                  )}
+                  {slugAvailability === 'available' && (
+                    <p className="mt-1 text-xs text-[#16A34A]">This subdomain is available.</p>
+                  )}
+                  {slugAvailability === 'unavailable' && (
+                    <p className="mt-1 text-xs text-red-500">This subdomain is unavailable.</p>
+                  )}
+                  {slugSuggestError && (
+                    <p className="mt-2 text-xs text-red-500">{slugSuggestError}</p>
+                  )}
+                  {slugSuggestions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {slugSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.slug}
+                          type="button"
+                          title={suggestion.label}
+                          onClick={() => applySlugSuggestion(suggestion.slug)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            suggestion.available
+                              ? 'border-gray-200 bg-gray-50 text-gray-700 hover:border-[#16A34A] hover:bg-[#16A34A]/5 hover:text-gray-900'
+                              : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
+                          }`}
+                        >
+                          {suggestion.slug}
+                          {!suggestion.available && (
+                            <span className="ml-1 text-[10px] uppercase tracking-wide">
+                              taken
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div>

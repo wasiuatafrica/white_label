@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { generatePartnerAdminPin } from '@/lib/admin-pin';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
@@ -47,6 +47,17 @@ export async function slugExists(slug: string) {
     .where(eq(partners.slug, slug))
     .limit(1);
   return Boolean(row);
+}
+
+export async function getTakenSlugs(slugs: string[]) {
+  if (slugs.length === 0) return new Set<string>();
+
+  const rows = await db
+    .select({ slug: partners.slug })
+    .from(partners)
+    .where(inArray(partners.slug, slugs));
+
+  return new Set(rows.map((row) => row.slug));
 }
 
 export async function createPartner(data: {

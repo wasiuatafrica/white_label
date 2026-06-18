@@ -1,5 +1,6 @@
-import { eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../index';
+import { mapPartnerSignupEvent } from '../mappers';
 import {
   partnerSignupEvents,
   type PartnerSignupEventFormData,
@@ -60,6 +61,14 @@ export async function trackPartnerSignupEvent(data: TrackPartnerSignupEventInput
     .returning({ id: partnerSignupEvents.id });
 
   return row;
+}
+
+export async function listPartnerSignupEvents() {
+  const rows = await db
+    .select()
+    .from(partnerSignupEvents)
+    .orderBy(desc(partnerSignupEvents.updatedAt));
+  return rows.map(mapPartnerSignupEvent);
 }
 
 export async function getPartnerSignupEventByAttemptId(attemptId: string) {
