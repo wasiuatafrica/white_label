@@ -24,7 +24,7 @@ async function main() {
   const verifiedResult = await sql`
     UPDATE evaluations
     SET verified_amount = COALESCE(verified_amount, amount)
-    WHERE status <> 'pending_payment'
+    WHERE status NOT IN ('pending_payment', 'payment_rejected')
       AND verified_amount IS NULL
   `;
 
@@ -44,7 +44,7 @@ async function main() {
     SET verified_at = NOW()
     WHERE verified_amount IS NOT NULL
       AND verified_at IS NULL
-      AND status <> 'pending_payment'
+      AND status NOT IN ('pending_payment', 'payment_rejected')
   `;
 
   const revenueResult = await sql`

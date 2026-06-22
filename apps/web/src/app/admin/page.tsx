@@ -1650,6 +1650,8 @@ function PaymentsTab({
 }) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<number | null>(null);
+  const [rejectNotes, setRejectNotes] = useState<Record<number, string>>({});
 
   const { data: rows = [], isLoading } = useQuery<PaymentRow[]>({
     queryKey: ['admin-payments'],
@@ -1675,6 +1677,33 @@ function PaymentsTab({
       setConfirming(null);
     },
     onError: () => setConfirming(null),
+  });
+
+  const rejectPayment = useMutation({
+    mutationFn: async ({
+      eval_id,
+      verification_note,
+    }: {
+      eval_id: number;
+      verification_note: string;
+    }) => {
+      const res = await fetch('/api/admin/payments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eval_id, action: 'reject', verification_note }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
+      setRejecting(null);
+    },
+    onError: () => setRejecting(null),
   });
 
   const totalPending = rows.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
@@ -1798,7 +1827,48 @@ function PaymentsTab({
                   <div className="text-xs text-gray-400">{formatDate(row.purchase_date)}</div>
                 </div>
                 <div className="shrink-0">
-                  {confirming === row.eval_id ? (
+                  {rejecting === row.eval_id ? (
+                    <div className="w-full max-w-sm space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                      <p className="text-xs font-semibold text-red-800">Reject this payment?</p>
+                      <textarea
+                        rows={2}
+                        placeholder="Required reason for rejection"
+                        value={rejectNotes[row.eval_id] ?? ''}
+                        onChange={(e) =>
+                          setRejectNotes((current) => ({
+                            ...current,
+                            [row.eval_id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setRejecting(null)}
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() =>
+                            rejectPayment.mutate({
+                              eval_id: row.eval_id,
+                              verification_note: rejectNotes[row.eval_id] ?? '',
+                            })
+                          }
+                          disabled={rejectPayment.isPending || !rejectNotes[row.eval_id]?.trim()}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {rejectPayment.isPending ? (
+                            <Loader2 size={11} className="animate-spin" />
+                          ) : (
+                            <X size={11} />
+                          )}
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ) : confirming === row.eval_id ? (
                     <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs">
                       <p className="mb-2 font-semibold text-gray-800">Confirm this payment?</p>
                       <div className="flex gap-2">
@@ -1823,14 +1893,32 @@ function PaymentsTab({
                       </div>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => setConfirming(row.eval_id)}
-                      disabled={!row.payment_proof_url}
-                      title={!row.payment_proof_url ? 'Payment evidence is required before approval' : ''}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50 sm:px-4"
-                    >
-                      <CheckCircle size={12} /> Confirm
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setRejecting(null);
+                          setConfirming(row.eval_id);
+                        }}
+                        disabled={!row.payment_proof_url}
+                        title={
+                          !row.payment_proof_url
+                            ? 'Payment evidence is required before approval'
+                            : ''
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50 sm:px-4"
+                      >
+                        <CheckCircle size={12} /> Confirm
+                      </button>
+                      <button
+                        onClick={() => {
+                          setConfirming(null);
+                          setRejecting(row.eval_id);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 sm:px-4"
+                      >
+                        <X size={12} /> Reject
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1854,11 +1942,15 @@ function EvaluationPaymentsTab({
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [partnerFilter, setPartnerFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending_payment' | 'approved'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'pending_payment' | 'approved' | 'rejected'
+  >('all');
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<number | null>(null);
   const [verifiedAmounts, setVerifiedAmounts] = useState<Record<number, string>>({});
   const [forceApprove, setForceApprove] = useState<Record<number, boolean>>({});
   const [verificationNotes, setVerificationNotes] = useState<Record<number, string>>({});
+  const [rejectNotes, setRejectNotes] = useState<Record<number, string>>({});
 
   const { data: rows = [], isLoading } = useQuery<EvaluationPaymentRow[]>({
     queryKey: ['admin-evaluation-payments'],
@@ -1905,6 +1997,33 @@ function EvaluationPaymentsTab({
     onError: () => setConfirming(null),
   });
 
+  const rejectPayment = useMutation({
+    mutationFn: async ({
+      eval_id,
+      verification_note,
+    }: {
+      eval_id: number;
+      verification_note: string;
+    }) => {
+      const res = await fetch('/api/admin/evaluation-payments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eval_id, action: 'reject', verification_note }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      setRejecting(null);
+    },
+    onError: () => setRejecting(null),
+  });
+
   const partners = Array.from(
     new Map(
       rows.map((row) => [
@@ -1922,7 +2041,8 @@ function EvaluationPaymentsTab({
 
   const filtered = rows.filter((row) => {
     const q = search.trim().toLowerCase();
-    const approved = row.status !== 'pending_payment';
+    const approved =
+      row.status !== 'pending_payment' && row.status !== 'payment_rejected';
     const matchesSearch =
       !q ||
       row.trader_name.toLowerCase().includes(q) ||
@@ -1933,6 +2053,7 @@ function EvaluationPaymentsTab({
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'pending_payment' && row.status === 'pending_payment') ||
+      (statusFilter === 'rejected' && row.status === 'payment_rejected') ||
       (statusFilter === 'approved' && approved);
     return matchesSearch && matchesPartner && matchesStatus;
   });
@@ -1950,6 +2071,7 @@ function EvaluationPaymentsTab({
 
   const getPaymentBadge = (status: string) => {
     if (status === 'pending_payment') return <Badge color="amber">Awaiting Approval</Badge>;
+    if (status === 'payment_rejected') return <Badge color="red">Rejected</Badge>;
     if (status === 'active') return <Badge color="green">Approved</Badge>;
     if (status === 'passed') return <Badge color="green">Passed</Badge>;
     if (status === 'failed') return <Badge color="red">Failed</Badge>;
@@ -2039,6 +2161,7 @@ function EvaluationPaymentsTab({
                 ['all', 'All'],
                 ['pending_payment', 'Pending'],
                 ['approved', 'Approved'],
+                ['rejected', 'Rejected'],
               ].map(([id, label]) => (
                 <button
                   key={id}
@@ -2165,7 +2288,54 @@ function EvaluationPaymentsTab({
                           )}
 
                           {row.status === 'pending_payment' &&
-                            (confirming === row.eval_id ? (
+                            rejecting === row.eval_id ? (
+                              <div className="w-full max-w-md space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                                <p className="text-xs font-semibold text-red-800">
+                                  Reject this payment?
+                                </p>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Required reason for rejection"
+                                  value={rejectNotes[row.eval_id] ?? ''}
+                                  onChange={(e) =>
+                                    setRejectNotes((current) => ({
+                                      ...current,
+                                      [row.eval_id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs"
+                                />
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => setRejecting(null)}
+                                    className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      rejectPayment.mutate({
+                                        eval_id: row.eval_id,
+                                        verification_note: rejectNotes[row.eval_id] ?? '',
+                                      })
+                                    }
+                                    disabled={
+                                      rejectPayment.isPending ||
+                                      !rejectNotes[row.eval_id]?.trim()
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                                  >
+                                    {rejectPayment.isPending ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <X size={11} />
+                                    )}
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            ) : row.status === 'pending_payment' &&
+                            confirming === row.eval_id ? (
                               <div className="w-full max-w-md space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                   <div>
@@ -2291,26 +2461,41 @@ function EvaluationPaymentsTab({
                                   </button>
                                 </div>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setConfirming(row.eval_id);
-                                  setVerifiedAmounts((current) => ({
-                                    ...current,
-                                    [row.eval_id]: String(parseFloat(row.amount)),
-                                  }));
-                                }}
-                                disabled={!row.payment_proof_url}
-                                title={
-                                  !row.payment_proof_url
-                                    ? 'Payment evidence is required before approval'
-                                    : ''
-                                }
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
-                              >
-                                <CheckCircle size={12} /> Approve
-                              </button>
-                            ))}
+                            ) : row.status === 'pending_payment' ? (
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => {
+                                    setRejecting(null);
+                                    setConfirming(row.eval_id);
+                                    setVerifiedAmounts((current) => ({
+                                      ...current,
+                                      [row.eval_id]: String(parseFloat(row.amount)),
+                                    }));
+                                  }}
+                                  disabled={!row.payment_proof_url}
+                                  title={
+                                    !row.payment_proof_url
+                                      ? 'Payment evidence is required before approval'
+                                      : ''
+                                  }
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#16A34A] px-3 py-2 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                                >
+                                  <CheckCircle size={12} /> Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setConfirming(null);
+                                    setRejecting(row.eval_id);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                                >
+                                  <X size={12} /> Reject
+                                </button>
+                              </div>
+                            ) : null}
+                          {row.status === 'payment_rejected' && row.verification_note && (
+                            <span className="text-xs text-red-600">{row.verification_note}</span>
+                          )}
                         </div>
                       </div>
                     ))}

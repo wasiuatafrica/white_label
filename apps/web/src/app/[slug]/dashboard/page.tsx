@@ -333,6 +333,11 @@ function StatusBadge({ status }: { status: string }) {
       cls: 'border-amber-200 bg-amber-50 text-amber-700',
       dot: 'bg-amber-500',
     },
+    payment_rejected: {
+      label: 'Payment Rejected',
+      cls: 'border-red-200 bg-red-50 text-red-700',
+      dot: 'bg-red-500',
+    },
     passed: {
       label: 'Passed ✓',
       cls: 'border-blue-200 bg-blue-50 text-blue-700',

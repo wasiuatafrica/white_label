@@ -327,7 +327,7 @@ export async function createEvaluationForTrader(data: {
 }
 
 type EvalUpdateFields = Partial<{
-  status: 'pending_payment' | 'active' | 'passed' | 'failed' | 'suspended';
+  status: 'pending_payment' | 'active' | 'passed' | 'failed' | 'suspended' | 'payment_rejected';
   currentProfit: string;
   currentDrawdown: string;
   tradingDays: number;
@@ -436,6 +436,28 @@ export async function activateEvaluation(
   });
 }
 
+export async function rejectEvaluationPayment(
+  evalId: number,
+  options?: { verificationNote?: string | null }
+) {
+  const note = options?.verificationNote?.trim() || '';
+  if (!note) {
+    throw new EvaluationActivationError('verification_note is required when rejecting a payment');
+  }
+
+  const [row] = await db
+    .update(evaluations)
+    .set({
+      status: 'payment_rejected',
+      verificationNote: note,
+      updatedAt: sql`NOW()`,
+    })
+    .where(and(eq(evaluations.id, evalId), eq(evaluations.status, 'pending_payment')))
+    .returning({ id: evaluations.id });
+
+  return row ?? null;
+}
+
 export async function updateEvaluationPayoutStatus(
   evalId: number,
   payoutStatus: 'processing' | 'paid'
@@ -470,7 +492,8 @@ export async function backfillEvaluationPricing() {
     const evalType = row.evalType as EvalType;
     const markup = row.markupAmount != null ? toMoneyNumber(row.markupAmount) : toMoneyNumber(row.feeMarkup);
     const wholesale = row.wholesaleAmount != null ? toMoneyNumber(row.wholesaleAmount) : getWholesalePrice(evalType);
-    const isVerified = row.status !== 'pending_payment';
+    const isVerified =
+      row.status !== 'pending_payment' && row.status !== 'payment_rejected';
     const verifiedAmount = row.verifiedAmount ?? (isVerified ? row.amount : null);
     const partnerEarnings =
       row.partnerEarningsAmount ??

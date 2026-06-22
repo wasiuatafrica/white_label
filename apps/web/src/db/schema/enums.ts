@@ -16,6 +16,7 @@ export const evalStatusEnum = pgEnum('eval_status', [
   'passed',
   'failed',
   'suspended',
+  'payment_rejected',
 ]);
 export const payoutStatusEnum = pgEnum('payout_status', ['processing', 'paid']);
 export const traderRequestTypeEnum = pgEnum('trader_request_type', [

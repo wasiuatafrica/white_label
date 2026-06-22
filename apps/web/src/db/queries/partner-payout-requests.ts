@@ -45,7 +45,7 @@ export async function getPartnerTotalEarnings(partnerId: number): Promise<number
       and(
         eq(evaluations.partnerId, partnerId),
         sql`${evaluations.verifiedAmount} IS NOT NULL`,
-        sql`${evaluations.status} <> 'pending_payment'`
+        sql`${evaluations.status} NOT IN ('pending_payment', 'payment_rejected')`
       )
     );
   return parseFloat(row?.total || '0');

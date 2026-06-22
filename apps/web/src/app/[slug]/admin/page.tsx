@@ -27,7 +27,16 @@ import {
   ChevronDown,
   ChevronUp,
   Activity,
+  Info,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { HexColorPicker } from 'react-colorful';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
@@ -151,7 +160,9 @@ function fmtMoney(n: number) {
 }
 
 function sumEvaluationFinancials(evaluations: Evaluation[]) {
-  const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
+  const confirmed = evaluations.filter(
+    (e) => e.status !== 'pending_payment' && e.status !== 'payment_rejected'
+  );
   const gross = confirmed.reduce(
     (sum, e) => sum + parseFloat(e.verified_amount || e.amount || '0'),
     0
@@ -183,17 +194,22 @@ function StatCard({
   icon,
   color = '#6B7280',
   sub,
+  labelExtra,
 }: {
   label: string;
   value: string | number;
   icon: React.ReactNode;
   color?: string;
   sub?: string;
+  labelExtra?: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-400">{label}</span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+          {label}
+          {labelExtra}
+        </span>
         <span style={{ color }}>{icon}</span>
       </div>
       <div className="mt-2 text-2xl font-black text-gray-900">{value}</div>
@@ -497,6 +513,126 @@ function PaymentsTab({
 
 // ─── Payouts Tab ──────────────────────────────────────────────────────────────
 
+function PayoutsEarningsBreakdownDialog({
+  evaluations,
+  totalEarnings,
+  totalPaid,
+  balance,
+}: {
+  evaluations: Evaluation[];
+  totalEarnings: number;
+  totalPaid: number;
+  balance: number;
+}) {
+  const { confirmed, gross, wholesale, partnerEarnings } = sumEvaluationFinancials(evaluations);
+  const earningRows = confirmed
+    .filter((e) => e.verified_amount != null || parseFloat(e.partner_earnings_amount || '0') > 0)
+    .sort(
+      (a, b) =>
+        new Date(b.purchase_date).getTime() - new Date(a.purchase_date).getTime()
+    );
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex rounded-full p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          aria-label="How total earned is calculated"
+        >
+          <Info size={13} />
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>How your payout is calculated</DialogTitle>
+          <DialogDescription>
+            Earnings come from verified evaluation payments. Each sale earns verified amount minus
+            FT9ja wholesale (25% off base + your markup when paid in full).
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-3 font-mono text-xs text-gray-700">
+            Partner earnings = verified amount − wholesale
+          </div>
+
+          {earningRows.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                Per evaluation ({earningRows.length})
+              </p>
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                {earningRows.map((ev) => {
+                  const verified = parseFloat(ev.verified_amount || ev.amount || '0');
+                  const wholesaleAmount = parseFloat(ev.wholesale_amount || '0');
+                  const markupAmount = parseFloat(ev.markup_amount || '0');
+                  const earnings = parseFloat(ev.partner_earnings_amount || '0');
+                  return (
+                    <div
+                      key={ev.id}
+                      className="rounded-lg border border-gray-100 bg-white px-3 py-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-gray-900">
+                          {ev.eval_type} · {ev.trader_name}
+                        </span>
+                        <span className="font-bold text-green-700">{fmtMoney(earnings)}</span>
+                      </div>
+                      <div className="mt-1 space-y-0.5 text-gray-500">
+                        <div>
+                          {fmtMoney(verified)} verified − {fmtMoney(wholesaleAmount)} wholesale
+                        </div>
+                        <div>
+                          Markup:{' '}
+                          <span className={markupAmount > 0 ? 'font-medium text-gray-700' : 'text-gray-400'}>
+                            {markupAmount > 0 ? fmtMoney(markupAmount) : 'None (wholesale only)'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">
+              No verified evaluations yet. Earnings appear after FT9ja confirms payment receipts.
+            </p>
+          )}
+
+          <div className="space-y-2 border-t border-gray-100 pt-3">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Verified GMV</span>
+              <span className="font-semibold text-gray-900">{fmtMoney(gross)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">FT9ja wholesale</span>
+              <span className="font-semibold text-gray-900">− {fmtMoney(wholesale)}</span>
+            </div>
+            <div className="flex justify-between border-t border-gray-100 pt-2 text-xs">
+              <span className="font-semibold text-gray-700">
+                Total earned ({earningRows.length} evaluation{earningRows.length !== 1 ? 's' : ''})
+              </span>
+              <span className="font-black text-green-700">
+                {fmtMoney(totalEarnings || partnerEarnings)}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Already paid / reserved</span>
+              <span className="font-semibold text-gray-900">− {fmtMoney(totalPaid)}</span>
+            </div>
+            <div className="flex justify-between rounded-lg bg-amber-50 px-3 py-2 text-xs">
+              <span className="font-semibold text-amber-900">Available to withdraw</span>
+              <span className="font-black text-amber-900">{fmtMoney(Math.max(balance, 0))}</span>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PayoutsTab({
   evaluations,
   partner,
@@ -598,6 +734,14 @@ function PayoutsTab({
           icon={<TrendingUp size={16} />}
           color="#16A34A"
           sub="Verified evaluation earnings"
+          labelExtra={
+            <PayoutsEarningsBreakdownDialog
+              evaluations={evaluations}
+              totalEarnings={totalEarnings}
+              totalPaid={totalPaid}
+              balance={balance}
+            />
+          }
         />
         <StatCard
           label="Already Paid"

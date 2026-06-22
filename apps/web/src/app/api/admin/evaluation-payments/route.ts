@@ -1,4 +1,8 @@
-import { activateEvaluation, EvaluationActivationError } from '@/db/queries/evaluations';
+import {
+  activateEvaluation,
+  EvaluationActivationError,
+  rejectEvaluationPayment,
+} from '@/db/queries/evaluations';
 import { getPaymentActivationNotice, listAllEvaluationPayments } from '@/db/queries/admin';
 import { sendEmail } from '@/app/api/utils/send-email';
 import { toMoneyNumber } from '@/lib/partner-pricing';
@@ -16,10 +20,23 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { eval_id, verified_amount, force_approve, verification_note } = body;
+    const { eval_id, action, verified_amount, force_approve, verification_note } = body;
 
     if (!eval_id) {
       return Response.json({ error: 'eval_id is required' }, { status: 400 });
+    }
+
+    if (action === 'reject') {
+      const result = await rejectEvaluationPayment(Number(eval_id), {
+        verificationNote: typeof verification_note === 'string' ? verification_note : null,
+      });
+      if (!result) {
+        return Response.json(
+          { error: 'Evaluation not found or not awaiting payment approval' },
+          { status: 404 }
+        );
+      }
+      return Response.json({ success: true, rejected: true });
     }
 
     const verifiedAmount = verified_amount ?? body.amount;

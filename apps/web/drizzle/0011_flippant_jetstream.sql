@@ -1,0 +1,1 @@
+ALTER TYPE "public"."eval_status" ADD VALUE 'payment_rejected';
