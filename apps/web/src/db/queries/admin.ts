@@ -169,6 +169,40 @@ export async function listPassedEvaluationsForPayouts() {
     );
 }
 
+export async function listAllTradeAccounts() {
+  return db
+    .select({
+      trade_account_id: tradeAccounts.id,
+      number: tradeAccounts.number,
+      platform: tradeAccounts.platform,
+      broker: tradeAccounts.broker,
+      type_of_account: tradeAccounts.typeOfAccount,
+      acc_size: tradeAccounts.accSize,
+      creation_code: tradeAccounts.creationCode,
+      blown: tradeAccounts.blown,
+      inactive: tradeAccounts.inactive,
+      has_aso: tradeAccounts.hasAso,
+      aso_account_number: tradeAccounts.asoAccountNumber,
+      created_at: tradeAccounts.createdAt,
+      trader_id: traders.id,
+      trader_name: traders.name,
+      trader_email: traders.email,
+      partner_id: partners.id,
+      partner_slug: partners.slug,
+      partner_firm_name: partners.firmName,
+      partner_brand_color: partners.brandColor,
+      partner_status: partners.status,
+      eval_id: evaluations.id,
+      eval_type: evaluations.evalType,
+      is_completed: sql<boolean>`${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> ''`,
+    })
+    .from(tradeAccounts)
+    .innerJoin(traders, eq(traders.id, tradeAccounts.traderId))
+    .innerJoin(partners, eq(partners.id, tradeAccounts.partnerId))
+    .leftJoin(evaluations, eq(evaluations.id, tradeAccounts.evaluationId))
+    .orderBy(asc(partners.firmName), desc(tradeAccounts.createdAt));
+}
+
 export async function listAllTraderRequests() {
   return db
     .select({

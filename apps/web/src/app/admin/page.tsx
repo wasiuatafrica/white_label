@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Shield,
   UserPlus,
+  KeyRound,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -76,6 +77,32 @@ type TraderRow = {
   partner_firm_name: string;
   partner_brand_color: string;
   partner_status: string;
+};
+
+type TradeAccountRow = {
+  trade_account_id: number;
+  number: number;
+  platform: string;
+  broker: string;
+  type_of_account: string;
+  acc_size: string;
+  creation_code: string;
+  blown: boolean;
+  inactive: boolean;
+  has_aso: number | null;
+  aso_account_number: number | null;
+  created_at: string;
+  trader_id: number;
+  trader_name: string;
+  trader_email: string;
+  partner_id: number;
+  partner_slug: string;
+  partner_firm_name: string;
+  partner_brand_color: string;
+  partner_status: string;
+  eval_id: number | null;
+  eval_type: string | null;
+  is_completed: boolean;
 };
 
 type PartnerSignupRow = {
@@ -229,6 +256,13 @@ function formatDate(d: string) {
   const [hh, mm] = timePart.split(':');
   const month = months[parseInt(mo ?? '1', 10) - 1] ?? '';
   return `${parseInt(day ?? '1', 10)} ${month} ${yr}, ${hh ?? '00'}:${mm ?? '00'}`;
+}
+
+function formatAccountType(type: string) {
+  if (type === 'Synthetic-Signals') return 'SS';
+  if (type === 'Synthetic-Signals-Lite') return 'SSL';
+  if (type === 'Aso') return 'ASO';
+  return type;
 }
 
 function formatPaymentMethod(method: string | null) {
@@ -1119,6 +1153,255 @@ function TradersTab() {
                         </div>
                         <div className="text-xs text-gray-400 sm:text-right">
                           Joined {formatDate(row.trader_created_at)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Trade Accounts Tab ───────────────────────────────────────────────────────
+
+function TradeAccountsTab() {
+  const [search, setSearch] = useState('');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'blown'>('all');
+
+  const { data: rows = [], isLoading } = useQuery<TradeAccountRow[]>({
+    queryKey: ['admin-trade-accounts'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/trade-accounts');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const partners = Array.from(
+    new Map(
+      rows.map((row) => [
+        row.partner_id,
+        {
+          id: row.partner_id,
+          slug: row.partner_slug,
+          firmName: row.partner_firm_name,
+          brandColor: row.partner_brand_color,
+          status: row.partner_status,
+        },
+      ])
+    ).values()
+  );
+
+  const filtered = rows.filter((row) => {
+    const q = search.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      row.trader_name.toLowerCase().includes(q) ||
+      row.trader_email.toLowerCase().includes(q) ||
+      row.partner_firm_name.toLowerCase().includes(q) ||
+      String(row.number).includes(q) ||
+      row.creation_code.toLowerCase().includes(q);
+    const matchesPartner = partnerFilter === 'all' || String(row.partner_id) === partnerFilter;
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && row.is_completed && !row.blown && !row.inactive) ||
+      (statusFilter === 'pending' && !row.is_completed) ||
+      (statusFilter === 'blown' && row.blown);
+    return matchesSearch && matchesPartner && matchesStatus;
+  });
+
+  const grouped = partners
+    .map((partner) => ({
+      partner,
+      accounts: filtered.filter((row) => row.partner_id === partner.id),
+    }))
+    .filter((group) => group.accounts.length > 0);
+
+  const activeAccounts = rows.filter(
+    (row) => row.is_completed && !row.blown && !row.inactive
+  ).length;
+  const pendingAccounts = rows.filter((row) => !row.is_completed).length;
+  const blownAccounts = rows.filter((row) => row.blown).length;
+
+  const getAccountBadge = (row: TradeAccountRow) => {
+    if (row.blown) return <Badge color="red">Blown</Badge>;
+    if (row.inactive) return <Badge color="gray">Inactive</Badge>;
+    if (!row.is_completed) return <Badge color="amber">Pending Setup</Badge>;
+    return <Badge color="green">Active</Badge>;
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        {[
+          {
+            label: 'Total Accounts',
+            value: rows.length,
+            color: '#111827',
+            icon: <KeyRound size={16} />,
+          },
+          {
+            label: 'Active Accounts',
+            value: activeAccounts,
+            color: '#16A34A',
+            icon: <CheckCircle size={16} />,
+          },
+          {
+            label: 'Pending Setup',
+            value: pendingAccounts,
+            color: '#F59E0B',
+            icon: <Clock size={16} />,
+          },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-400">{c.label}</span>
+              <span style={{ color: c.color }}>{c.icon}</span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {blownAccounts > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-600" />
+          <p className="text-xs text-red-700">
+            <strong>{blownAccounts} blown account{blownAccounts !== 1 ? 's' : ''}</strong> across
+            all partners.
+          </p>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Trade Accounts by Partner</h2>
+            <p className="text-xs text-gray-400">
+              {filtered.length} account{filtered.length !== 1 ? 's' : ''} across {grouped.length}{' '}
+              partner{grouped.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                className="w-full rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#16A34A] sm:w-56"
+                placeholder="Search accounts..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as 'all' | 'active' | 'pending' | 'blown')
+              }
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#16A34A]"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="pending">Pending setup</option>
+              <option value="blown">Blown</option>
+            </select>
+            <select
+              value={partnerFilter}
+              onChange={(e) => setPartnerFilter(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-[#16A34A]"
+            >
+              <option value="all">All partners</option>
+              {partners.map((partner) => (
+                <option key={partner.id} value={partner.id}>
+                  {partner.firmName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading trade accounts...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="p-12 text-center">
+            <KeyRound size={28} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm text-gray-400">No trade accounts yet.</p>
+          </div>
+        ) : grouped.length === 0 ? (
+          <div className="p-12 text-center text-sm text-gray-400">
+            No trade accounts match your search.
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {grouped.map(({ partner, accounts }) => {
+              const sc = getStatusConfig(partner.status);
+              return (
+                <section key={partner.id}>
+                  <div className="flex flex-col gap-3 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                        style={{ backgroundColor: partner.brandColor || '#16A34A' }}
+                      >
+                        {partner.firmName[0]}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-sm font-black text-gray-900">
+                            {partner.firmName}
+                          </h3>
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium"
+                            style={{ color: sc.color }}
+                          >
+                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+                            {sc.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400">{partner.slug}.ft9ja.com</p>
+                      </div>
+                    </div>
+                    <div className="text-xs font-semibold text-gray-500">
+                      {accounts.length} account{accounts.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-gray-100">
+                    {accounts.map((row) => (
+                      <div
+                        key={row.trade_account_id}
+                        className="flex flex-col gap-2 px-4 py-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {row.is_completed ? `MT5 ${row.number}` : 'Awaiting setup'}
+                            </span>
+                            <Badge color="gray">{formatAccountType(row.type_of_account)}</Badge>
+                            {row.eval_type && <Badge color="blue">{row.eval_type}</Badge>}
+                            {getAccountBadge(row)}
+                            {row.has_aso ? <Badge color="purple">Has ASO</Badge> : null}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-gray-400">
+                            {row.trader_name} · {row.trader_email}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-400">
+                            {row.platform} · {row.broker} · {row.acc_size}
+                            {!row.is_completed ? ` · Code ${row.creation_code}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-xs text-gray-400 sm:text-right">
+                          Created {formatDate(row.created_at)}
                         </div>
                       </div>
                     ))}
@@ -2771,6 +3054,7 @@ export default function AdminPage() {
     | 'partners'
     | 'partner-signups'
     | 'traders'
+    | 'trade-accounts'
     | 'kyc'
     | 'payments'
     | 'evaluation-payments'
@@ -2948,6 +3232,7 @@ export default function AdminPage() {
       badge: partnerSignupsAbandoned,
     },
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
+    { id: 'trade-accounts', label: 'Trade Accounts', icon: <KeyRound size={13} />, badge: 0 },
     { id: 'kyc', label: 'KYC', icon: <BadgeCheck size={13} />, badge: kycPending },
     { id: 'payments', label: 'Payments', icon: <CreditCard size={13} />, badge: paymentsPending },
     {
@@ -3030,6 +3315,7 @@ export default function AdminPage() {
         )}
         {tab === 'partner-signups' && <PartnerSignupsTab />}
         {tab === 'traders' && <TradersTab />}
+        {tab === 'trade-accounts' && <TradeAccountsTab />}
         {tab === 'kyc' && <KYCTab />}
         {tab === 'payments' && (
           <PaymentsTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
