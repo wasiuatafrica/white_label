@@ -10,6 +10,7 @@ import {
   TRADING_DAILY_DRAWDOWN_LIMIT_PERCENT,
   TRADING_PROFIT_TARGET_PERCENT,
   TRADING_REQUIRED_DAYS,
+  getProfitTargetPercent,
 } from '@/lib/trading-telemetry';
 import { incrementPartnerRevenue, incrementPartnerTraders } from './partners';
 import { createTrader, getTraderByEmail } from './traders';
@@ -109,7 +110,10 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
 
       return {
         ...evaluation,
-        profit_target: telemetry?.profit_target ?? TRADING_PROFIT_TARGET_PERCENT,
+        profit_target:
+          row.evalType === 'SSL'
+            ? 0
+            : telemetry?.profit_target ?? TRADING_PROFIT_TARGET_PERCENT,
         current_profit: telemetry?.current_profit ?? Number(evaluation.current_profit),
         max_drawdown:
           telemetry?.max_account_drawdown ?? TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT,
@@ -202,7 +206,7 @@ export async function createEvaluationWithTrader(data: {
       await incrementPartnerTraders(data.partnerId, tx);
     }
 
-    const profitTarget = String(TRADING_PROFIT_TARGET_PERCENT);
+    const profitTarget = String(getProfitTargetPercent(data.evalType));
     const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
     const requiredDays = TRADING_REQUIRED_DAYS;
     const amount = String(data.amount || 0);
@@ -243,7 +247,7 @@ export async function createEvaluationForTrader(data: {
   paymentMethod?: string | null;
   paymentProofUrl?: string | null;
 }) {
-  const profitTarget = String(TRADING_PROFIT_TARGET_PERCENT);
+  const profitTarget = String(getProfitTargetPercent(data.evalType));
   const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
   const requiredDays = TRADING_REQUIRED_DAYS;
   const amount = String(data.amount || 0);

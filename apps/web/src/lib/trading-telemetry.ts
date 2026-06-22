@@ -11,6 +11,10 @@ export const TRADING_DAILY_DRAWDOWN_LIMIT_PERCENT = 5;
 export const TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT = 10;
 export const TRADING_REQUIRED_DAYS = 10;
 
+export function getProfitTargetPercent(evalType: 'SS' | 'SSL') {
+  return evalType === 'SSL' ? 0 : TRADING_PROFIT_TARGET_PERCENT;
+}
+
 export type BalanceEquityPoint = {
   account: number;
   timestamp: number;
