@@ -68,6 +68,12 @@ export function mapEvaluation(row: Evaluation) {
     partner_id: row.partnerId,
     eval_type: row.evalType,
     amount: row.amount,
+    verified_amount: row.verifiedAmount,
+    markup_amount: row.markupAmount,
+    wholesale_amount: row.wholesaleAmount,
+    partner_earnings_amount: row.partnerEarningsAmount,
+    verified_at: row.verifiedAt,
+    verification_note: row.verificationNote,
     payment_method: row.paymentMethod,
     payment_proof_url: row.paymentProofUrl,
     status: row.status,
@@ -127,7 +133,10 @@ export function mapPartnerPayoutRequest(row: PartnerPayoutRequest) {
     account_number: row.accountNumber,
     account_name: row.accountName,
     notes: row.notes,
+    admin_notes: row.adminNotes,
     status: row.status,
     created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    processed_at: row.processedAt,
   };
 }

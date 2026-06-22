@@ -165,7 +165,7 @@ const sections: Section[] = [
       },
       {
         q: 'How do I track my earnings?',
-        a: 'The Payouts tab shows your total earned (markup × confirmed evaluations), total paid out, and available balance. You can request a payout at any time when your balance is positive.',
+        a: 'The Payouts tab shows total earned (sum of verified partner earnings), reserved/paid amounts, and available balance from the server. Request a payout when your available balance is positive.',
       },
       {
         q: 'Can I see which traders have passed or failed?',

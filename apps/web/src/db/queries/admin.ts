@@ -88,6 +88,11 @@ export async function listAllEvaluationPayments() {
       eval_id: evaluations.id,
       eval_type: evaluations.evalType,
       amount: evaluations.amount,
+      verified_amount: evaluations.verifiedAmount,
+      markup_amount: evaluations.markupAmount,
+      wholesale_amount: evaluations.wholesaleAmount,
+      partner_earnings_amount: evaluations.partnerEarningsAmount,
+      verification_note: evaluations.verificationNote,
       payment_method: evaluations.paymentMethod,
       payment_proof_url: evaluations.paymentProofUrl,
       status: evaluations.status,
@@ -103,6 +108,7 @@ export async function listAllEvaluationPayments() {
       partner_firm_name: partners.firmName,
       partner_brand_color: partners.brandColor,
       partner_status: partners.status,
+      fee_markup: partners.feeMarkup,
     })
     .from(evaluations)
     .innerJoin(traders, eq(traders.id, evaluations.traderId))

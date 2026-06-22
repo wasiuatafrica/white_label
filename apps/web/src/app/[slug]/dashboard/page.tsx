@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
+import { getDefaultEvalProduct, getPartnerProducts } from '@/lib/eval-products';
 import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
 
@@ -169,38 +170,7 @@ const REQUEST_META: Record<string, { label: string; desc: string; icon: string }
   },
 };
 
-const BASE_EVAL_PRODUCTS: EvalProduct[] = [
-  {
-    id: 'ss',
-    name: 'Standard Evaluation',
-    code: 'SS',
-    price: '₦145,000',
-    priceNum: 145000,
-    accountSize: '$10,000',
-    profitTarget: '25%',
-    maxDrawdown: '10%',
-  },
-  {
-    id: 'ssl',
-    name: 'Starter Evaluation',
-    code: 'SSL',
-    price: '₦49,000',
-    priceNum: 49000,
-    accountSize: '$10,000',
-    profitTarget: 'None',
-    maxDrawdown: '10%',
-  },
-];
-const DEFAULT_EVAL_PRODUCT = BASE_EVAL_PRODUCTS[0] as EvalProduct;
-
-function getProducts(feeMarkup: number | string | null | undefined): EvalProduct[] {
-  const markup = Number(feeMarkup || 0);
-  if (!markup) return BASE_EVAL_PRODUCTS;
-  return BASE_EVAL_PRODUCTS.map((p) => {
-    const total = p.priceNum + markup;
-    return { ...p, priceNum: total, price: `₦${total.toLocaleString()}` };
-  });
-}
+const DEFAULT_EVAL_PRODUCT = getDefaultEvalProduct();
 
 function getAvailableRequests(evalType: string): string[] {
   if (evalType === 'SSL') return ['talent_bonus', 'aso_payout_ssl'];
@@ -2204,7 +2174,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
   const primary = partner?.brand_color || '#16A34A';
   const firmName = partner?.firm_name || slug;
-  const products = getProducts(partner?.fee_markup);
+  const products = getPartnerProducts(partner?.fee_markup);
 
   if (sessionQuery.isLoading || (!email && !sessionQuery.data)) {
     return (

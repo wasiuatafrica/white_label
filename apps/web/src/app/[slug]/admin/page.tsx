@@ -31,6 +31,13 @@ import {
 import { HexColorPicker } from 'react-colorful';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
+import {
+  FT9JA_BASE_PRICES,
+  getExpectedPrice,
+  getPartnerEarningsAtBaseMarkup,
+  getWholesalePrice,
+  toMoneyNumber as pricingToMoney,
+} from '@/lib/partner-pricing';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +84,10 @@ type Evaluation = {
   trader_email: string;
   eval_type: string;
   amount: string;
+  verified_amount?: string | null;
+  markup_amount?: string | null;
+  wholesale_amount?: string | null;
+  partner_earnings_amount?: string | null;
   payment_method: string | null;
   payment_proof_url: string | null;
   status: string;
@@ -139,8 +150,25 @@ function fmtMoney(n: number) {
   return `₦${n.toFixed(0)}`;
 }
 
+function sumEvaluationFinancials(evaluations: Evaluation[]) {
+  const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
+  const gross = confirmed.reduce(
+    (sum, e) => sum + parseFloat(e.verified_amount || e.amount || '0'),
+    0
+  );
+  const wholesale = confirmed.reduce(
+    (sum, e) => sum + parseFloat(e.wholesale_amount || '0'),
+    0
+  );
+  const partnerEarnings = confirmed.reduce(
+    (sum, e) => sum + parseFloat(e.partner_earnings_amount || '0'),
+    0
+  );
+  return { confirmed, gross, wholesale, partnerEarnings };
+}
+
 function toMoneyNumber(value: number | string | null | undefined) {
-  return Number(value || 0);
+  return pricingToMoney(value);
 }
 
 function formatPaymentMethod(method: string | null) {
@@ -245,11 +273,8 @@ function PaymentsTab({
   openingReceiptUrl: string | null;
 }) {
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
-  const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
-  const totalRevenue = confirmed.reduce((s, e) => s + parseFloat(e.amount || '0'), 0);
-  const markup = toMoneyNumber(partner.fee_markup);
-  const partnerEarnings = confirmed.length * markup;
-  const ft9jaEarnings = totalRevenue - partnerEarnings;
+  const { confirmed, gross: totalRevenue, wholesale: ft9jaEarnings, partnerEarnings } =
+    sumEvaluationFinancials(evaluations);
 
   return (
     <div className="space-y-5">
@@ -278,7 +303,7 @@ function PaymentsTab({
           value={fmtMoney(partnerEarnings)}
           icon={<TrendingUp size={16} />}
           color="#2563EB"
-          sub={`₦${markup.toLocaleString()} markup × ${confirmed.length} evals`}
+          sub={`${confirmed.length} verified evaluations`}
         />
       </div>
 
@@ -295,15 +320,15 @@ function PaymentsTab({
                 color: '#6B7280',
               },
               {
-                label: 'FT9ja Platform Fee',
+                label: 'FT9ja Wholesale Owed',
                 value: fmtMoney(ft9jaEarnings),
-                desc: 'Base prices go to FT9ja',
+                desc: '75% of FT9ja base per evaluation',
                 color: '#DC2626',
               },
               {
                 label: 'Your Net Earnings',
                 value: fmtMoney(partnerEarnings),
-                desc: `Markup revenue (₦${markup.toLocaleString()}/eval)`,
+                desc: `Verified partner earnings`,
                 color: '#16A34A',
               },
             ].map((r) => (
@@ -438,7 +463,13 @@ function PaymentsTab({
                   </div>
                   <div className="text-xs text-gray-400">
                     Your cut:{' '}
-                    <span className="font-semibold text-gray-700">₦{markup.toLocaleString()}</span>
+                    <span className="font-semibold text-gray-700">
+                      {ev.partner_earnings_amount != null
+                        ? fmtMoney(parseFloat(ev.partner_earnings_amount))
+                        : ev.markup_amount != null
+                          ? fmtMoney(parseFloat(ev.markup_amount))
+                          : '—'}
+                    </span>
                   </div>
                 </div>
                 <span
@@ -477,7 +508,6 @@ function PayoutsTab({
 }) {
   const qc = useQueryClient();
   const slug = partner.slug;
-  const markup = toMoneyNumber(partner.fee_markup);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -488,7 +518,12 @@ function PayoutsTab({
   });
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: payoutRequests = [], isLoading: prLoading } = useQuery<PayoutRequest[]>({
+  const { data: payoutData, isLoading: prLoading } = useQuery<{
+    requests: PayoutRequest[];
+    available_balance: number;
+    total_earnings: number;
+    total_reserved: number;
+  }>({
     queryKey: ['payout-requests', slug],
     queryFn: async () => {
       const res = await fetch(`/api/partners/${slug}/payout-requests`);
@@ -497,11 +532,10 @@ function PayoutsTab({
     },
   });
 
-  const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
-  const totalEarnings = confirmed.length * markup;
-  const approvedRequests = payoutRequests.filter((r) => r.status === 'approved');
-  const totalPaid = approvedRequests.reduce((s, r) => s + parseFloat(r.amount_requested || '0'), 0);
-  const balance = totalEarnings - totalPaid;
+  const payoutRequests = payoutData?.requests ?? [];
+  const totalEarnings = payoutData?.total_earnings ?? 0;
+  const totalPaid = payoutData?.total_reserved ?? 0;
+  const balance = payoutData?.available_balance ?? 0;
   const hasPending = payoutRequests.some((r) => r.status === 'pending');
 
   const submitRequest = useMutation({
@@ -541,6 +575,12 @@ function PayoutsTab({
           ✅ Approved
         </span>
       );
+    if (status === 'paid')
+      return (
+        <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+          💸 Paid
+        </span>
+      );
     return (
       <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600">
         ❌ Rejected
@@ -557,7 +597,7 @@ function PayoutsTab({
           value={fmtMoney(totalEarnings)}
           icon={<TrendingUp size={16} />}
           color="#16A34A"
-          sub={`₦${markup.toLocaleString()} × ${confirmed.length} evals`}
+          sub="Verified evaluation earnings"
         />
         <StatCard
           label="Already Paid"
@@ -577,9 +617,9 @@ function PayoutsTab({
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
         <h4 className="mb-2 text-xs font-semibold text-blue-800">💡 How Your Earnings Work</h4>
         <p className="text-xs text-blue-700">
-          You earn <strong>₦{markup.toLocaleString()}</strong> for every confirmed evaluation. FT9ja
-          pays out your balance upon request after verifying your bank details. Current markup:{' '}
-          <strong>₦{markup.toLocaleString()}</strong> per evaluation.
+          You earn the verified amount minus FT9ja wholesale on each confirmed evaluation (25% of
+          FT9ja base plus your markup when paid in full). Request a payout when your available
+          balance is positive.
         </p>
       </div>
 
@@ -766,21 +806,17 @@ function AnalyticsTab({
   partner: Partner;
   primary: string;
 }) {
-  const markup = toMoneyNumber(partner.fee_markup);
-  const confirmed = evaluations.filter((e) => e.status !== 'pending_payment');
+  const { confirmed, gross: totalRevenue, partnerEarnings } = sumEvaluationFinancials(evaluations);
   const active = evaluations.filter((e) => e.status === 'active');
   const passed = evaluations.filter((e) => e.status === 'passed');
   const failed = evaluations.filter((e) => e.status === 'failed');
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
-
   const sslEvals = confirmed.filter((e) => e.eval_type === 'SSL');
   const ssEvals = confirmed.filter((e) => e.eval_type === 'SS');
-
-  const totalRevenue = confirmed.reduce((s, e) => s + parseFloat(e.amount || '0'), 0);
-  const partnerEarnings = confirmed.length * markup;
   const passRate = confirmed.length > 0 ? Math.round((passed.length / confirmed.length) * 100) : 0;
   const kycApproved = traders.filter((t) => t.kyc_status === 'approved').length;
   const kycSubmitted = traders.filter((t) => t.kyc_status === 'submitted').length;
+  const markup = toMoneyNumber(partner.fee_markup);
 
   // Monthly chart data — derived purely from evaluation date strings, no Date objects needed
   const MONTH_LABELS: Record<string, string> = {
@@ -831,7 +867,10 @@ function AnalyticsTab({
     return {
       label,
       count: monthEvals.length,
-      revenue: monthEvals.reduce((s, e) => s + parseFloat(e.amount || '0'), 0),
+      revenue: monthEvals.reduce(
+        (s, e) => s + parseFloat(e.verified_amount || e.amount || '0'),
+        0
+      ),
     };
   });
 
@@ -860,7 +899,11 @@ function AnalyticsTab({
           value={fmtMoney(partnerEarnings)}
           icon={<DollarSign size={16} />}
           color="#16A34A"
-          sub={`₦${markup.toLocaleString()} markup/eval`}
+          sub={
+            confirmed.length > 0
+              ? `${confirmed.length} confirmed · ₦${markup.toLocaleString()} markup`
+              : 'No confirmed evals yet'
+          }
         />
         <StatCard
           label="KYC Approved"
@@ -1539,6 +1582,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const primary = brandForm.brand_color || '#16A34A';
   const revenue = parseFloat(partner.total_revenue || '0');
   const markup = toMoneyNumber(partner.fee_markup);
+  const { partnerEarnings: overviewEarnings } = sumEvaluationFinancials(allEvals);
 
   const TABS = [
     { id: 'overview', label: 'Overview', icon: <Activity size={13} />, badge: 0 },
@@ -1663,15 +1707,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               />
               <StatCard
                 label="Your Earnings"
-                value={
-                  markup > 0
-                    ? fmtMoney(
-                        allEvals.filter((e) => e.status !== 'pending_payment').length * markup
-                      )
-                    : '₦0'
-                }
+                value={fmtMoney(overviewEarnings)}
                 icon={<DollarSign size={16} />}
                 color="#2563EB"
+                sub="Verified evaluation earnings"
               />
               <StatCard
                 label="License"
@@ -1974,11 +2013,14 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     Price Breakdown
                   </div>
                   {[
-                    { label: 'Standard Evaluation (SS)', base: 149000 },
-                    { label: 'Starter Evaluation (SSL)', base: 52000 },
+                    { label: 'Standard Evaluation (SS)', code: 'SS' as const },
+                    { label: 'Starter Evaluation (SSL)', code: 'SSL' as const },
                   ].map((p) => {
                     const markup = toMoneyNumber(brandForm.fee_markup);
-                    const total = p.base + markup;
+                    const base = FT9JA_BASE_PRICES[p.code];
+                    const wholesale = getWholesalePrice(p.code);
+                    const total = getExpectedPrice(p.code, markup);
+                    const earnings = getPartnerEarningsAtBaseMarkup(p.code, markup);
                     return (
                       <div
                         key={p.label}
@@ -1989,7 +2031,13 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-400">FT9ja base</span>
                             <span className="font-medium text-gray-700">
-                              ₦{p.base.toLocaleString()}
+                              ₦{base.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-400">Your wholesale (25% off)</span>
+                            <span className="font-medium text-gray-700">
+                              ₦{wholesale.toLocaleString()}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
@@ -2003,6 +2051,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                             <span style={{ color: brandForm.brand_color }}>
                               ₦{total.toLocaleString()}
                             </span>
+                          </div>
+                          <div className="flex justify-between text-xs text-green-700">
+                            <span>You earn per sale</span>
+                            <span className="font-semibold">₦{earnings.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>

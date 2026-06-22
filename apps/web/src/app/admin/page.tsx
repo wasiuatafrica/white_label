@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPartnerUrl } from '@/lib/tenant';
+import { splitVerifiedAmount, type EvalType } from '@/lib/partner-pricing';
 import {
   CheckCircle,
   Clock,
@@ -150,11 +151,36 @@ type PaymentRow = {
 };
 
 type EvaluationPaymentRow = PaymentRow & {
+  verified_amount: string | null;
+  markup_amount: string | null;
+  wholesale_amount: string | null;
+  partner_earnings_amount: string | null;
+  verification_note: string | null;
   profit_target: string;
   max_drawdown: string;
   required_days: number;
   partner_id: number;
   partner_status: string;
+  fee_markup: string | null;
+};
+
+type PartnerPayoutRequestRow = {
+  id: number;
+  partner_id: number;
+  amount_requested: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  notes: string | null;
+  admin_notes: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  processed_at: string | null;
+  partner_slug: string | null;
+  partner_firm_name: string | null;
+  partner_brand_color: string | null;
+  available_balance: number;
 };
 
 type PayoutRow = {
@@ -1690,8 +1716,9 @@ function PaymentsTab({
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <AlertTriangle size={14} className="shrink-0 text-amber-600 mt-0.5" />
           <p className="text-xs text-amber-700">
-            <strong>Confirm payments only after verifying uploaded evidence.</strong> Match the
-            method, amount, and trader reference before activating the evaluation.
+            <strong>This tab is legacy.</strong> Use the <strong>Eval Payments</strong> tab to
+            approve receipts with verified amounts. Confirm payments only after verifying uploaded
+            evidence — match method, amount, and trader reference.
           </p>
         </div>
       )}
@@ -1829,6 +1856,9 @@ function EvaluationPaymentsTab({
   const [partnerFilter, setPartnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending_payment' | 'approved'>('all');
   const [confirming, setConfirming] = useState<number | null>(null);
+  const [verifiedAmounts, setVerifiedAmounts] = useState<Record<number, string>>({});
+  const [forceApprove, setForceApprove] = useState<Record<number, boolean>>({});
+  const [verificationNotes, setVerificationNotes] = useState<Record<number, string>>({});
 
   const { data: rows = [], isLoading } = useQuery<EvaluationPaymentRow[]>({
     queryKey: ['admin-evaluation-payments'],
@@ -1840,13 +1870,31 @@ function EvaluationPaymentsTab({
   });
 
   const confirm = useMutation({
-    mutationFn: async (eval_id: number) => {
+    mutationFn: async ({
+      eval_id,
+      verified_amount,
+      force_approve,
+      verification_note,
+    }: {
+      eval_id: number;
+      verified_amount: number;
+      force_approve: boolean;
+      verification_note: string;
+    }) => {
       const res = await fetch('/api/admin/evaluation-payments', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eval_id }),
+        body: JSON.stringify({
+          eval_id,
+          verified_amount,
+          force_approve,
+          verification_note,
+        }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -2118,29 +2166,140 @@ function EvaluationPaymentsTab({
 
                           {row.status === 'pending_payment' &&
                             (confirming === row.eval_id ? (
-                              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5">
-                                <button
-                                  onClick={() => setConfirming(null)}
-                                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => confirm.mutate(row.eval_id)}
-                                  disabled={confirm.isPending || !row.payment_proof_url}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
-                                >
-                                  {confirm.isPending ? (
-                                    <Loader2 size={11} className="animate-spin" />
-                                  ) : (
-                                    <CheckCircle size={11} />
-                                  )}
-                                  Approve
-                                </button>
+                              <div className="w-full max-w-md space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  <div>
+                                    <span className="text-gray-400">Declared</span>
+                                    <div className="font-semibold text-gray-900">
+                                      ₦{parseFloat(row.amount).toLocaleString()}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400">Expected</span>
+                                    <div className="font-semibold text-gray-900">
+                                      ₦
+                                      {(
+                                        parseFloat(row.wholesale_amount || '0') +
+                                        parseFloat(row.markup_amount || '0')
+                                      ).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                                <label className="block text-xs font-medium text-gray-600">
+                                  Verified amount
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={
+                                    verifiedAmounts[row.eval_id] ?? String(parseFloat(row.amount))
+                                  }
+                                  onChange={(e) =>
+                                    setVerifiedAmounts((current) => ({
+                                      ...current,
+                                      [row.eval_id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm"
+                                />
+                                {(() => {
+                                  const verified = parseFloat(
+                                    verifiedAmounts[row.eval_id] ?? row.amount
+                                  );
+                                  const split = splitVerifiedAmount(
+                                    row.eval_type as EvalType,
+                                    verified,
+                                    row.wholesale_amount
+                                  );
+                                  return (
+                                    <div className="rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs">
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">FT9ja wholesale</span>
+                                        <span className="font-semibold text-gray-900">
+                                          ₦{split.wholesale.toLocaleString()}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-400">Partner earnings</span>
+                                        <span className="font-semibold text-green-700">
+                                          ₦{split.partnerEarnings.toLocaleString()}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                                {parseFloat(
+                                  verifiedAmounts[row.eval_id] ?? row.amount
+                                ) <
+                                  parseFloat(row.wholesale_amount || '0') +
+                                    parseFloat(row.markup_amount || '0') && (
+                                  <>
+                                    <label className="flex items-center gap-2 text-xs text-amber-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={Boolean(forceApprove[row.eval_id])}
+                                        onChange={(e) =>
+                                          setForceApprove((current) => ({
+                                            ...current,
+                                            [row.eval_id]: e.target.checked,
+                                          }))
+                                        }
+                                      />
+                                      Override underpayment
+                                    </label>
+                                    <textarea
+                                      rows={2}
+                                      placeholder="Required note for underpayment override"
+                                      value={verificationNotes[row.eval_id] ?? ''}
+                                      onChange={(e) =>
+                                        setVerificationNotes((current) => ({
+                                          ...current,
+                                          [row.eval_id]: e.target.value,
+                                        }))
+                                      }
+                                      className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs"
+                                    />
+                                  </>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => setConfirming(null)}
+                                    className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      confirm.mutate({
+                                        eval_id: row.eval_id,
+                                        verified_amount: parseFloat(
+                                          verifiedAmounts[row.eval_id] ?? row.amount
+                                        ),
+                                        force_approve: Boolean(forceApprove[row.eval_id]),
+                                        verification_note: verificationNotes[row.eval_id] ?? '',
+                                      })
+                                    }
+                                    disabled={confirm.isPending || !row.payment_proof_url}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                                  >
+                                    {confirm.isPending ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <CheckCircle size={11} />
+                                    )}
+                                    Approve
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <button
-                                onClick={() => setConfirming(row.eval_id)}
+                                onClick={() => {
+                                  setConfirming(row.eval_id);
+                                  setVerifiedAmounts((current) => ({
+                                    ...current,
+                                    [row.eval_id]: String(parseFloat(row.amount)),
+                                  }));
+                                }}
                                 disabled={!row.payment_proof_url}
                                 title={
                                   !row.payment_proof_url
@@ -2374,6 +2533,251 @@ function PayoutsTab() {
                   )}
                   {row.payout_status === 'paid' && (
                     <span className="text-xs font-semibold text-green-600">✓ Paid out</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Partner Payouts Tab ──────────────────────────────────────────────────────
+
+function PartnerPayoutsTab() {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'paid' | 'rejected'>(
+    'pending'
+  );
+  const [adminNotes, setAdminNotes] = useState<Record<number, string>>({});
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery<PartnerPayoutRequestRow[]>({
+    queryKey: ['admin-partner-payouts'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/partner-payouts');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const update = useMutation({
+    mutationFn: async ({
+      request_id,
+      status,
+      admin_notes,
+    }: {
+      request_id: number;
+      status: 'approved' | 'rejected' | 'paid';
+      admin_notes?: string;
+    }) => {
+      const res = await fetch('/api/admin/partner-payouts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id, status, admin_notes }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-partner-payouts'] });
+      setUpdatingId(null);
+    },
+    onError: () => setUpdatingId(null),
+  });
+
+  const filtered = rows.filter((row) => {
+    if (statusFilter === 'all') return true;
+    return row.status === statusFilter;
+  });
+
+  const pendingCount = rows.filter((r) => r.status === 'pending').length;
+  const approvedCount = rows.filter((r) => r.status === 'approved').length;
+  const paidCount = rows.filter((r) => r.status === 'paid').length;
+
+  const getStatusBadge = (status: string) => {
+    if (status === 'pending') return <Badge color="amber">Pending</Badge>;
+    if (status === 'approved') return <Badge color="blue">Approved</Badge>;
+    if (status === 'paid') return <Badge color="green">Paid</Badge>;
+    if (status === 'rejected') return <Badge color="red">Rejected</Badge>;
+    return <Badge color="gray">{status}</Badge>;
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        {[
+          { label: 'Pending', value: pendingCount, color: '#F59E0B', icon: <Clock size={16} /> },
+          { label: 'Approved', value: approvedCount, color: '#2563EB', icon: <Banknote size={16} /> },
+          { label: 'Paid', value: paidCount, color: '#16A34A', icon: <CheckCircle size={16} /> },
+        ].map((c) => (
+          <div key={c.label} className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-400">{c.label}</span>
+              <span style={{ color: c.color }}>{c.icon}</span>
+            </div>
+            <div className="mt-2 text-2xl font-black text-gray-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Partner Payout Requests</h2>
+            <p className="text-xs text-gray-400">
+              Approve to reserve balance, then mark paid after transfer
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 p-1 overflow-x-auto">
+            {(['pending', 'approved', 'paid', 'rejected', 'all'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors sm:px-3 ${statusFilter === s ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900'}`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-400">
+            <Loader2 size={16} className="animate-spin" /> Loading...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <Banknote size={28} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-sm text-gray-400">No {statusFilter === 'all' ? '' : statusFilter} payout requests.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {filtered.map((row) => (
+              <div
+                key={row.id}
+                className="flex flex-col gap-3 px-4 py-4 hover:bg-gray-50 sm:flex-row sm:items-start sm:gap-4 sm:px-5"
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-black text-white"
+                    style={{ backgroundColor: row.partner_brand_color || '#16A34A' }}
+                  >
+                    {row.partner_firm_name?.[0] ?? 'P'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {row.partner_firm_name ?? 'Partner'}
+                      </span>
+                      {getStatusBadge(row.status)}
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-400">
+                      {row.partner_slug}.ft9ja.com · {formatDate(row.created_at)}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                      <span>
+                        Requested:{' '}
+                        <strong className="text-gray-900">
+                          ₦{parseFloat(row.amount_requested).toLocaleString()}
+                        </strong>
+                      </span>
+                      <span>
+                        Available:{' '}
+                        <strong className="text-gray-900">
+                          ₦{row.available_balance.toLocaleString()}
+                        </strong>
+                      </span>
+                      <span>
+                        {row.bank_name} · {row.account_number} · {row.account_name}
+                      </span>
+                    </div>
+                    {row.notes && (
+                      <p className="mt-1 text-xs text-gray-500">Partner note: {row.notes}</p>
+                    )}
+                    {row.admin_notes && (
+                      <p className="mt-1 text-xs text-blue-700">Admin note: {row.admin_notes}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:items-end">
+                  {row.status === 'pending' && (
+                    <>
+                      <textarea
+                        rows={2}
+                        placeholder="Optional admin note"
+                        value={adminNotes[row.id] ?? ''}
+                        onChange={(e) =>
+                          setAdminNotes((current) => ({ ...current, [row.id]: e.target.value }))
+                        }
+                        className="w-full min-w-[220px] rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs sm:w-64"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            setUpdatingId(row.id);
+                            update.mutate({
+                              request_id: row.id,
+                              status: 'approved',
+                              admin_notes: adminNotes[row.id],
+                            });
+                          }}
+                          disabled={update.isPending && updatingId === row.id}
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#2563EB] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1D4ED8] disabled:opacity-50"
+                        >
+                          {update.isPending && updatingId === row.id ? (
+                            <Loader2 size={11} className="animate-spin" />
+                          ) : (
+                            <CheckCircle size={11} />
+                          )}
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            setUpdatingId(row.id);
+                            update.mutate({
+                              request_id: row.id,
+                              status: 'rejected',
+                              admin_notes: adminNotes[row.id],
+                            });
+                          }}
+                          disabled={update.isPending && updatingId === row.id}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  {row.status === 'approved' && (
+                    <button
+                      onClick={() => {
+                        setUpdatingId(row.id);
+                        update.mutate({
+                          request_id: row.id,
+                          status: 'paid',
+                          admin_notes: adminNotes[row.id] || row.admin_notes || undefined,
+                        });
+                      }}
+                      disabled={update.isPending && updatingId === row.id}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                    >
+                      {update.isPending && updatingId === row.id ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <CheckCircle size={11} />
+                      )}
+                      Mark Paid
+                    </button>
+                  )}
+                  {row.status === 'paid' && (
+                    <span className="text-xs font-semibold text-green-600">✓ Settled</span>
                   )}
                 </div>
               </div>
@@ -3059,6 +3463,7 @@ export default function AdminPage() {
     | 'payments'
     | 'evaluation-payments'
     | 'payouts'
+    | 'partner-payouts'
     | 'requests'
     | 'aso-requests'
   >('partners');
@@ -3117,9 +3522,19 @@ export default function AdminPage() {
     },
     enabled: authed,
   });
+  const { data: partnerPayoutRows = [] } = useQuery<PartnerPayoutRequestRow[]>({
+    queryKey: ['admin-partner-payouts'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/partner-payouts');
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    enabled: authed,
+  });
   const kycPending = kycRows.filter((r) => r.kyc_status === 'submitted').length;
   const paymentsPending = paymentRows.length;
   const payoutsPending = payoutRows.filter((r) => !r.payout_status).length;
+  const partnerPayoutsPending = partnerPayoutRows.filter((r) => r.status === 'pending').length;
   const requestsPending = requestRows.filter((r) => r.status === 'pending').length;
   const asoRequestsPending = asoRequestRows.filter((r) => r.status === 'pending').length;
   const partnerSignupsAbandoned = partnerSignupRows.filter((r) => r.status === 'abandoned').length;
@@ -3241,7 +3656,13 @@ export default function AdminPage() {
       icon: <CreditCard size={13} />,
       badge: paymentsPending,
     },
-    { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: payoutsPending },
+    { id: 'payouts', label: 'Trader Payouts', icon: <Banknote size={13} />, badge: payoutsPending },
+    {
+      id: 'partner-payouts',
+      label: 'Partner Payouts',
+      icon: <Banknote size={13} />,
+      badge: partnerPayoutsPending,
+    },
     {
       id: 'requests',
       label: 'Requests',
@@ -3327,6 +3748,7 @@ export default function AdminPage() {
           />
         )}
         {tab === 'payouts' && <PayoutsTab />}
+        {tab === 'partner-payouts' && <PartnerPayoutsTab />}
         {tab === 'requests' && <RequestsTab />}
         {tab === 'aso-requests' && <AsoRequestsTab />}
       </div>

@@ -1,7 +1,10 @@
-import { getPartnerIdBySlug } from '@/db/queries/partners';
+import { getPartnerIdBySlug, getPartnerPrivateBySlug } from '@/db/queries/partners';
 import {
   createPartnerPayoutRequest,
   findPendingPartnerPayoutRequest,
+  getPartnerAvailableBalance,
+  getPartnerReservedPayoutTotal,
+  getPartnerTotalEarnings,
   listPartnerPayoutRequests,
 } from '@/db/queries/partner-payout-requests';
 
@@ -12,7 +15,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
     const rows = await listPartnerPayoutRequests(partnerId);
-    return Response.json(rows);
+    const [available_balance, total_earnings, total_reserved] = await Promise.all([
+      getPartnerAvailableBalance(partnerId),
+      getPartnerTotalEarnings(partnerId),
+      getPartnerReservedPayoutTotal(partnerId),
+    ]);
+    return Response.json({
+      requests: rows,
+      available_balance,
+      total_earnings,
+      total_reserved,
+    });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed' }, { status: 500 });
@@ -54,7 +67,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     return Response.json(result, { status: 201 });
   } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed';
     console.error(e);
-    return Response.json({ error: 'Failed' }, { status: 500 });
+    return Response.json({ error: message }, { status: 400 });
   }
 }

@@ -1,6 +1,7 @@
+import { activateEvaluation, EvaluationActivationError } from '@/db/queries/evaluations';
 import { getPaymentActivationNotice, listAllEvaluationPayments } from '@/db/queries/admin';
-import { activateEvaluation } from '@/db/queries/evaluations';
 import { sendEmail } from '@/app/api/utils/send-email';
+import { toMoneyNumber } from '@/lib/partner-pricing';
 
 export async function GET() {
   try {
@@ -15,13 +16,22 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { eval_id } = body;
+    const { eval_id, verified_amount, force_approve, verification_note } = body;
 
     if (!eval_id) {
       return Response.json({ error: 'eval_id is required' }, { status: 400 });
     }
 
-    const result = await activateEvaluation(eval_id);
+    const verifiedAmount = verified_amount ?? body.amount;
+    if (verifiedAmount == null || toMoneyNumber(verifiedAmount) <= 0) {
+      return Response.json({ error: 'verified_amount is required' }, { status: 400 });
+    }
+
+    const result = await activateEvaluation(Number(eval_id), {
+      verifiedAmount,
+      forceApprove: Boolean(force_approve),
+      verificationNote: typeof verification_note === 'string' ? verification_note : null,
+    });
     if (!result) {
       return Response.json({ error: 'Evaluation not found or already activated' }, { status: 404 });
     }
@@ -66,6 +76,9 @@ export async function PATCH(request: Request) {
 
     return Response.json({ success: true, account_creation_code: result.account_creation_code });
   } catch (e) {
+    if (e instanceof EvaluationActivationError) {
+      return Response.json({ error: e.message }, { status: 400 });
+    }
     console.error(e);
     return Response.json({ error: 'Failed to confirm evaluation payment' }, { status: 500 });
   }

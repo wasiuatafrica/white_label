@@ -1,6 +1,7 @@
 import { getPaymentActivationNotice, listPendingPayments } from '@/db/queries/admin';
-import { activateEvaluation } from '@/db/queries/evaluations';
+import { activateEvaluation, EvaluationActivationError } from '@/db/queries/evaluations';
 import { sendEmail } from '@/app/api/utils/send-email';
+import { toMoneyNumber } from '@/lib/partner-pricing';
 
 export async function GET() {
   try {
@@ -15,13 +16,22 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { eval_id } = body;
+    const { eval_id, verified_amount, force_approve, verification_note } = body;
 
     if (!eval_id) {
       return Response.json({ error: 'eval_id is required' }, { status: 400 });
     }
 
-    const result = await activateEvaluation(eval_id);
+    const verifiedAmount = verified_amount ?? body.amount;
+    if (verifiedAmount == null || toMoneyNumber(verifiedAmount) <= 0) {
+      return Response.json({ error: 'verified_amount is required' }, { status: 400 });
+    }
+
+    const result = await activateEvaluation(Number(eval_id), {
+      verifiedAmount,
+      forceApprove: Boolean(force_approve),
+      verificationNote: typeof verification_note === 'string' ? verification_note : null,
+    });
     if (!result) {
       return Response.json({ error: 'Evaluation not found or already activated' }, { status: 404 });
     }
@@ -52,9 +62,6 @@ export async function PATCH(request: Request) {
                 Log in to your trader dashboard and use this code to add your MT5 Deriv-Demo account number, password, and investor password.
               </p>
               <a href="${dashboardUrl}" style="display:inline-block;background:${notice.partner_brand_color || '#16A34A'};color:#fff;text-decoration:none;border-radius:8px;padding:12px 18px;font-size:14px;font-weight:700">Open Dashboard</a>
-              <p style="font-size:12px;color:#9CA3AF;border-top:1px solid #F3F4F6;margin:20px 0 0;padding-top:14px">
-                Keep this code private. Your partner admin can view it if you need support.
-              </p>
             </div>
           `,
           text: `Payment verified. Your activation code is ${notice.account_creation_code}. Log in to your trader dashboard to add your trading account details.`,
@@ -66,6 +73,9 @@ export async function PATCH(request: Request) {
 
     return Response.json({ success: true, account_creation_code: result.account_creation_code });
   } catch (e) {
+    if (e instanceof EvaluationActivationError) {
+      return Response.json({ error: e.message }, { status: 400 });
+    }
     console.error(e);
     return Response.json({ error: 'Failed to confirm payment' }, { status: 500 });
   }

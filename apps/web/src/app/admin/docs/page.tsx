@@ -766,9 +766,12 @@ export default function DocsPage() {
           <H3 id="partner-pricing">Pricing & Fee Markup</H3>
           <P>
             FT9ja sets two base evaluation prices: <strong>₦145,000 (SS — Standard)</strong> and{' '}
-            <strong>₦49,000 (SSL — Starter)</strong>. Partners can add a flat naira markup via the{' '}
-            <Code>fee_markup</Code> field. The markup is applied to both products equally at display
-            time. All revenue is remitted through FT9ja; the partner earns the difference.
+            <strong>₦49,000 (SSL — Starter)</strong>. Partners receive a fixed{' '}
+            <strong>25% wholesale discount</strong> (SS ₦108,750 · SSL ₦36,750). Partners add a
+            flat naira markup via <Code>fee_markup</Code>; the trader pays FT9ja base + markup. On
+            receipt approval, Super Admin enters the <Code>verified_amount</Code>; partner earnings
+            per sale are <Code>verified_amount − wholesale_amount</Code> (25% of base + markup when
+            fully paid).
           </P>
           <Callout type="info">
             Partners also pay a <strong>₦95,000/month platform license fee</strong> to FT9ja. This
@@ -1137,7 +1140,7 @@ export default function DocsPage() {
               ['monthly_fee_paid', 'BOOLEAN', 'false', '—'],
               ['setup_fee_waived', 'BOOLEAN', 'false', '—'],
               ['total_traders', 'INTEGER', '0', 'Incremented on trader create'],
-              ['total_revenue', 'NUMERIC(14,2)', '0', 'Incremented on eval purchase'],
+              ['total_revenue', 'NUMERIC(14,2)', '0', 'Sum of verified evaluation GMV'],
               ['payment_proof_url', 'TEXT', 'NULL', 'Setup fee proof upload'],
               ['created_at', 'TIMESTAMP', 'now()', '—'],
               ['updated_at', 'TIMESTAMP', 'now()', '—'],
@@ -1176,7 +1179,13 @@ export default function DocsPage() {
               ['trader_id', 'INT FK → traders.id', 'CASCADE DELETE'],
               ['partner_id', 'INT FK → partners.id', 'CASCADE DELETE'],
               ['eval_type', 'VARCHAR(10)', 'SS or SSL'],
-              ['amount', 'NUMERIC(12,2)', 'Price paid incl. fee markup'],
+              ['amount', 'NUMERIC(12,2)', 'Declared trader price at checkout (base + markup)'],
+              ['verified_amount', 'NUMERIC(12,2)', 'Super Admin confirmed receipt amount'],
+              ['markup_amount', 'NUMERIC(12,2)', 'Partner markup snapshot at purchase'],
+              ['wholesale_amount', 'NUMERIC(12,2)', 'FT9ja wholesale snapshot at purchase'],
+              ['partner_earnings_amount', 'NUMERIC(12,2)', 'verified − wholesale on approval'],
+              ['verified_at', 'TIMESTAMP', 'When payment was verified'],
+              ['verification_note', 'TEXT', 'Required for underpayment override'],
               ['status', 'VARCHAR(20)', 'pending_payment | active | passed | failed | suspended'],
               ['profit_target', 'NUMERIC(5,2)', 'Default: 10.0 (SS) / 8.0 (SSL)'],
               ['current_profit', 'NUMERIC(5,2)', 'Updated by partner admin or integration'],
@@ -1219,6 +1228,9 @@ export default function DocsPage() {
               ['account_name', 'TEXT', '—'],
               ['notes', 'TEXT', 'Optional'],
               ['status', 'ENUM', 'pending | approved | rejected | paid'],
+              ['admin_notes', 'TEXT', 'Partner-visible approval/rejection note'],
+              ['updated_at', 'TIMESTAMP', 'Status change tracking'],
+              ['processed_at', 'TIMESTAMP', 'When marked paid'],
               ['created_at', 'TIMESTAMP', 'now()'],
             ]}
           />

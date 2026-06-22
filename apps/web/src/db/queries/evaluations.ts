@@ -12,7 +12,16 @@ import {
   TRADING_REQUIRED_DAYS,
   getProfitTargetPercent,
 } from '@/lib/trading-telemetry';
+import {
+  getExpectedPrice,
+  getWholesalePrice,
+  splitVerifiedAmount,
+  toMoneyNumber,
+  type EvalType,
+} from '@/lib/partner-pricing';
+import type { DbOrTx } from '../types';
 import { incrementPartnerRevenue, incrementPartnerTraders } from './partners';
+import { partners } from '../schema/partners';
 import { createTrader, getTraderByEmail } from './traders';
 import { createTradeAccountActivation } from './trade-accounts';
 
@@ -22,6 +31,12 @@ const evaluationColumns = {
   partner_id: evaluations.partnerId,
   eval_type: evaluations.evalType,
   amount: evaluations.amount,
+  verified_amount: evaluations.verifiedAmount,
+  markup_amount: evaluations.markupAmount,
+  wholesale_amount: evaluations.wholesaleAmount,
+  partner_earnings_amount: evaluations.partnerEarningsAmount,
+  verified_at: evaluations.verifiedAt,
+  verification_note: evaluations.verificationNote,
   payment_method: evaluations.paymentMethod,
   payment_proof_url: evaluations.paymentProofUrl,
   status: evaluations.status,
@@ -35,6 +50,31 @@ const evaluationColumns = {
   purchase_date: evaluations.purchaseDate,
   updated_at: evaluations.updatedAt,
 };
+
+async function getPartnerMarkupSnapshot(partnerId: number, tx: DbOrTx = db) {
+  const [partner] = await tx
+    .select({ feeMarkup: partners.feeMarkup })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+  return toMoneyNumber(partner?.feeMarkup);
+}
+
+function buildPricingSnapshots(evalType: EvalType, markup: number, declaredAmount: string | number) {
+  const wholesale = getWholesalePrice(evalType);
+  return {
+    amount: String(declaredAmount),
+    markupAmount: String(markup),
+    wholesaleAmount: String(wholesale),
+  };
+}
+
+export class EvaluationActivationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EvaluationActivationError';
+  }
+}
 
 export async function listEvaluationsByPartnerId(partnerId: number) {
   return db
@@ -67,6 +107,12 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
       partnerId: evaluations.partnerId,
       evalType: evaluations.evalType,
       amount: evaluations.amount,
+      verifiedAmount: evaluations.verifiedAmount,
+      markupAmount: evaluations.markupAmount,
+      wholesaleAmount: evaluations.wholesaleAmount,
+      partnerEarningsAmount: evaluations.partnerEarningsAmount,
+      verifiedAt: evaluations.verifiedAt,
+      verificationNote: evaluations.verificationNote,
       paymentMethod: evaluations.paymentMethod,
       paymentProofUrl: evaluations.paymentProofUrl,
       status: evaluations.status,
@@ -209,7 +255,9 @@ export async function createEvaluationWithTrader(data: {
     const profitTarget = String(getProfitTargetPercent(data.evalType));
     const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
     const requiredDays = TRADING_REQUIRED_DAYS;
+    const markup = await getPartnerMarkupSnapshot(data.partnerId, tx);
     const amount = String(data.amount || 0);
+    const pricing = buildPricingSnapshots(data.evalType, markup, amount);
 
     const [evaluation] = await tx
       .insert(evaluations)
@@ -217,7 +265,9 @@ export async function createEvaluationWithTrader(data: {
         traderId: traderRow.id,
         partnerId: data.partnerId,
         evalType: data.evalType,
-        amount,
+        amount: pricing.amount,
+        markupAmount: pricing.markupAmount,
+        wholesaleAmount: pricing.wholesaleAmount,
         paymentMethod: data.paymentMethod ?? null,
         paymentProofUrl: data.paymentProofUrl ?? null,
         status: 'pending_payment',
@@ -229,8 +279,6 @@ export async function createEvaluationWithTrader(data: {
         requiredDays,
       })
       .returning();
-
-    await incrementPartnerRevenue(data.partnerId, amount, tx);
 
     return {
       trader: traderRow,
@@ -250,7 +298,9 @@ export async function createEvaluationForTrader(data: {
   const profitTarget = String(getProfitTargetPercent(data.evalType));
   const maxDrawdown = String(TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
   const requiredDays = TRADING_REQUIRED_DAYS;
+  const markup = await getPartnerMarkupSnapshot(data.partnerId);
   const amount = String(data.amount || 0);
+  const pricing = buildPricingSnapshots(data.evalType, markup, amount);
 
   const [evaluation] = await db
     .insert(evaluations)
@@ -258,7 +308,9 @@ export async function createEvaluationForTrader(data: {
       traderId: data.traderId,
       partnerId: data.partnerId,
       evalType: data.evalType,
-      amount,
+      amount: pricing.amount,
+      markupAmount: pricing.markupAmount,
+      wholesaleAmount: pricing.wholesaleAmount,
       paymentMethod: data.paymentMethod ?? null,
       paymentProofUrl: data.paymentProofUrl ?? null,
       status: 'pending_payment',
@@ -270,8 +322,6 @@ export async function createEvaluationForTrader(data: {
       requiredDays,
     })
     .returning();
-
-  await incrementPartnerRevenue(data.partnerId, amount);
 
   return mapEvaluation(evaluation);
 }
@@ -311,11 +361,54 @@ export async function updateEvaluation(
   return row ? mapEvaluation(row) : null;
 }
 
-export async function activateEvaluation(evalId: number) {
+export async function activateEvaluation(
+  evalId: number,
+  options: {
+    verifiedAmount: string | number;
+    forceApprove?: boolean;
+    verificationNote?: string | null;
+  }
+) {
   return db.transaction(async (tx) => {
+    const [pending] = await tx
+      .select()
+      .from(evaluations)
+      .where(and(eq(evaluations.id, evalId), eq(evaluations.status, 'pending_payment')))
+      .limit(1);
+    if (!pending) return null;
+
+    const evalType = pending.evalType as EvalType;
+    const verified = toMoneyNumber(options.verifiedAmount);
+    const expected =
+      pending.markupAmount != null && pending.wholesaleAmount != null
+        ? toMoneyNumber(pending.wholesaleAmount) + toMoneyNumber(pending.markupAmount)
+        : getExpectedPrice(evalType, pending.markupAmount);
+    const note = options.verificationNote?.trim() || '';
+
+    if (verified < expected) {
+      if (!options.forceApprove || !note) {
+        throw new EvaluationActivationError(
+          'Verified amount is below expected price. Provide force_approve and verification_note to override.'
+        );
+      }
+    }
+
+    const wholesale =
+      pending.wholesaleAmount != null
+        ? toMoneyNumber(pending.wholesaleAmount)
+        : getWholesalePrice(evalType);
+    const { partnerEarnings } = splitVerifiedAmount(evalType, verified, wholesale);
+
     const [row] = await tx
       .update(evaluations)
-      .set({ status: 'active', updatedAt: sql`NOW()` })
+      .set({
+        status: 'active',
+        verifiedAmount: String(verified),
+        partnerEarningsAmount: String(partnerEarnings),
+        verifiedAt: sql`NOW()`,
+        verificationNote: note || null,
+        updatedAt: sql`NOW()`,
+      })
       .where(and(eq(evaluations.id, evalId), eq(evaluations.status, 'pending_payment')))
       .returning({
         id: evaluations.id,
@@ -325,6 +418,8 @@ export async function activateEvaluation(evalId: number) {
         profit_target: evaluations.profitTarget,
       });
     if (!row) return null;
+
+    await incrementPartnerRevenue(row.partner_id, verified, tx);
 
     const tradeAccount = await createTradeAccountActivation(
       {
@@ -351,4 +446,67 @@ export async function updateEvaluationPayoutStatus(
     .where(and(eq(evaluations.id, evalId), eq(evaluations.status, 'passed')))
     .returning({ id: evaluations.id });
   return row ?? null;
+}
+
+export async function backfillEvaluationPricing() {
+  const rows = await db
+    .select({
+      id: evaluations.id,
+      partnerId: evaluations.partnerId,
+      evalType: evaluations.evalType,
+      amount: evaluations.amount,
+      status: evaluations.status,
+      verifiedAmount: evaluations.verifiedAmount,
+      markupAmount: evaluations.markupAmount,
+      wholesaleAmount: evaluations.wholesaleAmount,
+      partnerEarningsAmount: evaluations.partnerEarningsAmount,
+      feeMarkup: partners.feeMarkup,
+    })
+    .from(evaluations)
+    .innerJoin(partners, eq(partners.id, evaluations.partnerId));
+
+  let updated = 0;
+  for (const row of rows) {
+    const evalType = row.evalType as EvalType;
+    const markup = row.markupAmount != null ? toMoneyNumber(row.markupAmount) : toMoneyNumber(row.feeMarkup);
+    const wholesale = row.wholesaleAmount != null ? toMoneyNumber(row.wholesaleAmount) : getWholesalePrice(evalType);
+    const isVerified = row.status !== 'pending_payment';
+    const verifiedAmount = row.verifiedAmount ?? (isVerified ? row.amount : null);
+    const partnerEarnings =
+      row.partnerEarningsAmount ??
+      (verifiedAmount != null
+        ? splitVerifiedAmount(evalType, verifiedAmount, wholesale).partnerEarnings
+        : null);
+
+    await db
+      .update(evaluations)
+      .set({
+        markupAmount: String(markup),
+        wholesaleAmount: String(wholesale),
+        verifiedAmount: verifiedAmount != null ? String(verifiedAmount) : null,
+        partnerEarningsAmount:
+          partnerEarnings != null ? String(partnerEarnings) : null,
+        verifiedAt: isVerified && row.verifiedAmount == null ? sql`NOW()` : undefined,
+      })
+      .where(eq(evaluations.id, row.id));
+    updated += 1;
+  }
+
+  const partnerTotals = await db
+    .select({
+      partnerId: evaluations.partnerId,
+      total: sql<string>`COALESCE(SUM(${evaluations.verifiedAmount}), 0)`,
+    })
+    .from(evaluations)
+    .where(sql`${evaluations.verifiedAmount} IS NOT NULL`)
+    .groupBy(evaluations.partnerId);
+
+  for (const row of partnerTotals) {
+    await db
+      .update(partners)
+      .set({ totalRevenue: row.total, updatedAt: sql`NOW()` })
+      .where(eq(partners.id, row.partnerId));
+  }
+
+  return { updatedEvaluations: updated, partnersAdjusted: partnerTotals.length };
 }

@@ -18,8 +18,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { use, useState } from 'react';
+import { type EvalProduct, getPartnerProducts } from '@/lib/eval-products';
 import {
-  DAILY_DRAWDOWN_RULE,
   FT9JA_EVAL_RULES,
   FT9JA_PARTNER_FAQS,
   FT9JA_RULE_NOTES,
@@ -46,79 +46,6 @@ type Partner = {
   template: string | null;
   fee_markup: number | string | null;
 };
-
-type EvalProduct = {
-  id: string;
-  name: string;
-  code: string;
-  price: string;
-  priceNum: number;
-  accountSize: string;
-  profitTarget: string;
-  maxDrawdown: string;
-  tradingDays: string;
-  features: string[];
-};
-
-const PARTNER_PRODUCT_CONDUCT_FEATURES = [
-  'Scalping permitted — positions must be held at least 5 minutes',
-  'Copy trading between accounts is strictly forbidden',
-  'One-side betting is prohibited',
-] as const;
-
-const BASE_EVAL_PRODUCTS: EvalProduct[] = [
-  {
-    id: 'ss',
-    name: 'Standard Evaluation',
-    code: 'SS',
-    price: '₦145,000',
-    priceNum: 145000,
-    accountSize: '$10,000',
-    profitTarget: '25%',
-    maxDrawdown: '10%',
-    tradingDays: '10 days/mo',
-    features: [
-      `Daily drawdown: ${DAILY_DRAWDOWN_RULE}`,
-      'Maximum 10% total drawdown',
-      'Minimum 10 trading days per month (2 per week)',
-      ...PARTNER_PRODUCT_CONDUCT_FEATURES,
-      'Grow to 25% to qualify for Aso account (up to 90% split)',
-      'Payouts processed on Fridays',
-    ],
-  },
-  {
-    id: 'ssl',
-    name: 'Starter Evaluation',
-    code: 'SSL',
-    price: '₦49,000',
-    priceNum: 49000,
-    accountSize: '$10,000',
-    profitTarget: 'None',
-    maxDrawdown: '10%',
-    tradingDays: '10 days/mo',
-    features: [
-      `Daily drawdown: ${DAILY_DRAWDOWN_RULE}`,
-      'Maximum 10% total drawdown',
-      'Minimum 10 trading days per month (2 per week)',
-      ...PARTNER_PRODUCT_CONDUCT_FEATURES,
-      'No evaluation — talent bonus payouts (5% weekly / 15% monthly)',
-      'Payouts processed on Fridays',
-    ],
-  },
-];
-
-function getProducts(feeMarkup: number | string | null | undefined): EvalProduct[] {
-  const markup = Number(feeMarkup || 0);
-  if (!markup) return BASE_EVAL_PRODUCTS;
-  return BASE_EVAL_PRODUCTS.map((p) => {
-    const total = p.priceNum + markup;
-    return {
-      ...p,
-      priceNum: total,
-      price: `₦${total.toLocaleString()}`,
-    };
-  });
-}
 
 // ─── Partner Info Sections (FAQ, Rules, Contact) ──────────────────────────────
 const PARTNER_FAQS = FT9JA_PARTNER_FAQS;
@@ -1200,7 +1127,7 @@ function TemplateDark({
                   ))}
                 </div>
                 <div className="space-y-2 mb-6">
-                  {prod.features.map((f) => (
+                  {(prod.features ?? []).map((f) => (
                     <div key={f} className="flex items-start gap-2 text-xs text-white/50">
                       <span className="text-white/20">—</span> {f}
                     </div>
@@ -1311,7 +1238,7 @@ function EvalCards({
                 ))}
               </div>
               <div className="space-y-2 mb-6">
-                {prod.features.map((f) => (
+                {(prod.features ?? []).map((f) => (
                   <div key={f} className="flex items-start gap-2 text-xs text-gray-600">
                     <span className="text-gray-400">—</span>
                     {f}
@@ -1534,7 +1461,7 @@ export default function PartnerLandingPage({ params }: { params: Promise<{ slug:
           partner={partner}
           slug={slug}
           onBuy={setSelectedProduct}
-          products={getProducts(partner.fee_markup)}
+          products={getPartnerProducts(partner.fee_markup)}
         />
       </>
     );
@@ -1546,7 +1473,7 @@ export default function PartnerLandingPage({ params }: { params: Promise<{ slug:
           partner={partner}
           slug={slug}
           onBuy={setSelectedProduct}
-          products={getProducts(partner.fee_markup)}
+          products={getPartnerProducts(partner.fee_markup)}
         />
       </>
     );
@@ -1557,7 +1484,7 @@ export default function PartnerLandingPage({ params }: { params: Promise<{ slug:
         partner={partner}
         slug={slug}
         onBuy={setSelectedProduct}
-        products={getProducts(partner.fee_markup)}
+        products={getPartnerProducts(partner.fee_markup)}
       />
     </>
   );

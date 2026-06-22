@@ -15,8 +15,11 @@ export const partnerPayoutRequests = pgTable(
     accountNumber: text('account_number').notNull(),
     accountName: text('account_name').notNull(),
     notes: text('notes'),
+    adminNotes: text('admin_notes'),
     status: partnerPayoutRequestStatusEnum('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: false }),
   },
   (table) => [
     index('partner_payout_requests_partner_status_idx').on(table.partnerId, table.status),

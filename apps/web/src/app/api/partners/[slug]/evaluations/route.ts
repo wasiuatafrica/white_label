@@ -1,4 +1,4 @@
-import { getPartnerIdBySlug } from '@/db/queries/partners';
+import { getPartnerIdBySlug, getPartnerPrivateBySlug } from '@/db/queries/partners';
 import {
   createEvaluationForTrader,
   createEvaluationWithTrader,
@@ -7,6 +7,7 @@ import {
 } from '@/db/queries/evaluations';
 import { getTraderByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
+import { amountsMatch, getTraderPrice, toMoneyNumber, type EvalType } from '@/lib/partner-pricing';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -75,6 +76,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
+    }
+
+    const partner = await getPartnerPrivateBySlug(slug);
+    const expectedAmount = getTraderPrice(eval_type as EvalType, partner?.fee_markup ?? 0);
+    if (!amountsMatch(amount, expectedAmount)) {
+      return Response.json(
+        { error: 'amount does not match current partner pricing' },
+        { status: 400 }
+      );
     }
 
     const session = parseSessionFromRequest(request, slug);
