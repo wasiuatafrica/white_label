@@ -187,7 +187,7 @@ const BASE_EVAL_PRODUCTS: EvalProduct[] = [
     price: '₦49,000',
     priceNum: 49000,
     accountSize: '$10,000',
-    profitTarget: '25%',
+    profitTarget: 'None',
     maxDrawdown: '10%',
   },
 ];
@@ -210,6 +210,10 @@ function getAvailableRequests(evalType: string): string[] {
 function getEvalTypeLabel(evalType: string): string {
   if (evalType === 'SSL') return 'Synthetic Signals Lite (SSL)';
   return 'Synthetic Signals (SS)';
+}
+
+function hasProfitTarget(evalType: string) {
+  return evalType !== 'SSL';
 }
 
 function formatEvaluationCode(id: number) {
@@ -319,6 +323,13 @@ function EvaluationAccountSwitcher({
 
 function hasPassedByRules(eval_: Evaluation) {
   if (eval_.status === 'passed') return true;
+  if (!hasProfitTarget(eval_.eval_type)) {
+    return Boolean(
+      eval_.telemetry?.min_trading_days_passed &&
+        !eval_.telemetry?.daily_drawdown_breached &&
+        !eval_.telemetry?.account_drawdown_breached
+    );
+  }
   return Boolean(
     eval_.telemetry?.profit_target_passed &&
       eval_.telemetry.min_trading_days_passed &&
@@ -502,7 +513,9 @@ function DashboardPurchaseModal({
                 <div className="mt-1 text-sm font-black">{p.name}</div>
                 <div className="mt-2 text-lg font-black">{p.price}</div>
                 <div className="mt-1 text-xs opacity-70">
-                  {p.accountSize} · Target {p.profitTarget} · DD {p.maxDrawdown}
+                  {p.accountSize} ·{' '}
+                  {hasProfitTarget(p.code) ? `Target ${p.profitTarget} · ` : 'Talent bonus · '}
+                  DD {p.maxDrawdown}
                 </div>
               </button>
             ))}
@@ -2344,8 +2357,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     );
   }
 
-  const profitDone =
-    eval_.telemetry?.profit_target_passed ?? eval_.current_profit >= eval_.profit_target;
+  const profitDone = hasProfitTarget(eval_.eval_type)
+    ? eval_.telemetry?.profit_target_passed ?? eval_.current_profit >= eval_.profit_target
+    : false;
   const daysDone =
     eval_.telemetry?.min_trading_days_passed ?? eval_.trading_days >= eval_.required_days;
   const dailyDrawdownBreached =
@@ -2359,6 +2373,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     accountDrawdownBreached ||
     eval_.current_drawdown >= eval_.max_drawdown * 0.8 ||
     eval_.daily_drawdown >= eval_.max_daily_drawdown * 0.8;
+  const allConditionsMet = hasProfitTarget(eval_.eval_type)
+    ? profitDone && daysDone && !dailyDrawdownBreached && !accountDrawdownBreached
+    : daysDone && !dailyDrawdownBreached && !accountDrawdownBreached;
   const accountSize = 10000;
   const currentBalance =
     eval_.latest_balance ?? accountSize * (1 + eval_.current_profit / 100);
@@ -2599,14 +2616,18 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
 
             <div className="mb-6 rounded-xl border border-gray-200 bg-white p-8">
               <h2 className="mb-6 text-base font-semibold text-gray-900">Evaluation Progress</h2>
-              <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-                <CircleRing
-                  value={eval_.current_profit}
-                  max={eval_.profit_target}
-                  color={profitDone ? '#16A34A' : primary}
-                  label="Profit Target"
-                  sub={`${eval_.current_profit}% / ${eval_.profit_target}%`}
-                />
+              <div
+                className={`grid grid-cols-2 gap-8 ${hasProfitTarget(eval_.eval_type) ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
+              >
+                {hasProfitTarget(eval_.eval_type) && (
+                  <CircleRing
+                    value={eval_.current_profit}
+                    max={eval_.profit_target}
+                    color={profitDone ? '#16A34A' : primary}
+                    label="Profit Target"
+                    sub={`${eval_.current_profit}% / ${eval_.profit_target}%`}
+                  />
+                )}
                 <CircleRing
                   value={eval_.daily_drawdown}
                   max={eval_.max_daily_drawdown}
@@ -2636,11 +2657,15 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 <h3 className="mb-4 text-base font-semibold text-gray-900">Rules Checklist</h3>
                 <div className="space-y-3">
                   {[
-                    {
-                      rule: `Profit target (${eval_.profit_target}%)`,
-                      done: profitDone,
-                      detail: `${eval_.current_profit}% achieved`,
-                    },
+                    ...(hasProfitTarget(eval_.eval_type)
+                      ? [
+                          {
+                            rule: `Profit target (${eval_.profit_target}%)`,
+                            done: profitDone,
+                            detail: `${eval_.current_profit}% achieved`,
+                          },
+                        ]
+                      : []),
                     {
                       rule: `Min trading days (${eval_.required_days})`,
                       done: daysDone,
@@ -2684,7 +2709,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                     </div>
                   ))}
                 </div>
-                {profitDone && daysDone && !dailyDrawdownBreached && !accountDrawdownBreached && (
+                {allConditionsMet && (
                   <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                     <CheckCircle size={20} className="mx-auto mb-2 text-[#16A34A]" />
                     <div className="text-sm font-semibold text-green-800">All conditions met!</div>
