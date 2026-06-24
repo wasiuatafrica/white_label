@@ -190,6 +190,18 @@ function formatEvaluationCode(id: number) {
   return `EVL-${id.toString().padStart(6, '0')}`;
 }
 
+function formatProfitLabel(profit: number) {
+  if (profit > 0) return `+${profit}% profit`;
+  if (profit < 0) return `${profit}% loss`;
+  return '0% flat';
+}
+
+function profitBadgeClassName(profit: number) {
+  if (profit > 0) return 'rounded-full bg-green-50 px-2.5 py-1 font-medium text-green-700';
+  if (profit < 0) return 'rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700';
+  return 'rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-600';
+}
+
 function getDefaultEvaluationId(
   evaluations: Evaluation[],
   preferredId?: number | null
@@ -292,8 +304,8 @@ function EvaluationAccountSwitcher({
                   </span>
                 )}
                 {hasLiveMetrics ? (
-                  <span className="rounded-full bg-green-50 px-2.5 py-1 font-medium text-green-700">
-                    +{evaluation.current_profit}% profit
+                  <span className={profitBadgeClassName(evaluation.current_profit)}>
+                    {formatProfitLabel(evaluation.current_profit)}
                   </span>
                 ) : evaluation.trade_account_completed ? (
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
@@ -1529,7 +1541,7 @@ function PayoutsTab({
                       )}
                     </div>
                     <div className="mt-0.5 text-xs text-gray-400">
-                      EVL-{e.id.toString().padStart(6, '0')} · Profit: +{e.current_profit}% ·{' '}
+                      EVL-{e.id.toString().padStart(6, '0')} · {formatProfitLabel(e.current_profit)} ·{' '}
                       {e.trading_days} days
                     </div>
                   </div>
