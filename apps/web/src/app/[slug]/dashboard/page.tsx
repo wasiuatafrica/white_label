@@ -203,16 +203,32 @@ function getDefaultEvaluationId(
   );
 }
 
+function ViewOnlyBanner() {
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+      <Eye size={16} className="mt-0.5 shrink-0 text-gray-500" />
+      <div>
+        <p className="text-sm font-semibold text-gray-800">Viewing trader dashboard (read-only)</p>
+        <p className="mt-0.5 text-xs text-gray-600">
+          Sign in as the trader to manage payments, account setup, and profile.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function EvaluationAccountSwitcher({
   evaluations,
   selectedId,
   onSelect,
   primary,
+  viewOnly = false,
 }: {
   evaluations: Evaluation[];
   selectedId: number;
   onSelect: (id: number) => void;
   primary: string;
+  viewOnly?: boolean;
 }) {
   if (evaluations.length === 0) return null;
 
@@ -223,7 +239,9 @@ function EvaluationAccountSwitcher({
           {evaluations.length > 1 ? 'Select account' : 'Active account'}
         </h2>
         <p className="text-xs text-gray-400">
-          Metrics and actions apply only to the selected account
+          {viewOnly
+            ? 'Select an account to view its metrics'
+            : 'Metrics and actions apply only to the selected account'}
         </p>
       </div>
       <div
@@ -2119,6 +2137,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const sessionEmail = sessionQuery.data?.trader?.email;
   const email = sessionEmail || emailParam;
   const hasSession = !!sessionEmail;
+  const isViewOnly = !hasSession && !!emailParam;
 
   useEffect(() => {
     if (!sessionQuery.isLoading && !sessionEmail && !emailParam) {
@@ -2288,6 +2307,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
             )}
           </div>
         </nav>
+        <div className="mx-auto max-w-6xl px-6 py-8">
+          {isViewOnly && <ViewOnlyBanner />}
+        </div>
         <div className="flex min-h-[calc(100vh-65px)] flex-col items-center justify-center px-6">
           <div className="text-center">
             <div className="mb-4 text-4xl">📋</div>
@@ -2471,12 +2493,15 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       </nav>
 
       <div className="mx-auto max-w-6xl px-6 py-8">
-        {hasSession && evaluations.length > 0 && resolvedEvalId && (
+        {isViewOnly && <ViewOnlyBanner />}
+
+        {evaluations.length > 0 && resolvedEvalId && (
           <EvaluationAccountSwitcher
             evaluations={evaluations}
             selectedId={resolvedEvalId}
             onSelect={handleSelectEvaluation}
             primary={primary}
+            viewOnly={isViewOnly}
           />
         )}
 
@@ -2510,16 +2535,19 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-amber-800">Payment pending</p>
                   <p className="mt-0.5 text-xs text-amber-700">
-                    You have {pendingPaymentCount} evaluation{pendingPaymentCount !== 1 ? 's' : ''}{' '}
-                    awaiting payment confirmation.
+                    {isViewOnly
+                      ? `This trader has ${pendingPaymentCount} evaluation${pendingPaymentCount !== 1 ? 's' : ''} awaiting payment confirmation.`
+                      : `You have ${pendingPaymentCount} evaluation${pendingPaymentCount !== 1 ? 's' : ''} awaiting payment confirmation.`}
                   </p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('payments')}
-                  className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
-                >
-                  View →
-                </button>
+                {hasSession && (
+                  <button
+                    onClick={() => setActiveTab('payments')}
+                    className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                  >
+                    View →
+                  </button>
+                )}
               </div>
             )}
 
@@ -2553,18 +2581,23 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4">
                 <AlertCircle size={16} className="mt-0.5 shrink-0 text-blue-500" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-blue-800">Link your MT5 account</p>
+                  <p className="text-sm font-semibold text-blue-800">
+                    {isViewOnly ? 'MT5 account not linked' : 'Link your MT5 account'}
+                  </p>
                   <p className="mt-0.5 text-xs text-blue-700">
-                    Live metrics for this evaluation appear after you add your trading account
-                    credentials.
+                    {isViewOnly
+                      ? 'Live metrics for this evaluation appear after the trader links their trading account credentials.'
+                      : 'Live metrics for this evaluation appear after you add your trading account credentials.'}
                   </p>
                 </div>
-                <button
-                  onClick={() => setActiveTab('account')}
-                  className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
-                >
-                  Set up account →
-                </button>
+                {hasSession && (
+                  <button
+                    onClick={() => setActiveTab('account')}
+                    className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                  >
+                    Set up account →
+                  </button>
+                )}
               </div>
             )}
 
