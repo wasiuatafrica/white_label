@@ -39,10 +39,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
         ({
           account_creation_code: _accountCreationCode,
           trade_account_id: _tradeAccountId,
-          trade_account_number: _tradeAccountNumber,
-          trade_account_platform: _tradeAccountPlatform,
-          trade_account_broker: _tradeAccountBroker,
-          trade_account_completed: _tradeAccountCompleted,
           ...evaluation
         }) => evaluation
       );
