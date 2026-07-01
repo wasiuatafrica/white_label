@@ -11,7 +11,8 @@
 		"db:push": "drizzle-kit push",
 		"db:migrate-logo-generation-count": "node scripts/migrate-logo-generation-count.mjs",
 		"db:migrate-last-generated-logo-url": "node scripts/migrate-last-generated-logo-url.mjs",
-		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs"
+		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs",
+		"create-admin": "node scripts/create-admin.mjs"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.3.0",
@@ -29,12 +30,14 @@
 		"mongodb": "^7.3.0",
 		"next": "^16.2.6",
 		"next-themes": "^0.4.6",
+		"otplib": "^13.4.1",
 		"radix-ui": "^1.4.3",
 		"react": "^19.0.4",
 		"react-colorful": "^5.6.1",
 		"react-day-picker": "^9.14.0",
 		"react-dom": "^19.0.4",
 		"react-hook-form": "^7.72.0",
+		"react-qr-code": "^2.2.0",
 		"recharts": "3.8.0",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.2.0",

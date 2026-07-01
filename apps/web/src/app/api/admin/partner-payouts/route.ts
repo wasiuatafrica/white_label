@@ -4,8 +4,12 @@ import {
   listAllPartnerPayoutRequests,
   updatePartnerPayoutRequest,
 } from '@/db/queries/partner-payout-requests';
+import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const [requests, partners] = await Promise.all([
       listAllPartnerPayoutRequests(),
@@ -40,6 +44,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const body = await request.json();
     const { request_id, status, admin_notes } = body;
@@ -59,6 +66,15 @@ export async function PATCH(request: Request) {
     if (!result) {
       return Response.json({ error: 'Payout request not found' }, { status: 404 });
     }
+
+    await logAdminAction({
+      adminUserId: auth.admin.id,
+      action: `partner_payout.${status}`,
+      resourceType: 'partner_payout_request',
+      resourceId: request_id,
+      metadata: admin_notes ? { admin_notes } : null,
+      request,
+    });
 
     return Response.json(result);
   } catch (e) {

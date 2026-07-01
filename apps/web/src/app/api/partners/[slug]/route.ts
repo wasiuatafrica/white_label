@@ -9,6 +9,7 @@ import {
   isValidPartnerAdminPin,
   partnerPinNeedsGeneration,
 } from '@/lib/admin-pin';
+import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 import {
   sendPartnerFirmLiveEmail,
   sendPartnerLicensePaymentConfirmedEmail,
@@ -52,6 +53,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
   try {
     const { slug } = await params;
     const body = await request.json();
+
+    const superAdminFields = ['status', 'monthly_fee_paid'] as const;
+    const needsSuperAdmin = superAdminFields.some((key) => key in body);
+    let adminAuth: Awaited<ReturnType<typeof requireAdmin>> | null = null;
+    if (needsSuperAdmin) {
+      adminAuth = await requireAdmin(request);
+      if (isAdminUnauthorized(adminAuth)) return adminAuth;
+    }
 
     const allowed = [
       'status',
@@ -121,6 +130,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       await sendPartnerLifecycleEmails(existing, partner);
     }
 
+    if (needsSuperAdmin && adminAuth && !isAdminUnauthorized(adminAuth)) {
+      await logAdminAction({
+        adminUserId: adminAuth.admin.id,
+        action: 'partner.update',
+        resourceType: 'partner',
+        resourceId: slug,
+        metadata: {
+          status: body.status ?? undefined,
+          monthly_fee_paid: body.monthly_fee_paid ?? undefined,
+        },
+        request,
+      });
+    }
+
     const { admin_pin: _adminPin, ...partnerResponse } = partner;
     return Response.json(withPartnerLogoDisplayUrl(partnerResponse));
   } catch (e) {
@@ -158,10 +181,22 @@ async function sendPartnerLifecycleEmails(
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const { slug } = await params;
     await deletePartnerBySlug(slug);
+
+    await logAdminAction({
+      adminUserId: auth.admin.id,
+      action: 'partner.delete',
+      resourceType: 'partner',
+      resourceId: slug,
+      request,
+    });
+
     return Response.json({ success: true });
   } catch (e) {
     console.error(e);

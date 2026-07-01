@@ -4,8 +4,12 @@ import {
   listAllAsoRequests,
   reviewAsoRequest,
 } from '@/db/queries/aso-requests';
+import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const rows = await listAllAsoRequests();
     return Response.json(rows);
@@ -16,6 +20,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const body = await request.json();
     const requestId = Number(body.request_id);
@@ -32,13 +39,22 @@ export async function PATCH(request: Request) {
     const result = await reviewAsoRequest({
       requestId,
       status: status as 'approved' | 'rejected',
-      reviewedBy: 'super_admin',
+      reviewedBy: auth.admin.email,
       adminNotes,
     });
 
     if (!result.request) {
       return Response.json({ error: 'ASO request not found or already reviewed' }, { status: 404 });
     }
+
+    await logAdminAction({
+      adminUserId: auth.admin.id,
+      action: `aso_request.${status}`,
+      resourceType: 'aso_request',
+      resourceId: requestId,
+      metadata: adminNotes ? { admin_notes: adminNotes } : null,
+      request,
+    });
 
     if (status === 'approved' && result.token) {
       const notice = await getAsoApprovalNotice(requestId);

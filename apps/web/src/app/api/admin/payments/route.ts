@@ -5,9 +5,13 @@ import {
   rejectEvaluationPayment,
 } from '@/db/queries/evaluations';
 import { sendEmail } from '@/app/api/utils/send-email';
+import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 import { toMoneyNumber } from '@/lib/partner-pricing';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const rows = await listPendingPayments();
     return Response.json(rows);
@@ -18,6 +22,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const body = await request.json();
     const { eval_id, action, verified_amount, force_approve, verification_note } = body;
@@ -36,6 +43,16 @@ export async function PATCH(request: Request) {
           { status: 404 }
         );
       }
+
+      await logAdminAction({
+        adminUserId: auth.admin.id,
+        action: 'payment.reject',
+        resourceType: 'evaluation',
+        resourceId: eval_id,
+        metadata: verification_note ? { verification_note } : null,
+        request,
+      });
+
       return Response.json({ success: true, rejected: true });
     }
 
@@ -52,6 +69,19 @@ export async function PATCH(request: Request) {
     if (!result) {
       return Response.json({ error: 'Evaluation not found or already activated' }, { status: 404 });
     }
+
+    await logAdminAction({
+      adminUserId: auth.admin.id,
+      action: 'payment.approve',
+      resourceType: 'evaluation',
+      resourceId: eval_id,
+      metadata: {
+        verified_amount: verifiedAmount,
+        force_approve: Boolean(force_approve),
+        verification_note: verification_note ?? null,
+      },
+      request,
+    });
 
     const notice = await getPaymentActivationNotice(eval_id);
     if (notice) {

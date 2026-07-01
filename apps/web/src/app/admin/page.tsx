@@ -1,7 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AdminLoginPanel } from '@/components/admin/admin-login-panel';
+import { AdminsTab } from '@/components/admin/admins-tab';
+import { AuditTab } from '@/components/admin/audit-tab';
 import { getPartnerUrl } from '@/lib/tenant';
 import { splitVerifiedAmount, type EvalType } from '@/lib/partner-pricing';
 import {
@@ -29,6 +32,8 @@ import {
   Shield,
   UserPlus,
   KeyRound,
+  LogOut,
+  ClipboardList,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -3607,10 +3612,8 @@ const LOGO_LIGHT =
   'https://dtvoeevhaseb5.cloudfront.net/user-uploads/4eccdbc1-dabd-439b-8e76-68c9cf5bb8a4.png';
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(false);
-  const [pw, setPw] = useState('');
-  const [pwError, setPwError] = useState(false);
-  const [pwChecking, setPwChecking] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [admin, setAdmin] = useState<{ id: number; email: string; name: string } | null>(null);
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
   const [tab, setTab] = useState<
     | 'partners'
@@ -3623,7 +3626,33 @@ export default function AdminPage() {
     | 'payouts'
     | 'partner-payouts'
     | 'requests'
+    | 'admins'
+    | 'audit'
   >('partners');
+
+  const authed = Boolean(admin);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/auth');
+        if (!res.ok) {
+          if (!cancelled) setAdmin(null);
+          return;
+        }
+        const data = await res.json();
+        if (!cancelled) setAdmin(data.session ?? null);
+      } catch {
+        if (!cancelled) setAdmin(null);
+      } finally {
+        if (!cancelled) setSessionChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const { data: kycRows = [] } = useQuery<KYCRow[]>({
     queryKey: ['admin-kyc'],
@@ -3697,36 +3726,9 @@ export default function AdminPage() {
     asoRequestRows.filter((r) => r.status === 'pending').length;
   const partnerSignupsAbandoned = partnerSignupRows.filter((r) => r.status === 'abandoned').length;
 
-  const checkPw = async () => {
-    setPwChecking(true);
-    setPwError(false);
-
-    try {
-      const res = await fetch('/api/admin/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
-      });
-
-      if (res.ok) {
-        setPw('');
-        setAuthed(true);
-      } else {
-        setPwError(true);
-      }
-    } catch {
-      setPwError(true);
-    } finally {
-      setPwChecking(false);
-    }
-  };
-
-  const submitPw = () => {
-    if (!pw || pwChecking) {
-      return;
-    }
-
-    void checkPw();
+  const logout = async () => {
+    await fetch('/api/admin/auth', { method: 'DELETE' });
+    setAdmin(null);
   };
 
   const openReceipt = async (receiptUrl: string) => {
@@ -3758,42 +3760,16 @@ export default function AdminPage() {
     }
   };
 
-  if (!authed) {
+  if (!sessionChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F7F4EF] px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8">
-          <div className="mb-6">
-            <div className="flex items-center gap-1.5 mb-4">
-              <img src={LOGO_LIGHT} alt="FT9ja" className="h-8 w-auto" />
-            </div>
-            <h1 className="text-xl font-black text-gray-900">Super Admin</h1>
-            <p className="mt-1 text-sm text-gray-500">Enter your admin password to continue.</p>
-          </div>
-          <input
-            type="password"
-            className={`w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16A34A]/20 ${pwError ? 'border-red-300 focus:border-red-300' : 'border-gray-200 focus:border-[#16A34A]'}`}
-            placeholder="Admin password"
-            value={pw}
-            onChange={(e) => {
-              setPw(e.target.value);
-              setPwError(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitPw();
-            }}
-          />
-          {pwError && <p className="mt-1 text-xs text-red-500">Incorrect password.</p>}
-          <button
-            onClick={submitPw}
-            disabled={!pw || pwChecking}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#111827] py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {pwChecking && <Loader2 size={14} className="animate-spin" />}
-            Access Admin
-          </button>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-[#F7F4EF]">
+        <Loader2 size={24} className="animate-spin text-gray-300" />
       </div>
     );
+  }
+
+  if (!authed) {
+    return <AdminLoginPanel onAuthed={setAdmin} />;
   }
 
   const tabs = [
@@ -3827,6 +3803,8 @@ export default function AdminPage() {
       icon: <MessageSquare size={13} />,
       badge: requestsPending,
     },
+    { id: 'admins', label: 'Admins', icon: <Shield size={13} />, badge: 0 },
+    { id: 'audit', label: 'Audit', icon: <ClipboardList size={13} />, badge: 0 },
   ] as const;
 
   return (
@@ -3842,6 +3820,13 @@ export default function AdminPage() {
             <span className="text-sm font-semibold text-gray-900">Admin</span>
           </div>
           <div className="flex items-center gap-1.5">
+            <span className="hidden text-xs text-gray-500 sm:inline">{admin?.name}</span>
+            <button
+              onClick={() => void logout()}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-gray-300 sm:px-3"
+            >
+              <LogOut size={10} /> <span className="hidden sm:inline">Sign out</span>
+            </button>
             <Link
               href="/admin/docs"
               className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:border-gray-300"
@@ -3902,6 +3887,8 @@ export default function AdminPage() {
         {tab === 'payouts' && <PayoutsTab />}
         {tab === 'partner-payouts' && <PartnerPayoutsTab />}
         {tab === 'requests' && <RequestsTab />}
+        {tab === 'admins' && <AdminsTab />}
+        {tab === 'audit' && <AuditTab />}
       </div>
     </div>
   );

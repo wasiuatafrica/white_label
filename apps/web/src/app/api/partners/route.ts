@@ -1,7 +1,11 @@
 import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
+import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const partners = await listPartners();
     return Response.json(partners);

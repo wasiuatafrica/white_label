@@ -1,7 +1,11 @@
 import { listPassedEvaluationsForPayouts } from '@/db/queries/admin';
 import { updateEvaluationPayoutStatus } from '@/db/queries/evaluations';
+import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const rows = await listPassedEvaluationsForPayouts();
     return Response.json(rows);
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const auth = await requireAdmin(request);
+  if (isAdminUnauthorized(auth)) return auth;
+
   try {
     const body = await request.json();
     const { eval_id, payout_status } = body;
@@ -27,6 +34,14 @@ export async function PATCH(request: Request) {
     if (!result) {
       return Response.json({ error: 'Evaluation not found' }, { status: 404 });
     }
+
+    await logAdminAction({
+      adminUserId: auth.admin.id,
+      action: `payout.${payout_status}`,
+      resourceType: 'evaluation',
+      resourceId: eval_id,
+      request,
+    });
 
     return Response.json({ success: true });
   } catch (e) {

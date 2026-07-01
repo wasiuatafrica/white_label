@@ -1,4 +1,6 @@
 export * from './enums';
+export * from './admin-users';
+export * from './admin-audit-logs';
 export * from './partners';
 export * from './traders';
 export * from './evaluations';

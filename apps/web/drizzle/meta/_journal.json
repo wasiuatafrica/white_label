@@ -78,6 +78,13 @@
       "when": 1782142389800,
       "tag": "0011_flippant_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782919844370,
+      "tag": "0012_majestic_valeria_richards",
+      "breakpoints": true
     }
   ]
 }
