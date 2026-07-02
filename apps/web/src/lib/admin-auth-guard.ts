@@ -15,7 +15,7 @@ export function isAdminUnauthorized(result: AdminContext | Response): result is 
 }
 
 export async function requireAdmin(request: Request): Promise<AdminContext | Response> {
-  const session = parseAdminSessionFromRequest(request);
+  const session = await parseAdminSessionFromRequest(request);
   if (!session) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -1,10 +1,6 @@
 import crypto from 'crypto';
-
-const SECRET =
-  process.env.ADMIN_SESSION_SECRET ||
-  process.env.BETTER_AUTH_SECRET ||
-  process.env.AUTH_SECRET ||
-  'ft9ja-admin-fallback-secret';
+import { getAdminSessionSecret } from '@/lib/auth-secret';
+import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
 
 export const ADMIN_SESSION_COOKIE = 'ft9ja_admin_session';
 export const ADMIN_PENDING_COOKIE = 'ft9ja_admin_pending';
@@ -16,6 +12,7 @@ export interface AdminSessionPayload {
   adminUserId: number;
   email: string;
   name: string;
+  iat: number;
   exp: number;
 }
 
@@ -24,19 +21,24 @@ export type AdminPendingPurpose = 'totp_verify' | 'totp_setup';
 export interface AdminPendingPayload {
   adminUserId: number;
   purpose: AdminPendingPurpose;
+  iat: number;
   exp: number;
 }
 
 function sign(encoded: string) {
-  return crypto.createHmac('sha256', SECRET).update(encoded).digest('hex');
+  return crypto.createHmac('sha256', getAdminSessionSecret()).update(encoded).digest('hex');
 }
 
-function createSignedToken<T extends { exp: number }>(payload: T): string {
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+function createSignedToken<T extends { iat: number; exp: number }>(
+  payload: Omit<T, 'iat' | 'exp'> & { exp: number }
+): string {
+  const encoded = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() } as T)).toString(
+    'base64url'
+  );
   return `${encoded}.${sign(encoded)}`;
 }
 
-function verifySignedToken<T extends { exp: number }>(token: string): T | null {
+function verifySignedToken<T extends { iat?: number; exp: number }>(token: string): T | null {
   try {
     const lastDot = token.lastIndexOf('.');
     if (lastDot < 0) return null;
@@ -55,8 +57,8 @@ function verifySignedToken<T extends { exp: number }>(token: string): T | null {
   }
 }
 
-export function createAdminSessionToken(payload: Omit<AdminSessionPayload, 'exp'>) {
-  return createSignedToken({
+export function createAdminSessionToken(payload: Omit<AdminSessionPayload, 'iat' | 'exp'>) {
+  return createSignedToken<AdminSessionPayload>({
     ...payload,
     exp: Date.now() + ADMIN_SESSION_MAX_AGE * 1000,
   });
@@ -70,7 +72,7 @@ export function createAdminPendingToken(
   adminUserId: number,
   purpose: AdminPendingPurpose
 ) {
-  return createSignedToken({
+  return createSignedToken<AdminPendingPayload>({
     adminUserId,
     purpose,
     exp: Date.now() + ADMIN_PENDING_MAX_AGE * 1000,
@@ -129,14 +131,20 @@ export function clearAdminPendingCookie(options: { secure?: boolean } = {}) {
   return buildCookie(ADMIN_PENDING_COOKIE, '', 0, options.secure ?? process.env.NODE_ENV === 'production');
 }
 
-export function parseAdminSessionFromRequest(request: Request) {
+export async function parseAdminSessionFromRequest(request: Request) {
   const token = parseCookies(request.headers.get('cookie')).get(ADMIN_SESSION_COOKIE);
   if (!token) return null;
-  return verifyAdminSessionToken(token);
+  const session = verifyAdminSessionToken(token);
+  if (!session) return null;
+  if (await isSessionIssuedBeforeRevocation(session.iat)) return null;
+  return session;
 }
 
-export function parseAdminPendingFromRequest(request: Request) {
+export async function parseAdminPendingFromRequest(request: Request) {
   const token = parseCookies(request.headers.get('cookie')).get(ADMIN_PENDING_COOKIE);
   if (!token) return null;
-  return verifyAdminPendingToken(token);
+  const pending = verifyAdminPendingToken(token);
+  if (!pending) return null;
+  if (await isSessionIssuedBeforeRevocation(pending.iat)) return null;
+  return pending;
 }

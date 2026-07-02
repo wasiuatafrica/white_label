@@ -1,20 +1,27 @@
 import { getPartnerPrivateBySlug } from '@/db/queries/partners';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 import { createS3PresignedGetUrl, parseS3ObjectUrl } from '@/lib/storage/s3';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  try {
-    const { slug } = await params;
-    const { url, admin_pin } = await request.json();
+  const { slug } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
 
-    if (!url || !admin_pin) {
-      return Response.json({ error: 'url and admin_pin are required' }, { status: 400 });
+  try {
+    const { url } = await request.json();
+
+    if (!url) {
+      return Response.json({ error: 'url is required' }, { status: 400 });
     }
 
     const partner = await getPartnerPrivateBySlug(slug);
-    if (!partner || partner.admin_pin !== String(admin_pin)) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!partner) {
+      return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
     const accessKeyId = process.env.AWS_ACCESS_KEY_ID;

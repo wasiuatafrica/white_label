@@ -15,7 +15,7 @@ export async function GET(
 ) {
   try {
     const { slug, id } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session || session.traderId !== Number(id)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -34,7 +34,7 @@ export async function POST(
 ) {
   try {
     const { slug, id } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session || session.traderId !== Number(id)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }

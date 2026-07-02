@@ -7,6 +7,10 @@ import {
 } from '@/db/queries/evaluations';
 import { getTraderByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 import { amountsMatch, getTraderPrice, toMoneyNumber, type EvalType } from '@/lib/partner-pricing';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -21,6 +25,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     }
 
     if (!email) {
+      const auth = await requirePartnerAdmin(request, slug);
+      if (isPartnerAdminUnauthorized(auth)) return auth;
+
       const evaluations = await listEvaluationsByPartnerId(partnerId);
       return Response.json({ evaluations });
     }
@@ -30,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       return Response.json({ error: 'Trader not found' }, { status: 404 });
     }
 
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     const canViewAccountActivation =
       session?.partnerId === partnerId && session.traderId === trader.id;
     const evaluations = await listEvaluationsByTrader(partnerId, trader.id);
@@ -83,7 +90,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (session?.partnerId === partnerId) {
       const trader = await getTraderForSession(session.traderId, partnerId);
       if (!trader) return Response.json({ error: 'Unauthorized' }, { status: 401 });

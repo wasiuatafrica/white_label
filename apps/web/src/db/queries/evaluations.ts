@@ -242,13 +242,15 @@ export async function createEvaluationWithTrader(data: {
   paymentProofUrl?: string | null;
 }) {
   return db.transaction(async (tx) => {
-    let traderRow = await getTraderByEmail(data.partnerId, data.email, tx);
+    const existingTrader = await getTraderByEmail(data.partnerId, data.email, tx);
+    let traderId = existingTrader?.id;
 
-    if (!traderRow) {
-      traderRow = await createTrader(
+    if (!traderId) {
+      const createdTrader = await createTrader(
         { partnerId: data.partnerId, name: data.name, email: data.email },
         tx
       );
+      traderId = createdTrader.id;
       await incrementPartnerTraders(data.partnerId, tx);
     }
 
@@ -262,7 +264,7 @@ export async function createEvaluationWithTrader(data: {
     const [evaluation] = await tx
       .insert(evaluations)
       .values({
-        traderId: traderRow.id,
+        traderId,
         partnerId: data.partnerId,
         evalType: data.evalType,
         amount: pricing.amount,
@@ -280,8 +282,11 @@ export async function createEvaluationWithTrader(data: {
       })
       .returning();
 
+    const trader =
+      existingTrader ?? (await getTraderByEmail(data.partnerId, data.email, tx));
+
     return {
-      trader: traderRow,
+      trader: trader!,
       evaluation: mapEvaluation(evaluation),
     };
   });

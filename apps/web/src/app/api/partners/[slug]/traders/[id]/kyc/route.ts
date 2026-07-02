@@ -1,10 +1,9 @@
-import { getPartnerWithPinBySlug } from '@/db/queries/partners';
-import {
-  getTraderKyc,
-  submitTraderKyc,
-  updateTraderKycStatus,
-} from '@/db/queries/traders';
+import { updateTraderKycStatus, getTraderKyc, submitTraderKyc } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 
 export async function GET(
   request: Request,
@@ -12,7 +11,7 @@ export async function GET(
 ) {
   try {
     const { slug, id } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session || session.traderId !== Number(id)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -32,7 +31,7 @@ export async function POST(
 ) {
   try {
     const { slug, id } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session || session.traderId !== Number(id)) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -67,22 +66,19 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
 ) {
+  const { slug, id } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
+
   try {
-    const { slug, id } = await params;
     const body = await request.json();
-    const { kyc_status, admin_pin } = body;
+    const { kyc_status } = body;
 
     if (!['approved', 'rejected'].includes(kyc_status)) {
       return Response.json({ error: 'kyc_status must be approved or rejected' }, { status: 400 });
     }
 
-    const partner = await getPartnerWithPinBySlug(slug);
-    if (!partner) return Response.json({ error: 'Partner not found' }, { status: 404 });
-    if (partner.admin_pin !== admin_pin) {
-      return Response.json({ error: 'Invalid PIN' }, { status: 403 });
-    }
-
-    await updateTraderKycStatus(Number(id), kyc_status, partner.id);
+    await updateTraderKycStatus(Number(id), kyc_status, auth.partnerId);
     return Response.json({ success: true });
   } catch (e) {
     console.error(e);

@@ -12,7 +12,8 @@
 		"db:migrate-logo-generation-count": "node scripts/migrate-logo-generation-count.mjs",
 		"db:migrate-last-generated-logo-url": "node scripts/migrate-last-generated-logo-url.mjs",
 		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs",
-		"create-admin": "node scripts/create-admin.mjs"
+		"create-admin": "node scripts/create-admin.mjs",
+		"revoke-all-sessions": "node scripts/revoke-all-sessions.mjs"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.3.0",

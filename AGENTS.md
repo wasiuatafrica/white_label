@@ -7,16 +7,16 @@
 - Do not edit attached plan files when implementing a plan.
 - When todos already exist for a plan, mark them in_progress rather than recreating them.
 - Partner signup subdomain availability should show only "This subdomain is available." or "This subdomain is unavailable." (do not distinguish reserved vs taken); reserved/invalid slugs (including prefix variations of reserved words) are checked client-side; valid slugs use a debounced (~500ms) DB lookup.
+- Super Admin should use a single Requests tab combining trader requests and ASO upgrade requests (not separate tabs).
 
 ## Learned Workspace Facts
 
 - Yarn 4 workspaces monorepo: `apps/web` (Next.js) and `apps/mobile` (Expo); `publisher/` is outside workspaces.
-- Web app targets Neon PostgreSQL via `DATABASE_URL`; Better Auth stays on its Neon `Pool` adapter (separate from the Drizzle app data layer).
+- Web app targets Neon PostgreSQL via `DATABASE_URL`; Better Auth stays on its Neon `Pool` adapter (separate from the Drizzle app data layer). Three auth layers: Better Auth DB `session` table; partner trader stateless signed cookies (`ft9ja_trader_{slug}`); Super Admin stateless signed cookies (`ft9ja_admin_session`). No bulk-logout script—clear `session` for Better Auth users or rotate `BETTER_AUTH_SECRET`/`ADMIN_SESSION_SECRET` for stateless cookies.
 - Web app is deployed to Heroku app `landingpage-june` (`Procfile`: `yarn workspace web start`, `heroku-postbuild` builds web); partner sites use `{slug}.ft9ja.com` subdomains.
-- On `{slug}.ft9ja.com`, `/admin` uses the partner PIN gate. Reserved subdomains (`partner`, `partners`, etc.) and slugs starting with those words serve the main platform, not partner storefronts; Super Admin at `/admin` on reserved hosts (e.g. `partners.ft9ja.com`).
-- Partner AI logo generation uses OpenAI `gpt-image-2` directly (`OPENAI_API_KEY`); one image per API request (Heroku 30s web timeout); up to 3 generations per partner (`logo_generation_count`). Uploads to private `AWS_S3_BUCKET` at `uploads/logos/{slug}/`, served via `/api/partners/[slug]/logo`; store canonical S3 URL in `logo_url` and last preview in `last_generated_logo_url`. `ANYTHING_PROJECT_TOKEN` and `NEXT_PUBLIC_CREATE_BASE_URL` are not required.
-- Partner signup subdomain suggestions use OpenAI Responses API with `gpt-5.4-mini` (`apps/web/src/lib/openai/subdomain-suggestions.ts`).
-- `partner_signup_events` table and `POST /api/partner-signup-events` track partner signup funnel abandonment from `/apply`.
+- On `{slug}.ft9ja.com`, `/admin` uses the partner PIN gate. Reserved subdomains (`partner`, `partners`, etc.) and slugs starting with those words serve the main platform, not partner storefronts; Super Admin at `/admin` on reserved hosts (e.g. `partners.ft9ja.com`). Super Admin Trade Accounts "View dashboard" opens `/{slug}/dashboard?email=...&eval_id=...` read-only; mutations require a trader session.
+- AWS S3 in web app only (`apps/web/src/lib/storage/s3.ts`, manual SigV4, no `@aws-sdk`); private bucket—reads via presigned URLs or proxy routes, not public access. Receipts at `uploads/receipts/`; partner AI logos at `uploads/logos/{slug}/` via `gpt-image-2` (`OPENAI_API_KEY`; one image/request, Heroku 30s timeout; up to 3 generations per partner). Logos served via `/api/partners/[slug]/logo`; store canonical S3 URL in `logo_url` and last preview in `last_generated_logo_url`. `ANYTHING_PROJECT_TOKEN` and `NEXT_PUBLIC_CREATE_BASE_URL` are not required.
+- Partner signup: subdomain suggestions via OpenAI Responses API with `gpt-5.4-mini` (`apps/web/src/lib/openai/subdomain-suggestions.ts`); `partner_signup_events` table and `POST /api/partner-signup-events` track funnel abandonment from `/apply`.
 - Production Next.js builds use `next build --webpack` because Turbopack breaks Better Auth / Kysely bundling.
 - Heroku requires `DATABASE_URL`, `BETTER_AUTH_SECRET`, and `BETTER_AUTH_URL` (use a Neon URL, not Heroku Postgres, for auth); do not use `HEROKU_SKIP_INSTALL=1` with Yarn 4; `.slugignore` runs before install without `!` negation—do not exclude workspace packages needed by `yarn.lock`.
 - Drizzle client at `apps/web/src/db/index.ts` (neon-serverless Pool); config at `apps/web/drizzle.config.ts`; schemas in `apps/web/src/db/schema/`, queries in `apps/web/src/db/queries/`.

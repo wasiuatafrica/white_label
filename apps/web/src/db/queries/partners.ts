@@ -1,14 +1,19 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
-import { generatePartnerAdminPin } from '@/lib/admin-pin';
+import { generatePartnerAdminPin, partnerPinNeedsGeneration } from '@/lib/admin-pin';
+import {
+  hashPartnerAdminPin,
+  maybeRehashPartnerAdminPin,
+  verifyPartnerAdminPin,
+} from '@/lib/partner-pin-crypto';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import type { DbOrTx } from '../types';
-import { mapPartner, mapPartnerPublic } from '../mappers';
+import { mapPartner, mapPartnerForSuperAdmin, mapPartnerPublic } from '../mappers';
 import { partners } from '../schema/partners';
 
 export async function listPartners() {
   const rows = await db.select().from(partners).orderBy(sql`${partners.createdAt} DESC`);
-  return rows.map(mapPartner);
+  return rows.map(mapPartnerForSuperAdmin);
 }
 
 export async function getPartnerIdBySlug(slug: string) {
@@ -30,7 +35,7 @@ export async function getPartnerPrivateBySlug(slug: string) {
   return row ? mapPartner(row) : null;
 }
 
-export async function getPartnerWithPinBySlug(slug: string) {
+export async function getPartnerStoredPinBySlug(slug: string) {
   const [row] = await db
     .select({ id: partners.id, adminPin: partners.adminPin, firmName: partners.firmName })
     .from(partners)
@@ -38,6 +43,11 @@ export async function getPartnerWithPinBySlug(slug: string) {
     .limit(1);
   if (!row) return null;
   return { id: row.id, admin_pin: row.adminPin, firm_name: row.firmName };
+}
+
+/** @deprecated Use getPartnerStoredPinBySlug */
+export async function getPartnerWithPinBySlug(slug: string) {
+  return getPartnerStoredPinBySlug(slug);
 }
 
 export async function slugExists(slug: string) {
@@ -84,7 +94,7 @@ export async function createPartner(data: {
       brandColor: data.brandColor ?? '#16A34A',
       secondaryColor: data.secondaryColor ?? '#F59E0B',
       paymentProofUrl: data.paymentProofUrl ?? null,
-      adminPin: data.adminPin ?? generatePartnerAdminPin(),
+      adminPin: '0000',
       status: 'pending',
     })
     .returning();
@@ -147,7 +157,19 @@ export async function verifyPartnerPin(slug: string, pin: string) {
     .where(eq(partners.slug, slug))
     .limit(1);
   if (!row) return null;
-  return row.adminPin === String(pin);
+
+  const valid = await verifyPartnerAdminPin(row.adminPin, pin);
+  if (!valid) return false;
+
+  const rehashed = await maybeRehashPartnerAdminPin(row.adminPin, pin);
+  if (rehashed) {
+    await db
+      .update(partners)
+      .set({ adminPin: rehashed, updatedAt: sql`NOW()` })
+      .where(eq(partners.slug, slug));
+  }
+
+  return true;
 }
 
 export async function incrementPartnerTraders(partnerId: number, tx: DbOrTx = db) {

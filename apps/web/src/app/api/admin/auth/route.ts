@@ -20,7 +20,7 @@ function cookieOptions() {
 
 export async function GET(request: Request) {
   try {
-    const session = parseAdminSessionFromRequest(request);
+    const session = await parseAdminSessionFromRequest(request);
     if (!session) {
       return Response.json({ session: null }, { status: 401 });
     }
@@ -92,7 +92,7 @@ export async function DELETE() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = parseAdminSessionFromRequest(request);
+    const session = await parseAdminSessionFromRequest(request);
     if (!session) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }

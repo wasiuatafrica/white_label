@@ -39,6 +39,15 @@ export function mapPartnerPublic(row: Partner) {
   return rest;
 }
 
+export function mapPartnerForSuperAdmin(row: Partner) {
+  const full = mapPartner(row);
+  const { admin_pin, ...rest } = full;
+  return {
+    ...rest,
+    admin_pin_configured: Boolean(admin_pin && admin_pin !== '0000'),
+  };
+}
+
 export function mapTrader(row: Trader) {
   return {
     id: row.id,
@@ -59,6 +68,16 @@ export function mapTrader(row: Trader) {
     kyc_submitted_at: row.kycSubmittedAt,
     created_at: row.createdAt,
   };
+}
+
+export function mapTraderForPartnerAdmin(row: Trader) {
+  const {
+    password_hash: _passwordHash,
+    reset_token: _resetToken,
+    reset_token_expires: _resetTokenExpires,
+    ...rest
+  } = mapTrader(row);
+  return rest;
 }
 
 export function mapEvaluation(row: Evaluation) {

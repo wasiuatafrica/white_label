@@ -1,4 +1,4 @@
-import { getPartnerIdBySlug, getPartnerPrivateBySlug } from '@/db/queries/partners';
+import { getPartnerIdBySlug } from '@/db/queries/partners';
 import {
   createPartnerPayoutRequest,
   findPendingPartnerPayoutRequest,
@@ -7,18 +7,22 @@ import {
   getPartnerTotalEarnings,
   listPartnerPayoutRequests,
 } from '@/db/queries/partner-payout-requests';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
+
   try {
-    const { slug } = await params;
-    const partnerId = await getPartnerIdBySlug(slug);
-    if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
-
-    const rows = await listPartnerPayoutRequests(partnerId);
+    const rows = await listPartnerPayoutRequests(auth.partnerId);
     const [available_balance, total_earnings, total_reserved] = await Promise.all([
-      getPartnerAvailableBalance(partnerId),
-      getPartnerTotalEarnings(partnerId),
-      getPartnerReservedPayoutTotal(partnerId),
+      getPartnerAvailableBalance(auth.partnerId),
+      getPartnerTotalEarnings(auth.partnerId),
+      getPartnerReservedPayoutTotal(auth.partnerId),
     ]);
     return Response.json({
       requests: rows,
@@ -33,8 +37,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
+
   try {
-    const { slug } = await params;
     const body = await request.json();
     const { amount_requested, bank_name, account_number, account_name, notes } = body;
 
@@ -45,10 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    const partnerId = await getPartnerIdBySlug(slug);
-    if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
-
-    const existing = await findPendingPartnerPayoutRequest(partnerId);
+    const existing = await findPendingPartnerPayoutRequest(auth.partnerId);
     if (existing) {
       return Response.json(
         { error: 'You already have a pending payout request. Please wait for it to be processed.' },
@@ -57,7 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     }
 
     const result = await createPartnerPayoutRequest({
-      partnerId,
+      partnerId: auth.partnerId,
       amountRequested: amount_requested,
       bankName: bank_name,
       accountNumber: account_number,

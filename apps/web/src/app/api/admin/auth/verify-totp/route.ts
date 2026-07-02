@@ -13,7 +13,7 @@ function cookieOptions() {
 
 export async function POST(request: Request) {
   try {
-    const pending = parseAdminPendingFromRequest(request);
+    const pending = await parseAdminPendingFromRequest(request);
     if (!pending || pending.purpose !== 'totp_verify') {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }

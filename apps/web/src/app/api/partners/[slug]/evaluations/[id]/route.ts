@@ -1,18 +1,20 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
 import { updateEvaluation } from '@/db/queries/evaluations';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ slug: string; id: string }> }
 ) {
-  try {
-    const { slug, id } = await params;
-    const body = await request.json();
+  const { slug, id } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
 
-    const partnerId = await getPartnerIdBySlug(slug);
-    if (!partnerId) {
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    }
+  try {
+    const body = await request.json();
 
     const allowed = ['status', 'current_profit', 'current_drawdown', 'trading_days'];
     const hasAllowedField = allowed.some((key) => key in body);
@@ -27,7 +29,7 @@ export async function PATCH(
       );
     }
 
-    const evaluation = await updateEvaluation(Number(id), partnerId, body);
+    const evaluation = await updateEvaluation(Number(id), auth.partnerId, body);
     if (!evaluation) {
       return Response.json({ error: 'Evaluation not found' }, { status: 404 });
     }

@@ -11,12 +11,30 @@ import {
 } from '@/lib/admin-pin';
 import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
+import {
   sendPartnerFirmLiveEmail,
   sendPartnerLicensePaymentConfirmedEmail,
   sendPartnerSuspensionEmail,
   sendPartnerWelcomeEmail,
 } from '@/lib/email/ft9ja-to-partner';
+import { hashPartnerAdminPin, verifyPartnerAdminPin } from '@/lib/partner-pin-crypto';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
+
+const SUPER_ADMIN_FIELDS = ['status', 'monthly_fee_paid'] as const;
+const PARTNER_ADMIN_FIELDS = [
+  'firm_name',
+  'tagline',
+  'description',
+  'brand_color',
+  'secondary_color',
+  'logo_url',
+  'template',
+  'admin_pin',
+  'fee_markup',
+] as const;
 
 function withPartnerLogoDisplayUrl<
   T extends {
@@ -33,6 +51,11 @@ function withPartnerLogoDisplayUrl<
       partner.last_generated_logo_url ?? null
     ),
   };
+}
+
+function stripAdminPin<T extends { admin_pin?: string }>(partner: T) {
+  const { admin_pin: _adminPin, ...partnerResponse } = partner;
+  return partnerResponse;
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -54,27 +77,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     const { slug } = await params;
     const body = await request.json();
 
-    const superAdminFields = ['status', 'monthly_fee_paid'] as const;
-    const needsSuperAdmin = superAdminFields.some((key) => key in body);
+    const needsSuperAdmin = SUPER_ADMIN_FIELDS.some((key) => key in body);
+    const needsPartnerAdmin = PARTNER_ADMIN_FIELDS.some((key) => key in body);
+
     let adminAuth: Awaited<ReturnType<typeof requireAdmin>> | null = null;
     if (needsSuperAdmin) {
       adminAuth = await requireAdmin(request);
       if (isAdminUnauthorized(adminAuth)) return adminAuth;
     }
 
-    const allowed = [
-      'status',
-      'firm_name',
-      'tagline',
-      'description',
-      'brand_color',
-      'secondary_color',
-      'monthly_fee_paid',
-      'logo_url',
-      'template',
-      'admin_pin',
-      'fee_markup',
-    ];
+    const hasSuperAdminAuth = Boolean(adminAuth && !isAdminUnauthorized(adminAuth));
+
+    if (needsPartnerAdmin && !hasSuperAdminAuth) {
+      const partnerAuth = await requirePartnerAdmin(request, slug);
+      if (isPartnerAdminUnauthorized(partnerAuth)) return partnerAuth;
+    }
+
+    const allowed = [...SUPER_ADMIN_FIELDS, ...PARTNER_ADMIN_FIELDS];
     const hasAllowedField = allowed.some((key) => key in body);
     if (!hasAllowedField) {
       return Response.json({ error: 'No valid fields to update' }, { status: 400 });
@@ -87,6 +106,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       body.status === 'active';
     const existing = shouldCompareLifecycle ? await getPartnerPrivateBySlug(slug) : null;
 
+    let generatedAdminPinPlain: string | null = null;
+
     if ('admin_pin' in body) {
       if (!existing) {
         return Response.json({ error: 'Partner not found' }, { status: 404 });
@@ -97,11 +118,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
         return Response.json({ error: 'Admin PIN must be 4 to 12 digits' }, { status: 400 });
       }
 
-      const currentPin =
-        typeof body.current_admin_pin === 'string' ? body.current_admin_pin : undefined;
-      if (!partnerPinNeedsGeneration(existing.admin_pin) && existing.admin_pin !== currentPin) {
-        return Response.json({ error: 'Current admin PIN is required' }, { status: 403 });
+      const isSuperAdmin = Boolean(adminAuth && !isAdminUnauthorized(adminAuth));
+      if (!isSuperAdmin && !partnerPinNeedsGeneration(existing.admin_pin)) {
+        const currentPin =
+          typeof body.current_admin_pin === 'string' ? body.current_admin_pin : undefined;
+        if (
+          !currentPin ||
+          !(await verifyPartnerAdminPin(existing.admin_pin, currentPin))
+        ) {
+          return Response.json({ error: 'Current admin PIN is required' }, { status: 403 });
+        }
       }
+
+      body.admin_pin = await hashPartnerAdminPin(newPin);
     }
 
     if (body.status === 'active') {
@@ -117,7 +146,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
 
       body.monthly_fee_paid = true;
       if (partnerPinNeedsGeneration(existing.admin_pin)) {
-        body.admin_pin = generatePartnerAdminPin();
+        generatedAdminPinPlain = generatePartnerAdminPin();
+        body.admin_pin = await hashPartnerAdminPin(generatedAdminPinPlain);
       }
     }
 
@@ -127,7 +157,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     }
 
     if (existing) {
-      await sendPartnerLifecycleEmails(existing, partner);
+      await sendPartnerLifecycleEmails(existing, partner, generatedAdminPinPlain);
     }
 
     if (needsSuperAdmin && adminAuth && !isAdminUnauthorized(adminAuth)) {
@@ -144,8 +174,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       });
     }
 
-    const { admin_pin: _adminPin, ...partnerResponse } = partner;
-    return Response.json(withPartnerLogoDisplayUrl(partnerResponse));
+    return Response.json(withPartnerLogoDisplayUrl(stripAdminPin(partner)));
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to update partner' }, { status: 500 });
@@ -154,12 +183,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
 
 async function sendPartnerLifecycleEmails(
   previous: NonNullable<Awaited<ReturnType<typeof getPartnerPrivateBySlug>>>,
-  current: NonNullable<Awaited<ReturnType<typeof getPartnerPrivateBySlug>>>
+  current: NonNullable<Awaited<ReturnType<typeof getPartnerPrivateBySlug>>>,
+  generatedAdminPinPlain: string | null
 ) {
   const emails: Array<Promise<unknown>> = [];
 
   if (previous.status === 'pending' && current.status === 'active') {
-    emails.push(sendPartnerWelcomeEmail(current));
+    emails.push(sendPartnerWelcomeEmail(current, generatedAdminPinPlain ?? undefined));
     emails.push(sendPartnerFirmLiveEmail(current));
   } else if (previous.status === 'suspended' && current.status === 'active') {
     emails.push(sendPartnerFirmLiveEmail(current));

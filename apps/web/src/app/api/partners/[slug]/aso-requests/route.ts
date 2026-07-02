@@ -9,7 +9,7 @@ import { getPartnerIdBySlug } from '@/db/queries/partners';
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session) return Response.json({ error: 'Authentication required' }, { status: 401 });
 
     const partnerId = await getPartnerIdBySlug(slug);
@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session) return Response.json({ error: 'Authentication required' }, { status: 401 });
 
     const partnerId = await getPartnerIdBySlug(slug);
@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const session = parseSessionFromRequest(request, slug);
+    const session = await parseSessionFromRequest(request, slug);
     if (!session) return Response.json({ error: 'Authentication required' }, { status: 401 });
 
     const partnerId = await getPartnerIdBySlug(slug);

@@ -4,18 +4,19 @@ import {
   listTradersByPartnerId,
   traderEmailExists,
 } from '@/db/queries/traders';
+import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+} from '@/lib/partner-admin-auth-guard';
 import argon2 from 'argon2';
 
-export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
+
   try {
-    const { slug } = await params;
-
-    const partnerId = await getPartnerIdBySlug(slug);
-    if (!partnerId) {
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    }
-
-    const traders = await listTradersByPartnerId(partnerId);
+    const traders = await listTradersByPartnerId(auth.partnerId);
     return Response.json(traders);
   } catch (e) {
     console.error(e);
@@ -24,29 +25,25 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const auth = await requirePartnerAdmin(request, slug);
+  if (isPartnerAdminUnauthorized(auth)) return auth;
+
   try {
-    const { slug } = await params;
     const body = await request.json();
-    const { name, email, partner_id, password } = body;
+    const { name, email, password } = body;
 
     if (!name || !email) {
       return Response.json({ error: 'name and email are required' }, { status: 400 });
     }
 
-    const partnerId = await getPartnerIdBySlug(slug);
-    if (!partnerId) {
-      return Response.json({ error: 'Partner not found' }, { status: 404 });
-    }
-
-    const pid = partner_id || partnerId;
-
-    if (await traderEmailExists(pid, email)) {
+    if (await traderEmailExists(auth.partnerId, email)) {
       return Response.json({ error: 'A trader with this email already exists.' }, { status: 409 });
     }
 
     const passwordHash = password ? await argon2.hash(password) : null;
     const trader = await createTraderWithCount({
-      partnerId: pid,
+      partnerId: auth.partnerId,
       name,
       email,
       passwordHash,

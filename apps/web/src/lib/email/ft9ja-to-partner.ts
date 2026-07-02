@@ -315,12 +315,20 @@ function licenseReference(partner: PartnerRecipient, date: Date) {
   return `LIC-${partner.slug.toUpperCase()}-${date.getFullYear()}${month}`;
 }
 
-export async function sendPartnerWelcomeEmail(partner: PartnerRecipient) {
-  const { OWNER_NAME, FIRM_NAME, SLUG, ADMIN_PIN } = partnerVariables(partner);
+export async function sendPartnerWelcomeEmail(
+  partner: PartnerRecipient,
+  adminPinPlaintext?: string
+) {
+  const { OWNER_NAME, FIRM_NAME, SLUG } = partnerVariables(partner);
   return sendFt9jaPartnerEmail({
     template: 'p-01-welcome',
     to: partner.owner_email,
-    variables: { OWNER_NAME, FIRM_NAME, SLUG, ADMIN_PIN },
+    variables: {
+      OWNER_NAME,
+      FIRM_NAME,
+      SLUG,
+      ADMIN_PIN: adminPinPlaintext ?? '',
+    },
   });
 }
 

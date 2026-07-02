@@ -41,6 +41,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
 
   // Set-password (existing account with no password)
   const [setpwTraderId, setSetpwTraderId] = useState<number | null>(null);
+  const [setpwSetupToken, setSetpwSetupToken] = useState<string | null>(null);
   const [setpwEmail, setSetpwEmail] = useState('');
   const [setpwPassword, setSetpwPassword] = useState('');
   const [setpwConfirm, setSetpwConfirm] = useState('');
@@ -77,8 +78,12 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
       const data = await res.json();
       if (!res.ok) {
         if (data.error === 'no_password') {
-          const err = new Error('no_password') as Error & { traderId?: number };
+          const err = new Error('no_password') as Error & {
+            traderId?: number;
+            setupToken?: string;
+          };
           err.traderId = data.traderId;
+          err.setupToken = data.setup_token;
           throw err;
         }
         throw new Error(data.error || 'Login failed');
@@ -86,12 +91,13 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
       return data;
     },
     onSuccess: () => router.push(`/${slug}/dashboard`),
-    onError: (err: Error & { traderId?: number }) => {
+    onError: (err: Error & { traderId?: number; setupToken?: string }) => {
       if (err.message === 'no_account') {
         setSignInError('No account found with that email. Did you mean to register?');
       } else if (err.message === 'no_password') {
         setSetpwEmail(signInEmail.trim());
         setSetpwTraderId(err.traderId ?? null);
+        setSetpwSetupToken(err.setupToken ?? null);
         setView('set_password');
         setSignInError(null);
       } else if (err.message === 'invalid_password') {
@@ -106,6 +112,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
     mutationFn: async () => {
       if (setpwPassword !== setpwConfirm) throw new Error('Passwords do not match');
       if (setpwPassword.length < 8) throw new Error('Must be at least 8 characters');
+      if (!setpwSetupToken) throw new Error('Setup session expired. Try signing in again.');
       const res = await fetch(`/api/partners/${slug}/auth`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -113,6 +120,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
           email: setpwEmail,
           traderId: setpwTraderId,
           password: setpwPassword,
+          setup_token: setpwSetupToken,
         }),
       });
       if (!res.ok) {
@@ -129,7 +137,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
     mutationFn: async () => {
       if (regPw !== regConfirm) throw new Error('Passwords do not match');
       if (regPw.length < 8) throw new Error('Password must be at least 8 characters');
-      const res = await fetch(`/api/partners/${slug}/traders`, {
+      const res = await fetch(`/api/partners/${slug}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: regName.trim(), email: regEmail.trim(), password: regPw }),
@@ -138,14 +146,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
         const err = await res.json();
         throw new Error(err.error || 'Failed to register');
       }
-      // Auto-login
-      const loginRes = await fetch(`/api/partners/${slug}/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regEmail.trim(), password: regPw }),
-      });
-      if (!loginRes.ok) throw new Error('Registered — please sign in.');
-      return loginRes.json();
+      return res.json();
     },
     onSuccess: () => router.push(`/${slug}/dashboard`),
     onError: (err: Error) => setRegError(err.message),

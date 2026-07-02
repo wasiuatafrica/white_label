@@ -2,6 +2,9 @@
 import { use, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+const partnerAdminFetch = (input: string, init: RequestInit = {}) =>
+  fetch(input, { ...init, credentials: 'include' });
 import {
   Users,
   TrendingUp,
@@ -662,7 +665,7 @@ function PayoutsTab({
   }>({
     queryKey: ['payout-requests', slug],
     queryFn: async () => {
-      const res = await fetch(`/api/partners/${slug}/payout-requests`);
+      const res = await partnerAdminFetch(`/api/partners/${slug}/payout-requests`);
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -678,7 +681,7 @@ function PayoutsTab({
     mutationFn: async () => {
       if (!form.bank_name || !form.account_number || !form.account_name)
         throw new Error('All bank fields are required');
-      const res = await fetch(`/api/partners/${slug}/payout-requests`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/payout-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount_requested: balance, ...form }),
@@ -1362,14 +1365,27 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinLoading, setPinLoading] = useState(false);
-  const [verifiedPin, setVerifiedPin] = useState('');
+  const [currentAdminPin, setCurrentAdminPin] = useState('');
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const authed = sessionStorage.getItem(`partner_admin_${slug}`) === 'true';
-    const saved = sessionStorage.getItem(`partner_pin_${slug}`) || '';
-    setPinAuthed(authed);
-    setVerifiedPin(saved);
+    let cancelled = false;
+
+    async function checkSession() {
+      try {
+        const res = await partnerAdminFetch(`/api/partners/${slug}/verify-pin`);
+        if (!cancelled) {
+          setPinAuthed(res.ok);
+        }
+      } catch {
+        if (!cancelled) setPinAuthed(false);
+      }
+    }
+
+    void checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   async function handlePinSubmit(e: React.FormEvent) {
@@ -1377,17 +1393,14 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
     setPinLoading(true);
     setPinError(null);
     try {
-      const res = await fetch(`/api/partners/${slug}/verify-pin`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/verify-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: pinInput }),
       });
       const data = await res.json();
-      if (data.valid) {
-        sessionStorage.setItem(`partner_admin_${slug}`, 'true');
-        sessionStorage.setItem(`partner_pin_${slug}`, pinInput);
+      if (res.ok && data.valid) {
         setPinAuthed(true);
-        setVerifiedPin(pinInput);
       } else {
         setPinError('Incorrect PIN. Please try again.');
         setPinInput('');
@@ -1407,10 +1420,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
     setOpeningReceiptUrl(receiptUrl);
 
     try {
-      const res = await fetch(`/api/partners/${slug}/receipts`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/receipts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: receiptUrl, admin_pin: verifiedPin }),
+        body: JSON.stringify({ url: receiptUrl }),
       });
       const data = await res.json().catch(() => null);
 
@@ -1461,7 +1474,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const { data: partner, isLoading: partnerLoading } = useQuery<Partner>({
     queryKey: ['partner', slug],
     queryFn: async () => {
-      const res = await fetch(`/api/partners/${slug}`);
+      const res = await partnerAdminFetch(`/api/partners/${slug}`);
       if (!res.ok) throw new Error('Not found');
       return res.json();
     },
@@ -1500,7 +1513,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const { data: traders = [], isLoading: tradersLoading } = useQuery<Trader[]>({
     queryKey: ['traders', slug],
     queryFn: async () => {
-      const res = await fetch(`/api/partners/${slug}/traders`);
+      const res = await partnerAdminFetch(`/api/partners/${slug}/traders`);
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -1510,7 +1523,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const { data: evalData, isLoading: evalsLoading } = useQuery<{ evaluations: Evaluation[] }>({
     queryKey: ['evaluations', slug],
     queryFn: async () => {
-      const res = await fetch(`/api/partners/${slug}/evaluations`);
+      const res = await partnerAdminFetch(`/api/partners/${slug}/evaluations`);
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
@@ -1522,7 +1535,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   const addTrader = useMutation({
     mutationFn: async (data: { name: string; email: string; partner_id: number }) => {
-      const res = await fetch(`/api/partners/${slug}/traders`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/traders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -1546,11 +1559,11 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
     mutationFn: async () => {
       const payload: Record<string, unknown> = { ...brandForm };
       if (brandForm.admin_pin) {
-        payload.current_admin_pin = verifiedPin;
+        payload.current_admin_pin = currentAdminPin;
       } else {
         delete payload.admin_pin;
       }
-      const res = await fetch(`/api/partners/${slug}`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1564,8 +1577,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['partner', slug] });
       if (brandForm.admin_pin) {
-        sessionStorage.setItem(`partner_pin_${slug}`, brandForm.admin_pin);
-        setVerifiedPin(brandForm.admin_pin);
+        setCurrentAdminPin('');
       }
       setBrandSaved(true);
       setBrandError(null);
@@ -1578,7 +1590,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const generateLogos = useMutation({
     mutationFn: async () => {
       setLogoGenError(null);
-      const res = await fetch(`/api/partners/${slug}/generate-logo`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/generate-logo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1613,10 +1625,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       traderId: number;
       action: 'approved' | 'rejected';
     }) => {
-      const res = await fetch(`/api/partners/${slug}/traders/${traderId}/kyc`, {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/traders/${traderId}/kyc`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kyc_status: action, admin_pin: verifiedPin }),
+        body: JSON.stringify({ kyc_status: action }),
       });
       if (!res.ok) throw new Error('Failed');
       return res.json();
@@ -1775,12 +1787,11 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               <ExternalLink size={11} /> View Page
             </Link>
             <button
-              onClick={() => {
-                sessionStorage.removeItem(`partner_admin_${slug}`);
-                sessionStorage.removeItem(`partner_pin_${slug}`);
+              onClick={async () => {
+                await partnerAdminFetch(`/api/partners/${slug}/verify-pin`, { method: 'DELETE' });
                 setPinAuthed(false);
                 setPinInput('');
-                setVerifiedPin('');
+                setCurrentAdminPin('');
               }}
               className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-500 hover:border-gray-300"
             >
@@ -2455,8 +2466,20 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-gray-600">
-                    New PIN{' '}
-                    <span className="text-gray-400 font-normal">(leave blank to keep current)</span>
+                    Current PIN
+                  </label>
+                  <input
+                    type="password"
+                    value={currentAdminPin}
+                    onChange={(e) => setCurrentAdminPin(e.target.value)}
+                    placeholder="Enter current PIN"
+                    maxLength={12}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    className="mb-3 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-mono text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                  />
+                  <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                    New PIN
                   </label>
                   <input
                     type="password"
@@ -2471,7 +2494,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 </div>
                 <button
                   onClick={() => saveBranding.mutate()}
-                  disabled={!brandForm.admin_pin || saveBranding.isPending}
+                  disabled={!brandForm.admin_pin || !currentAdminPin || saveBranding.isPending}
                   className="mt-4 flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
                 >
                   <KeyRound size={13} /> Update PIN

@@ -15,8 +15,6 @@ import {
   TrendingUp,
   Search,
   Eye,
-  EyeOff,
-  Copy,
   Mail,
   BookOpen,
   X,
@@ -50,7 +48,7 @@ type Partner = {
   total_traders: number;
   total_revenue: string;
   payment_proof_url: string | null;
-  admin_pin: string;
+  admin_pin_configured: boolean;
   created_at: string;
 };
 
@@ -521,8 +519,6 @@ function PartnersTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [visiblePins, setVisiblePins] = useState<Set<number>>(new Set());
-  const [copiedPinId, setCopiedPinId] = useState<number | null>(null);
   const qc = useQueryClient();
 
   const { data: partners = [], isLoading } = useQuery<Partner[]>({
@@ -558,25 +554,6 @@ function PartnersTab({
   const totalRevenue = partners.reduce((s, p) => s + parseFloat(p.total_revenue || '0'), 0);
   const activeCount = partners.filter((p) => p.status === 'active').length;
   const pendingCount = partners.filter((p) => p.status === 'pending').length;
-
-  const togglePinVisibility = (partnerId: number) => {
-    setVisiblePins((current) => {
-      const next = new Set(current);
-      if (next.has(partnerId)) {
-        next.delete(partnerId);
-      } else {
-        next.add(partnerId);
-      }
-      return next;
-    });
-  };
-
-  const copyPin = async (partnerId: number, pin: string) => {
-    if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(pin);
-    setCopiedPinId(partnerId);
-    window.setTimeout(() => setCopiedPinId(null), 1600);
-  };
 
   return (
     <div className="space-y-5">
@@ -711,33 +688,15 @@ function PartnersTab({
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <span className="text-xs font-medium text-gray-400">Admin PIN</span>
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700">
-                          {p.admin_pin
-                            ? visiblePins.has(p.id)
-                              ? p.admin_pin
-                              : '••••'
-                            : 'No PIN'}
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                          {p.admin_pin_configured ? (
+                            <>
+                              <KeyRound size={11} /> Configured
+                            </>
+                          ) : (
+                            'Not set'
+                          )}
                         </span>
-                        {p.admin_pin && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => togglePinVisibility(p.id)}
-                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                            >
-                              {visiblePins.has(p.id) ? <EyeOff size={11} /> : <Eye size={11} />}
-                              {visiblePins.has(p.id) ? 'Hide' : 'Show'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => copyPin(p.id, p.admin_pin)}
-                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                            >
-                              <Copy size={11} />
-                              {copiedPinId === p.id ? 'Copied' : 'Copy'}
-                            </button>
-                          </>
-                        )}
                       </div>
                       {/* Mobile stats */}
                       <div className="mt-1.5 flex items-center gap-3 text-xs text-gray-500 sm:hidden">

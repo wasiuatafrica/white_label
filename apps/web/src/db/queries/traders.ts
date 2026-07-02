@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { db } from '../index';
-import { mapTrader } from '../mappers';
+import { mapTrader, mapTraderForPartnerAdmin } from '../mappers';
 import type { DbOrTx } from '../types';
 import { traders } from '../schema/traders';
 import { incrementPartnerTraders } from './partners';
@@ -11,7 +11,7 @@ export async function listTradersByPartnerId(partnerId: number) {
     .from(traders)
     .where(eq(traders.partnerId, partnerId))
     .orderBy(sql`${traders.createdAt} DESC`);
-  return rows.map(mapTrader);
+  return rows.map(mapTraderForPartnerAdmin);
 }
 
 export async function getTraderByEmail(partnerId: number, email: string, tx: DbOrTx = db) {
@@ -124,7 +124,7 @@ export async function createTrader(
       passwordHash: data.passwordHash ?? null,
     })
     .returning();
-  return mapTrader(row);
+  return mapTraderForPartnerAdmin(row);
 }
 
 export async function updateTraderProfile(
