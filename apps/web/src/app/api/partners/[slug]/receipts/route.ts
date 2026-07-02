@@ -1,9 +1,14 @@
 import { getPartnerPrivateBySlug } from '@/db/queries/partners';
+import { partnerOwnsEvaluationReceipt } from '@/db/queries/evaluations';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
-import { createS3PresignedGetUrl, parseS3ObjectUrl } from '@/lib/storage/s3';
+import {
+  createS3PresignedGetUrl,
+  hasAllowedS3KeyPrefix,
+  parseS3ObjectUrl,
+} from '@/lib/storage/s3';
 
 export const runtime = 'nodejs';
 
@@ -14,8 +19,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
   try {
     const { url } = await request.json();
+    const receiptUrl = String(url || '');
 
-    if (!url) {
+    if (!receiptUrl) {
       return Response.json({ error: 'url is required' }, { status: 400 });
     }
 
@@ -33,9 +39,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'AWS receipt viewing is not configured' }, { status: 500 });
     }
 
-    const key = parseS3ObjectUrl(String(url), bucket, region);
+    const key = parseS3ObjectUrl(receiptUrl, bucket, region);
     if (!key) {
       return Response.json({ error: 'Receipt URL is not valid for this bucket' }, { status: 400 });
+    }
+    const isSlugScopedKey = hasAllowedS3KeyPrefix(key, [
+      `uploads/receipts/${slug}/`,
+      `uploads/logos/${slug}/`,
+    ]);
+    const isLegacyReceiptKey = hasAllowedS3KeyPrefix(key, ['uploads/receipts/']);
+    const ownsLegacyReceipt =
+      isLegacyReceiptKey && (await partnerOwnsEvaluationReceipt(partner.id, receiptUrl));
+
+    if (!isSlugScopedKey && !ownsLegacyReceipt) {
+      return Response.json({ error: 'Receipt URL is not allowed' }, { status: 403 });
     }
 
     const signedUrl = createS3PresignedGetUrl({

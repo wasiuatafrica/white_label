@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { authorizeUpload } from '@/lib/upload-auth';
 import { buildS3ObjectUrl, putObjectToS3 } from '@/lib/storage/s3';
+import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 import { validateUploadFile } from '@/lib/upload-validation';
 
 export const runtime = 'nodejs';
@@ -42,8 +43,12 @@ export async function POST(request: Request) {
     }
 
     const slug = readPartnerSlug(request, formData);
+    const normalizedSlug = slug ? normalizePartnerSlug(slug) : null;
+    if (slug && (!normalizedSlug || !isValidPartnerSlug(normalizedSlug))) {
+      return Response.json({ error: 'Valid partner slug is required' }, { status: 400 });
+    }
     const uploadIntent = readUploadIntent(request, formData);
-    const auth = await authorizeUpload(request, { slug, uploadIntent });
+    const auth = await authorizeUpload(request, { slug: normalizedSlug, uploadIntent });
     if (!auth.authorized) {
       return Response.json({ error: auth.error }, { status: auth.status });
     }
@@ -59,7 +64,11 @@ export async function POST(request: Request) {
     }
 
     const safeName = sanitizeFileName(file.name || 'receipt');
-    const key = `uploads/receipts/${new Date().toISOString().slice(0, 10)}/${randomUUID()}-${safeName}`;
+    const datePrefix = new Date().toISOString().slice(0, 10);
+    const receiptPrefix = normalizedSlug
+      ? `uploads/receipts/${normalizedSlug}/${datePrefix}`
+      : `uploads/receipts/${datePrefix}`;
+    const key = `${receiptPrefix}/${randomUUID()}-${safeName}`;
 
     await putObjectToS3({
       bucket,

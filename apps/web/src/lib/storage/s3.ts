@@ -45,7 +45,13 @@ export function buildS3ObjectUrl(bucket: string, region: string, key: string) {
 }
 
 export function parseS3ObjectUrl(url: string, expectedBucket: string, expectedRegion: string) {
-  const parsed = new URL(url);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
   const expectedHost = `${expectedBucket}.s3.${expectedRegion}.amazonaws.com`;
 
   if (parsed.protocol !== 'https:' || parsed.hostname !== expectedHost) {
@@ -59,6 +65,10 @@ export function parseS3ObjectUrl(url: string, expectedBucket: string, expectedRe
     .join('/');
 
   return key || null;
+}
+
+export function hasAllowedS3KeyPrefix(key: string, allowedPrefixes: string[]) {
+  return allowedPrefixes.some((prefix) => key.startsWith(prefix));
 }
 
 export async function putObjectToS3(params: {

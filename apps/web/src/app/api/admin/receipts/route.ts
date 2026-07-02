@@ -1,7 +1,13 @@
-import { createS3PresignedGetUrl, parseS3ObjectUrl } from '@/lib/storage/s3';
+import {
+  createS3PresignedGetUrl,
+  hasAllowedS3KeyPrefix,
+  parseS3ObjectUrl,
+} from '@/lib/storage/s3';
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
 
 export const runtime = 'nodejs';
+
+const ADMIN_RECEIPT_PREFIXES = ['uploads/receipts/', 'uploads/logos/'];
 
 export async function GET(request: Request) {
   const auth = await requireAdmin(request);
@@ -27,6 +33,9 @@ export async function GET(request: Request) {
     const key = parseS3ObjectUrl(receiptUrl, bucket, region);
     if (!key) {
       return Response.json({ error: 'Receipt URL is not valid for this bucket' }, { status: 400 });
+    }
+    if (!hasAllowedS3KeyPrefix(key, ADMIN_RECEIPT_PREFIXES)) {
+      return Response.json({ error: 'Receipt URL is not allowed' }, { status: 403 });
     }
 
     const signedUrl = createS3PresignedGetUrl({

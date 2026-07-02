@@ -1,8 +1,13 @@
 import { getTakenSlugs } from '@/db/queries/partners';
 import { generateSubdomainSuggestions } from '@/lib/openai/subdomain-suggestions';
+import { checkRateLimit, getRequestRateLimitKey } from '@/lib/rate-limit';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
+import { verifyUploadIntentToken } from '@/lib/upload-intent-token';
 
 export const runtime = 'nodejs';
+
+const MAX_SUGGESTION_REQUESTS = 6;
+const SUGGESTION_WINDOW_MS = 10 * 60 * 1000;
 
 type SuggestSlugResponse = {
   suggestions: Array<{
@@ -14,7 +19,21 @@ type SuggestSlugResponse = {
 
 export async function POST(request: Request) {
   try {
+    const rateKey = getRequestRateLimitKey(request, 'partner-slug-suggestions');
+    const limited = checkRateLimit(rateKey, MAX_SUGGESTION_REQUESTS, SUGGESTION_WINDOW_MS);
+    if (!limited.allowed) {
+      return Response.json(
+        { error: 'Too many suggestion requests. Try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
+
     const body = await request.json();
+    const signupIntent = verifyUploadIntentToken(String(body.signup_intent || ''));
+    if (signupIntent?.purpose !== 'partner_apply' || !signupIntent.attemptId) {
+      return Response.json({ error: 'Signup authorization is required' }, { status: 403 });
+    }
+
     const firmName = String(body.firm_name || '').trim();
     const tagline = String(body.tagline || '').trim();
     const idea = String(body.idea || '').trim();

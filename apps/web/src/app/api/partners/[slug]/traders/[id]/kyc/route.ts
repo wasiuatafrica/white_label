@@ -4,6 +4,27 @@ import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
+import { hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
+
+function validateKycDocumentUrl(url: unknown, slug: string) {
+  const region = process.env.AWS_REGION;
+  const bucket = process.env.AWS_S3_BUCKET;
+  if (!region || !bucket) {
+    return { ok: false as const, status: 500, error: 'KYC document storage is not configured' };
+  }
+
+  const value = typeof url === 'string' ? url.trim() : '';
+  if (!value) {
+    return { ok: false as const, status: 400, error: 'KYC document URL is required' };
+  }
+
+  const key = parseS3ObjectUrl(value, bucket, region);
+  if (!key || !hasAllowedS3KeyPrefix(key, [`uploads/receipts/${slug}/`])) {
+    return { ok: false as const, status: 400, error: 'KYC document URL is not valid' };
+  }
+
+  return { ok: true as const, url: value };
+}
 
 export async function GET(
   request: Request,
@@ -46,13 +67,31 @@ export async function POST(
       );
     }
 
+    const idUrlValidation = validateKycDocumentUrl(id_url, slug);
+    if (!idUrlValidation.ok) {
+      return Response.json(
+        { error: idUrlValidation.error },
+        { status: idUrlValidation.status }
+      );
+    }
+
+    const selfieUrlValidation = selfie_url
+      ? validateKycDocumentUrl(selfie_url, slug)
+      : { ok: true as const, url: null };
+    if (!selfieUrlValidation.ok) {
+      return Response.json(
+        { error: selfieUrlValidation.error },
+        { status: selfieUrlValidation.status }
+      );
+    }
+
     await submitTraderKyc(Number(id), {
       fullName: full_name,
       idType: id_type,
       idNumber: id_number,
-      idUrl: id_url,
+      idUrl: idUrlValidation.url,
       address,
-      selfieUrl: selfie_url,
+      selfieUrl: selfieUrlValidation.url,
     });
 
     return Response.json({ success: true });

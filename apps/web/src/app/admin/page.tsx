@@ -362,11 +362,13 @@ function KYCDrawer({
   row,
   onClose,
   onDecision,
+  onOpenDocument,
   loading,
 }: {
   row: KYCRow;
   onClose: () => void;
   onDecision: (status: 'approved' | 'rejected') => void;
+  onOpenDocument: (documentUrl: string) => void;
   loading: boolean;
 }) {
   return (
@@ -437,28 +439,26 @@ function KYCDrawer({
             </p>
             <div className="grid grid-cols-2 gap-3">
               {row.kyc_id_url && (
-                <a
-                  href={row.kyc_id_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => onOpenDocument(row.kyc_id_url)}
                   className="group relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-5 hover:border-[#16A34A]/40 hover:bg-[#16A34A]/5 transition-colors"
                 >
                   <FileText size={20} className="text-gray-400 group-hover:text-[#16A34A]" />
                   <span className="text-xs font-medium text-gray-500">ID Document</span>
                   <ZoomIn size={12} className="text-gray-400" />
-                </a>
+                </button>
               )}
               {row.kyc_selfie_url ? (
-                <a
-                  href={row.kyc_selfie_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => onOpenDocument(row.kyc_selfie_url!)}
                   className="group relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-5 hover:border-[#16A34A]/40 hover:bg-[#16A34A]/5 transition-colors"
                 >
                   <Eye size={20} className="text-gray-400 group-hover:text-[#16A34A]" />
                   <span className="text-xs font-medium text-gray-500">Selfie with ID</span>
                   <ZoomIn size={12} className="text-gray-400" />
-                </a>
+                </button>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-100 bg-gray-50 p-5 opacity-40">
                   <Eye size={20} className="text-gray-300" />
@@ -829,6 +829,32 @@ function KYCTab() {
     },
   });
 
+  const openKycDocument = async (documentUrl: string) => {
+    const opened = window.open('', '_blank');
+    if (opened) {
+      opened.opener = null;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/receipts?url=${encodeURIComponent(documentUrl)}`);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error || 'Unable to open document');
+      }
+
+      if (opened) {
+        opened.location.href = data.url;
+      } else {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      if (opened) opened.close();
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Unable to open document');
+    }
+  };
+
   const filtered = filter === 'all' ? rows : rows.filter((r) => r.kyc_status === filter);
   const pendingCount = rows.filter((r) => r.kyc_status === 'submitted').length;
 
@@ -841,6 +867,7 @@ function KYCTab() {
           onDecision={(status) =>
             decide.mutate({ trader_id: selected.trader_id, kyc_status: status })
           }
+          onOpenDocument={openKycDocument}
           loading={decide.isPending}
         />
       )}

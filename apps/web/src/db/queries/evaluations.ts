@@ -232,6 +232,20 @@ export async function getActiveEvaluationForTradeAccount(
   return row ?? null;
 }
 
+export async function partnerOwnsEvaluationReceipt(partnerId: number, receiptUrl: string) {
+  const [row] = await db
+    .select({ id: evaluations.id })
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.partnerId, partnerId),
+        eq(evaluations.paymentProofUrl, receiptUrl)
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function createEvaluationWithTrader(data: {
   partnerId: number;
   name: string;

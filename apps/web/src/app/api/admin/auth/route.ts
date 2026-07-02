@@ -13,6 +13,14 @@ import {
   createAdminSessionToken,
   parseAdminSessionFromRequest,
 } from '@/lib/admin-session';
+import {
+  checkRateLimit,
+  getRequestRateLimitKey,
+  resetRateLimit,
+} from '@/lib/rate-limit';
+
+const MAX_ADMIN_LOGIN_ATTEMPTS = 8;
+const ADMIN_LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 function cookieOptions() {
   return { secure: process.env.NODE_ENV === 'production' };
@@ -53,6 +61,15 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
+    const rateKey = `${getRequestRateLimitKey(request, 'admin-login')}:${email}`;
+    const limited = checkRateLimit(rateKey, MAX_ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW_MS);
+    if (!limited.allowed) {
+      return Response.json(
+        { error: 'Too many login attempts. Try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
+
     const user = await getAdminUserByEmail(email);
     if (!user || !user.isActive) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
@@ -62,6 +79,7 @@ export async function POST(request: Request) {
     if (!valid) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
     }
+    resetRateLimit(rateKey);
 
     const purpose = user.totpEnabled ? 'totp_verify' : 'totp_setup';
     const pendingToken = createAdminPendingToken(user.id, purpose);

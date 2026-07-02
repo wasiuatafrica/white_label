@@ -1911,6 +1911,9 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
   });
   const [kycError, setKycError] = useState<string | null>(null);
   const [kycDone, setKycDone] = useState(false);
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null);
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
+  const [upload, { loading: uploadingKycDocument }] = useUpload();
 
   const kycQuery = useQuery({
     queryKey: ['kyc', slug, trader.id],
@@ -1939,10 +1942,30 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
 
   const kycMutation = useMutation({
     mutationFn: async () => {
+      if (!idDocumentFile && !form.id_url) {
+        throw new Error('Upload your ID document before submitting.');
+      }
+
+      const payload = { ...form };
+      if (idDocumentFile) {
+        const uploaded = await upload({ file: idDocumentFile, slug });
+        if (uploaded.error || !uploaded.url) {
+          throw new Error(uploaded.error || 'ID document upload failed');
+        }
+        payload.id_url = uploaded.url;
+      }
+      if (selfieFile) {
+        const uploaded = await upload({ file: selfieFile, slug });
+        if (uploaded.error || !uploaded.url) {
+          throw new Error(uploaded.error || 'Selfie upload failed');
+        }
+        payload.selfie_url = uploaded.url;
+      }
+
       const res = await fetch(`/api/partners/${slug}/traders/${trader.id}/kyc`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -1955,6 +1978,8 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
       qc.invalidateQueries({ queryKey: ['session', slug] });
       setKycDone(true);
       setKycError(null);
+      setIdDocumentFile(null);
+      setSelfieFile(null);
     },
     onError: (e: Error) => setKycError(e.message),
   });
@@ -2021,18 +2046,6 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
                 placeholder: '12 Example Street, Lagos, Nigeria',
                 type: 'text',
               },
-              {
-                label: 'ID Document URL',
-                key: 'id_url',
-                placeholder: 'https://link-to-your-id-scan.com',
-                type: 'url',
-              },
-              {
-                label: 'Selfie URL (holding ID)',
-                key: 'selfie_url',
-                placeholder: 'https://link-to-selfie.com (optional)',
-                type: 'url',
-              },
             ].map((field) => (
               <div key={field.key}>
                 <label className="mb-1.5 block text-xs font-medium text-gray-600">
@@ -2048,6 +2061,42 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
                 />
               </div>
             ))}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                  ID Document
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setIdDocumentFile(e.target.files?.[0] ?? null)}
+                  disabled={isReadOnly || uploadingKycDocument}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                {(idDocumentFile || form.id_url) && (
+                  <p className="mt-1 text-xs text-green-600">
+                    {idDocumentFile ? idDocumentFile.name : 'ID document already uploaded'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-gray-600">
+                  Selfie Holding ID (optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setSelfieFile(e.target.files?.[0] ?? null)}
+                  disabled={isReadOnly || uploadingKycDocument}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                {(selfieFile || form.selfie_url) && (
+                  <p className="mt-1 text-xs text-green-600">
+                    {selfieFile ? selfieFile.name : 'Selfie already uploaded'}
+                  </p>
+                )}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-gray-600">ID Type</label>
@@ -2080,8 +2129,8 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
               <div className="flex items-start gap-2">
                 <Upload size={12} className="mt-0.5 shrink-0" />
                 <div>
-                  <strong className="text-gray-700">How to upload:</strong> Upload your ID to Google
-                  Drive or Dropbox, set it to public view, then paste the link above.
+                  <strong className="text-gray-700">Document upload:</strong> Files are uploaded
+                  securely to FT9ja storage when you submit this form.
                 </div>
               </div>
             </div>
@@ -2096,14 +2145,15 @@ function KYCTab({ trader, slug, primary }: { trader: Trader; slug: string; prima
                 !form.full_name ||
                 !form.id_type ||
                 !form.id_number ||
-                !form.id_url ||
+                (!form.id_url && !idDocumentFile) ||
                 !form.address ||
-                kycMutation.isPending
+                kycMutation.isPending ||
+                uploadingKycDocument
               }
               className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
               style={{ backgroundColor: primary }}
             >
-              {kycMutation.isPending ? (
+              {kycMutation.isPending || uploadingKycDocument ? (
                 <>
                   <Loader2 size={14} className="animate-spin" /> Submitting...
                 </>

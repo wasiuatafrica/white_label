@@ -190,6 +190,7 @@ export default function ApplyPage() {
     setSlugSuggestions([]);
 
     try {
+      const signupIntent = await requestPartnerApplyUploadIntent(attemptIdRef.current);
       const res = await fetch('/api/partners/suggest-slug', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,6 +198,7 @@ export default function ApplyPage() {
           firm_name: form.firm_name,
           tagline: form.tagline,
           idea: form.slug,
+          signup_intent: signupIntent,
         }),
       });
 

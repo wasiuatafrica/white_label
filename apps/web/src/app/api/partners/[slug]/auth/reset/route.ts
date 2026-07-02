@@ -8,7 +8,16 @@ import {
 import argon2 from 'argon2';
 import crypto from 'crypto';
 import { sendEmail } from '@/app/api/utils/send-email';
+import {
+  checkRateLimit,
+  getRequestRateLimitKey,
+  resetRateLimit,
+} from '@/lib/rate-limit';
 import { getPartnerUrl } from '@/lib/tenant';
+
+const MAX_RESET_EMAIL_REQUESTS = 5;
+const MAX_RESET_ATTEMPTS = 10;
+const RESET_WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -17,11 +26,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const { email } = body;
 
     if (!email) return Response.json({ error: 'Email required' }, { status: 400 });
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const rateKey = `${getRequestRateLimitKey(request, 'trader-password-reset-email')}:${slug}:${normalizedEmail}`;
+    const limited = checkRateLimit(rateKey, MAX_RESET_EMAIL_REQUESTS, RESET_WINDOW_MS);
+    if (!limited.allowed) {
+      return Response.json(
+        { error: 'Too many password reset requests. Try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
 
     const partner = await getPartnerWithPinBySlug(slug);
     if (!partner) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const trader = await getTraderForReset(partner.id, email);
+    const trader = await getTraderForReset(partner.id, normalizedEmail);
 
     if (!trader) return Response.json({ success: true });
 
@@ -32,12 +51,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const resetUrl = getPartnerUrl(
       slug,
-      `/reset-password?token=${token}&email=${encodeURIComponent(email)}`
+      `/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`
     );
 
     try {
       await sendEmail({
-        to: email,
+        to: normalizedEmail,
         from: 'FT9ja <onboarding@resend.dev>',
         subject: `Reset your ${partner.firm_name} password`,
         text: `Reset your ${partner.firm_name} password: ${resetUrl}`,
@@ -83,17 +102,28 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
     if (password.length < 8) {
       return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
     }
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const rateKey = `${getRequestRateLimitKey(request, 'trader-password-reset-complete')}:${slug}:${normalizedEmail}`;
+    const limited = checkRateLimit(rateKey, MAX_RESET_ATTEMPTS, RESET_WINDOW_MS);
+    if (!limited.allowed) {
+      return Response.json(
+        { error: 'Too many reset attempts. Try again later.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
 
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const trader = await getTraderByResetToken(partnerId, email, token);
+    const trader = await getTraderByResetToken(partnerId, normalizedEmail, token);
     if (!trader) {
       return Response.json({ error: 'Invalid or expired reset link' }, { status: 400 });
     }
 
     const hash = await argon2.hash(password);
     await completePasswordReset(trader.id, hash);
+    resetRateLimit(rateKey);
 
     return Response.json({ success: true });
   } catch (e) {
