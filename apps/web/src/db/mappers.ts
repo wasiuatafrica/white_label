@@ -80,6 +80,10 @@ export function mapTraderForPartnerAdmin(row: Trader) {
   return rest;
 }
 
+export function mapTraderPublic(row: Trader) {
+  return mapTraderForPartnerAdmin(row);
+}
+
 export function mapEvaluation(row: Evaluation) {
   return {
     id: row.id,

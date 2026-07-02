@@ -1226,6 +1226,26 @@ function TradeAccountsTab() {
     return <Badge color="green">Active</Badge>;
   };
 
+  const openTraderDashboard = async (row: TradeAccountRow) => {
+    try {
+      const res = await fetch('/api/admin/trader-view-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: row.partner_slug, email: row.trader_email }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { view_token?: string };
+      if (!data.view_token) return;
+
+      const path = `/dashboard?email=${encodeURIComponent(row.trader_email)}&view_token=${encodeURIComponent(data.view_token)}${
+        row.eval_id ? `&eval_id=${row.eval_id}` : ''
+      }`;
+      window.open(getPartnerUrl(row.partner_slug, path), '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Failed to open trader dashboard:', error);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -1391,19 +1411,13 @@ function TradeAccountsTab() {
                           </p>
                         </div>
                         <div className="flex flex-col items-start gap-1 sm:items-end">
-                          <Link
-                            href={getPartnerUrl(
-                              row.partner_slug,
-                              `/dashboard?email=${encodeURIComponent(row.trader_email)}${
-                                row.eval_id ? `&eval_id=${row.eval_id}` : ''
-                              }`
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => void openTraderDashboard(row)}
                             className="inline-flex items-center gap-1 text-xs font-medium text-[#16A34A] hover:underline"
                           >
                             View dashboard <ExternalLink size={11} />
-                          </Link>
+                          </button>
                           <span className="text-xs text-gray-400">
                             Created {formatDate(row.created_at)}
                           </span>

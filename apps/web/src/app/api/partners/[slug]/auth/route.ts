@@ -1,4 +1,4 @@
-import { getPartnerIdBySlug } from '@/db/queries/partners';
+import { getPartnerIdBySlug, getPartnerWithPinBySlug } from '@/db/queries/partners';
 import {
   getTraderForLogin,
   getTraderForPasswordSetup,
@@ -9,7 +9,6 @@ import argon2 from 'argon2';
 import {
   createSessionToken,
   parseSessionFromRequest,
-  getSessionCookieName,
 } from '@/app/api/utils/session';
 import {
   checkRateLimit,
@@ -17,10 +16,48 @@ import {
   resetRateLimit,
 } from '@/lib/rate-limit';
 import { createTraderSetupToken, verifyTraderSetupToken } from '@/lib/trader-setup-token';
+import { buildTraderSessionCookie, clearTraderSessionCookie } from '@/lib/trader-session-cookie';
+import { sendEmail } from '@/app/api/utils/send-email';
+import { getPartnerUrl } from '@/lib/tenant';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
+async function sendTraderPasswordSetupEmail(options: {
+  slug: string;
+  firmName: string;
+  traderName: string;
+  email: string;
+  setupToken: string;
+}) {
+  const setupUrl = getPartnerUrl(
+    options.slug,
+    `/set-password?token=${encodeURIComponent(options.setupToken)}&email=${encodeURIComponent(options.email)}`
+  );
+
+  await sendEmail({
+    to: options.email,
+    subject: `Set your ${options.firmName} password`,
+    text: `Set your ${options.firmName} password: ${setupUrl}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="font-size:20px;font-weight:900;color:#111;margin-bottom:8px">Set Your Password</h2>
+        <p style="color:#555;font-size:14px">Hi ${options.traderName},</p>
+        <p style="color:#555;font-size:14px">
+          Finish setting up your account for <strong>${options.firmName}</strong>.
+          This link expires in <strong>1 hour</strong>.
+        </p>
+        <a href="${setupUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#16A34A;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:14px">
+          Set My Password
+        </a>
+        <p style="color:#999;font-size:12px;margin-top:24px">
+          If you did not request this, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -48,7 +85,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const rateKey = `${getRequestRateLimitKey(request, 'trader-login')}:${slug}:${String(email).toLowerCase()}`;
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const rateKey = `${getRequestRateLimitKey(request, 'trader-login')}:${slug}:${normalizedEmail}`;
     const limited = checkRateLimit(rateKey, MAX_LOGIN_ATTEMPTS, LOGIN_WINDOW_MS);
     if (!limited.allowed) {
       return Response.json(
@@ -63,7 +101,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const trader = await getTraderForLogin(partnerId, email);
+    const partner = await getPartnerWithPinBySlug(slug);
+    const trader = await getTraderForLogin(partnerId, normalizedEmail);
     if (!trader) return Response.json({ error: 'no_account' }, { status: 401 });
 
     if (!trader.password_hash) {
@@ -73,8 +112,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         email: trader.email,
         slug,
       });
+
+      try {
+        await sendTraderPasswordSetupEmail({
+          slug,
+          firmName: partner?.firm_name || slug,
+          traderName: trader.name,
+          email: trader.email,
+          setupToken,
+        });
+      } catch (emailErr) {
+        console.error('Failed to send password setup email:', emailErr);
+        return Response.json(
+          { error: 'Unable to send password setup email. Try again later.' },
+          { status: 503 }
+        );
+      }
+
       return Response.json(
-        { error: 'no_password', traderId: trader.id, setup_token: setupToken },
+        {
+          error: 'no_password',
+          message: 'Check your email for a link to set your password.',
+        },
         { status: 401 }
       );
     }
@@ -90,16 +149,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       slug,
       exp: Date.now() + SEVEN_DAYS * 1000,
     });
-    const cookieName = getSessionCookieName(slug);
 
     const res = Response.json({
       success: true,
       trader: { id: trader.id, name: trader.name, email: trader.email },
     });
-    res.headers.set(
-      'Set-Cookie',
-      `${cookieName}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SEVEN_DAYS}`
-    );
+    res.headers.set('Set-Cookie', buildTraderSessionCookie(slug, token));
     return res;
   } catch (e) {
     console.error(e);
@@ -111,7 +166,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
   try {
     const { slug } = await params;
     const body = await request.json();
-    const { email, traderId, password, setup_token } = body;
+    const { email, password, setup_token } = body;
 
     if (!password || password.length < 8) {
       return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
@@ -122,12 +177,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     }
 
     const tokenPayload = verifyTraderSetupToken(setup_token);
-    if (
-      !tokenPayload ||
-      tokenPayload.slug !== slug ||
-      tokenPayload.traderId !== Number(traderId) ||
-      tokenPayload.email !== email
-    ) {
+    if (!tokenPayload || tokenPayload.slug !== slug) {
+      return Response.json({ error: 'Invalid or expired setup token' }, { status: 400 });
+    }
+
+    const normalizedEmail = String(email || tokenPayload.email).trim().toLowerCase();
+    if (tokenPayload.email !== normalizedEmail) {
       return Response.json({ error: 'Invalid or expired setup token' }, { status: 400 });
     }
 
@@ -136,7 +191,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    const trader = await getTraderForPasswordSetup(traderId, email, partnerId);
+    const trader = await getTraderForPasswordSetup(
+      tokenPayload.traderId,
+      tokenPayload.email,
+      partnerId
+    );
     if (!trader) {
       return Response.json({ error: 'Invalid request or password already set' }, { status: 400 });
     }
@@ -150,16 +209,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       slug,
       exp: Date.now() + SEVEN_DAYS * 1000,
     });
-    const cookieName = getSessionCookieName(slug);
 
     const res = Response.json({
       success: true,
       trader: { id: trader.id, name: trader.name, email: trader.email },
     });
-    res.headers.set(
-      'Set-Cookie',
-      `${cookieName}=${sessionToken}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SEVEN_DAYS}`
-    );
+    res.headers.set('Set-Cookie', buildTraderSessionCookie(slug, sessionToken));
     return res;
   } catch (e) {
     console.error(e);
@@ -169,8 +224,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const cookieName = getSessionCookieName(slug);
   const res = Response.json({ success: true });
-  res.headers.set('Set-Cookie', `${cookieName}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+  res.headers.set('Set-Cookie', clearTraderSessionCookie(slug));
   return res;
 }

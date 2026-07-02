@@ -1,6 +1,6 @@
 'use client';
 import { getPartnerUrl, isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
-import useUpload from '@/utils/useUpload';
+import useUpload, { requestPartnerApplyUploadIntent } from '@/utils/useUpload';
 import { ArrowLeft, ArrowRight, CheckCircle, Loader2, Sparkles, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -303,12 +303,17 @@ export default function ApplyPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     setProofFileName(file.name);
-    const result = await upload({ file });
-    if (result.url) {
-      set('payment_proof_url', result.url);
-      void trackSignup('payment_started', 2);
-    } else {
-      setError(result.error || 'Upload failed. Please try again.');
+    try {
+      const uploadIntent = await requestPartnerApplyUploadIntent(attemptIdRef.current);
+      const result = await upload({ file, uploadIntent });
+      if (result.url) {
+        set('payment_proof_url', result.url);
+        void trackSignup('payment_started', 2);
+      } else {
+        setError(result.error || 'Upload failed. Please try again.');
+      }
+    } catch (uploadErr) {
+      setError(uploadErr instanceof Error ? uploadErr.message : 'Upload failed. Please try again.');
     }
   }
 

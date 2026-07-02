@@ -435,7 +435,7 @@ function DashboardPurchaseModal({
     mutationFn: async () => {
       if (!proofFile) throw new Error('Upload payment evidence before submitting.');
       setError(null);
-      const uploaded = await upload({ file: proofFile });
+      const uploaded = await upload({ file: proofFile, slug });
       if (uploaded.error || !uploaded.url) {
         throw new Error(uploaded.error || 'Upload failed');
       }
@@ -2127,6 +2127,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get('email');
+  const viewTokenParam = searchParams.get('view_token');
   const tabParam = searchParams.get('tab');
   const qc = useQueryClient();
 
@@ -2171,11 +2172,13 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     isLoading: evalLoading,
     isError: evalError,
   } = useQuery<{ trader: Trader; evaluations: Evaluation[] }>({
-    queryKey: ['evaluations', slug, email],
+    queryKey: ['evaluations', slug, email, viewTokenParam],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/partners/${slug}/evaluations?email=${encodeURIComponent(email!)}`
-      );
+      const params = new URLSearchParams({ email: email! });
+      if (viewTokenParam) {
+        params.set('view_token', viewTokenParam);
+      }
+      const res = await fetch(`/api/partners/${slug}/evaluations?${params.toString()}`);
       if (!res.ok) throw new Error('Not found');
       return res.json();
     },

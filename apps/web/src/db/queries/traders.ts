@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { db } from '../index';
-import { mapTrader, mapTraderForPartnerAdmin } from '../mappers';
+import { mapTrader, mapTraderForPartnerAdmin, mapTraderPublic } from '../mappers';
 import type { DbOrTx } from '../types';
 import { traders } from '../schema/traders';
 import { incrementPartnerTraders } from './partners';
@@ -21,6 +21,15 @@ export async function getTraderByEmail(partnerId: number, email: string, tx: DbO
     .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ? mapTrader(row) : null;
+}
+
+export async function getTraderPublicByEmail(partnerId: number, email: string, tx: DbOrTx = db) {
+  const [row] = await tx
+    .select()
+    .from(traders)
+    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .limit(1);
+  return row ? mapTraderPublic(row) : null;
 }
 
 export async function getTraderById(traderId: number) {

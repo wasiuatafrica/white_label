@@ -290,7 +290,7 @@ function PurchaseModal({
     mutationFn: async () => {
       if (!proofFile) throw new Error('Upload payment evidence before submitting.');
       setUploadError(null);
-      const uploaded = await upload({ file: proofFile });
+      const uploaded = await upload({ file: proofFile, slug });
       if (uploaded.error || !uploaded.url) {
         throw new Error(uploaded.error || 'Upload failed');
       }

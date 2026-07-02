@@ -3,12 +3,12 @@ import { createTraderWithCount, traderEmailExists } from '@/db/queries/traders';
 import argon2 from 'argon2';
 import {
   createSessionToken,
-  getSessionCookieName,
 } from '@/app/api/utils/session';
 import {
   checkRateLimit,
   getRequestRateLimitKey,
 } from '@/lib/rate-limit';
+import { buildTraderSessionCookie } from '@/lib/trader-session-cookie';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_REGISTER_ATTEMPTS = 5;
@@ -58,7 +58,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       slug,
       exp: Date.now() + SEVEN_DAYS * 1000,
     });
-    const cookieName = getSessionCookieName(slug);
 
     const res = Response.json(
       {
@@ -67,10 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       },
       { status: 201 }
     );
-    res.headers.set(
-      'Set-Cookie',
-      `${cookieName}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${SEVEN_DAYS}`
-    );
+    res.headers.set('Set-Cookie', buildTraderSessionCookie(slug, token));
     return res;
   } catch (e) {
     console.error(e);

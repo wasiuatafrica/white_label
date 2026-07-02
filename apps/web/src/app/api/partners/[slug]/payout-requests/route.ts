@@ -73,6 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed';
     console.error(e);
-    return Response.json({ error: message }, { status: 400 });
+    const status = message.includes('pending payout request') ? 409 : 400;
+    return Response.json({ error: message }, { status });
   }
 }

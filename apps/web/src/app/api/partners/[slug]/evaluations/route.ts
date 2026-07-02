@@ -5,19 +5,60 @@ import {
   listEvaluationsByPartnerId,
   listEvaluationsByTrader,
 } from '@/db/queries/evaluations';
-import { getTraderByEmail, getTraderForSession } from '@/db/queries/traders';
+import { getTraderPublicByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
-import { amountsMatch, getTraderPrice, toMoneyNumber, type EvalType } from '@/lib/partner-pricing';
+import { verifyAdminTraderViewToken } from '@/lib/admin-trader-view-token';
+import { amountsMatch, getTraderPrice, type EvalType } from '@/lib/partner-pricing';
+
+function toPublicTrader(trader: {
+  id: number;
+  partner_id: number;
+  name: string;
+  email: string;
+  password_hash?: string | null;
+  reset_token?: string | null;
+  reset_token_expires?: Date | string | null;
+  status: string;
+  kyc_status: string;
+  kyc_full_name?: string | null;
+  kyc_id_type?: string | null;
+  kyc_id_number?: string | null;
+  kyc_id_url?: string | null;
+  kyc_address?: string | null;
+  kyc_selfie_url?: string | null;
+  kyc_submitted_at?: Date | string | null;
+  created_at: Date | string;
+}) {
+  const {
+    password_hash: _passwordHash,
+    reset_token: _resetToken,
+    reset_token_expires: _resetTokenExpires,
+    ...rest
+  } = trader;
+  return rest;
+}
+
+function stripSensitiveEvaluationFields<
+  T extends { account_creation_code?: unknown; trade_account_id?: unknown },
+>(evaluation: T) {
+  const {
+    account_creation_code: _accountCreationCode,
+    trade_account_id: _tradeAccountId,
+    ...rest
+  } = evaluation;
+  return rest;
+}
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
     const url = new URL(request.url);
     const email = url.searchParams.get('email');
+    const viewToken = url.searchParams.get('view_token');
 
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) {
@@ -32,24 +73,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       return Response.json({ evaluations });
     }
 
-    const trader = await getTraderByEmail(partnerId, email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const trader = await getTraderPublicByEmail(partnerId, normalizedEmail);
     if (!trader) {
-      return Response.json({ error: 'Trader not found' }, { status: 404 });
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const session = await parseSessionFromRequest(request, slug);
-    const canViewAccountActivation =
+    const isTraderOwner =
       session?.partnerId === partnerId && session.traderId === trader.id;
+
+    const partnerAdminAuth = await requirePartnerAdmin(request, slug);
+    const isPartnerAdmin = !isPartnerAdminUnauthorized(partnerAdminAuth);
+
+    const hasAdminViewToken =
+      Boolean(viewToken) &&
+      verifyAdminTraderViewToken(String(viewToken), slug, normalizedEmail);
+
+    if (!isTraderOwner && !isPartnerAdmin && !hasAdminViewToken) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const evaluations = await listEvaluationsByTrader(partnerId, trader.id);
-    if (!canViewAccountActivation) {
-      const publicEvaluations = evaluations.map(
-        ({
-          account_creation_code: _accountCreationCode,
-          trade_account_id: _tradeAccountId,
-          ...evaluation
-        }) => evaluation
-      );
-      return Response.json({ trader, evaluations: publicEvaluations });
+    if (!isTraderOwner) {
+      return Response.json({
+        trader,
+        evaluations: evaluations.map(stripSensitiveEvaluationFields),
+      });
     }
 
     return Response.json({ trader, evaluations });
@@ -122,7 +172,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     });
 
     return Response.json(
-      { trader: result.trader, evaluation: result.evaluation },
+      { trader: toPublicTrader(result.trader), evaluation: result.evaluation },
       { status: 201 }
     );
   } catch (e) {
