@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/ui/password-input';
 import { Loader2, Shield, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -73,10 +74,9 @@ export function AdminsTab() {
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             />
-            <input
+            <PasswordInput
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
               placeholder="Temporary password (12+ chars)"
-              type="password"
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
             />

@@ -1,4 +1,5 @@
 'use client';
+import { PasswordInput } from '@/components/ui/password-input';
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -8,8 +9,6 @@ import {
   Loader2,
   Shield,
   ChevronRight,
-  Eye,
-  EyeOff,
   AlertCircle,
   CheckCircle,
 } from 'lucide-react';
@@ -32,8 +31,6 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
   const { slug } = use(params);
   const router = useRouter();
   const [view, setView] = useState<View>('signin');
-  const [showPw, setShowPw] = useState(false);
-
   // Sign-in
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPw, setSignInPw] = useState('');
@@ -289,28 +286,18 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
                         Forgot password?
                       </button>
                     </div>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        value={signInPw}
-                        onChange={(e) => {
-                          setSignInPw(e.target.value);
-                          setSignInError(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && signInEmail && signInPw) signInMutation.mutate();
-                        }}
-                        placeholder="Your password"
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      value={signInPw}
+                      onChange={(e) => {
+                        setSignInPw(e.target.value);
+                        setSignInError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && signInEmail && signInPw) signInMutation.mutate();
+                      }}
+                      placeholder="Your password"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    />
                   </div>
 
                   {signInError && (
@@ -374,32 +361,21 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       New Password
                     </label>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        value={setpwPassword}
-                        onChange={(e) => {
-                          setSetpwPassword(e.target.value);
-                          setSetpwError(null);
-                        }}
-                        placeholder="At least 8 characters"
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                      >
-                        {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      value={setpwPassword}
+                      onChange={(e) => {
+                        setSetpwPassword(e.target.value);
+                        setSetpwError(null);
+                      }}
+                      placeholder="At least 8 characters"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Confirm Password
                     </label>
-                    <input
-                      type={showPw ? 'text' : 'password'}
+                    <PasswordInput
                       value={setpwConfirm}
                       onChange={(e) => {
                         setSetpwConfirm(e.target.value);
@@ -480,32 +456,21 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Password
                     </label>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        value={regPw}
-                        onChange={(e) => {
-                          setRegPw(e.target.value);
-                          setRegError(null);
-                        }}
-                        placeholder="At least 8 characters"
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                      >
-                        {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      value={regPw}
+                      onChange={(e) => {
+                        setRegPw(e.target.value);
+                        setRegError(null);
+                      }}
+                      placeholder="At least 8 characters"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Confirm Password
                     </label>
-                    <input
-                      type={showPw ? 'text' : 'password'}
+                    <PasswordInput
                       value={regConfirm}
                       onChange={(e) => {
                         setRegConfirm(e.target.value);

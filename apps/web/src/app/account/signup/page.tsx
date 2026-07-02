@@ -16,6 +16,7 @@
 
 import { Suspense, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { PasswordInput } from '@/components/ui/password-input';
 import { authClient } from '@/lib/auth-client';
 
 function SignUpForm() {
@@ -73,8 +74,7 @@ function SignUpForm() {
 
         <label className="flex flex-col gap-[4px] text-[14px]">
           Password
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={8}
             value={password}

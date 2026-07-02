@@ -1,37 +1,4 @@
 'use client';
-import { use, useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const partnerAdminFetch = (input: string, init: RequestInit = {}) =>
-  fetch(input, { ...init, credentials: 'include' });
-import {
-  Users,
-  TrendingUp,
-  DollarSign,
-  ExternalLink,
-  Plus,
-  X,
-  Loader2,
-  CheckCircle,
-  Save,
-  Sparkles,
-  Lock,
-  KeyRound,
-  ShieldCheck,
-  Clock,
-  AlertCircle,
-  CreditCard,
-  Banknote,
-  BarChart3,
-  ArrowUpRight,
-  ArrowDownRight,
-  Send,
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  Info,
-} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -40,7 +7,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { HexColorPicker } from 'react-colorful';
+import { PasswordInput } from '@/components/ui/password-input';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
 import {
@@ -50,6 +17,36 @@ import {
   getWholesalePrice,
   toMoneyNumber as pricingToMoney,
 } from '@/lib/partner-pricing';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Activity,
+  AlertCircle,
+  Banknote,
+  BarChart3,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  DollarSign,
+  ExternalLink,
+  Info,
+  KeyRound,
+  Loader2,
+  Lock,
+  Plus,
+  Save,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+  Users,
+  X
+} from 'lucide-react';
+import Link from 'next/link';
+import { use, useEffect, useRef, useState } from 'react';
+import { HexColorPicker } from 'react-colorful';
+
+const partnerAdminFetch = (input: string, init: RequestInit = {}) =>
+  fetch(input, { ...init, credentials: 'include' });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1754,7 +1751,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               onSubmit={handlePinSubmit}
               className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
             >
-              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Owner email</label>
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Partner email</label>
               <input
                 type="email"
                 value={adminEmailInput}
@@ -1764,8 +1761,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
               />
               <label className="mb-1.5 block text-xs font-semibold text-gray-700">Admin PIN</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="Enter 6-digit PIN"
@@ -1801,9 +1797,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               >
                 Forgot PIN?
               </button>
-              <p className="mt-4 text-center text-xs text-gray-400">
-                Use the owner email and PIN from your FT9ja partner approval email.
-              </p>
+              
             </form>
           )}
 
@@ -1862,16 +1856,14 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
               />
               <label className="mb-1.5 block text-xs font-semibold text-gray-700">New PIN</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={resetPin}
                 onChange={(e) => setResetPin(e.target.value)}
                 placeholder="6-12 digit PIN"
                 className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
               />
               <label className="mb-1.5 block text-xs font-semibold text-gray-700">Confirm PIN</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={resetConfirmPin}
                 onChange={(e) => setResetConfirmPin(e.target.value)}
                 placeholder="Confirm PIN"
@@ -2666,8 +2658,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <label className="mb-1.5 block text-xs font-medium text-gray-600">
                     Current PIN
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={currentAdminPin}
                     onChange={(e) => setCurrentAdminPin(e.target.value)}
                     placeholder="Enter current PIN"
@@ -2679,8 +2670,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <label className="mb-1.5 block text-xs font-medium text-gray-600">
                     New PIN
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={brandForm.admin_pin}
                     onChange={(e) => setBrandForm((f) => ({ ...f, admin_pin: e.target.value }))}
                     placeholder="Enter 6-12 digit PIN"

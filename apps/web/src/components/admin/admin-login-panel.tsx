@@ -1,5 +1,6 @@
 'use client';
 
+import { PasswordInput } from '@/components/ui/password-input';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import QRCode from 'react-qr-code';
@@ -131,8 +132,7 @@ export function AdminLoginPanel({ onAuthed }: { onAuthed: (admin: AdminInfo) => 
                 if (e.key === 'Enter') void submitCredentials();
               }}
             />
-            <input
-              type="password"
+            <PasswordInput
               className={`w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#16A34A]/20 ${error ? 'border-red-300 focus:border-red-300' : 'border-gray-200 focus:border-[#16A34A]'}`}
               placeholder="Password"
               value={password}

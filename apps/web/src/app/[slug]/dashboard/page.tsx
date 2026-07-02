@@ -13,7 +13,6 @@ import {
     Copy,
     CreditCard,
     Eye,
-    EyeOff,
     FileText,
     KeyRound,
     Loader2,
@@ -29,6 +28,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
+import { PasswordInput } from '@/components/ui/password-input';
 import { getDefaultEvalProduct, getPartnerProducts } from '@/lib/eval-products';
 import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
@@ -938,12 +938,6 @@ function TradingAccountTab({
     password: '',
     investor_password: '',
   });
-  const [visiblePasswords, setVisiblePasswords] = useState({
-    password: false,
-    investor_password: false,
-    aso_password: false,
-    aso_investor_password: false,
-  });
   const [error, setError] = useState<string | null>(null);
   const [asoError, setAsoError] = useState<string | null>(null);
 
@@ -1151,20 +1145,26 @@ function TradingAccountTab({
                       key: 'investor_password',
                       placeholder: 'Read-only investor password',
                     },
-                  ].map((field) => {
-                    const isPasswordField = field.key === 'password' || field.key === 'investor_password';
-                    const inputType =
-                      isPasswordField && !visiblePasswords[field.key as keyof typeof visiblePasswords]
-                        ? 'password'
-                        : 'text';
-
-                    return (
-                      <div key={field.key}>
-                        <label className="mb-1.5 block text-xs font-semibold text-gray-600">
-                          {field.label}
-                        </label>
+                  ].map((field) => (
+                    <div key={field.key}>
+                      <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+                        {field.label}
+                      </label>
+                      {field.key === 'password' || field.key === 'investor_password' ? (
+                        <PasswordInput
+                          value={form[field.key as keyof typeof form]}
+                          onChange={(e) =>
+                            setForm((v) => ({
+                              ...v,
+                              [field.key]: e.target.value,
+                            }))
+                          }
+                          placeholder={field.placeholder}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                        />
+                      ) : (
                         <input
-                          type={inputType}
+                          type="text"
                           value={form[field.key as keyof typeof form]}
                           onChange={(e) =>
                             setForm((v) => ({
@@ -1178,9 +1178,9 @@ function TradingAccountTab({
                           placeholder={field.placeholder}
                           className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
                         />
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 {error && (
@@ -1257,15 +1257,26 @@ function TradingAccountTab({
                     <label className="mb-1.5 block text-xs font-semibold text-gray-600">
                       {field.label}
                     </label>
-                    <input
-                      type={field.key.includes('password') ? 'password' : 'text'}
-                      value={asoForm[field.key as keyof typeof asoForm]}
-                      onChange={(e) =>
-                        setAsoForm((v) => ({ ...v, [field.key]: e.target.value.trim() }))
-                      }
-                      placeholder={field.placeholder}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
-                    />
+                    {field.key === 'password' || field.key === 'investor_password' ? (
+                      <PasswordInput
+                        value={asoForm[field.key as keyof typeof asoForm]}
+                        onChange={(e) =>
+                          setAsoForm((v) => ({ ...v, [field.key]: e.target.value.trim() }))
+                        }
+                        placeholder={field.placeholder}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={asoForm[field.key as keyof typeof asoForm]}
+                        onChange={(e) =>
+                          setAsoForm((v) => ({ ...v, [field.key]: e.target.value.trim() }))
+                        }
+                        placeholder={field.placeholder}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -1740,7 +1751,6 @@ function ProfileTab({ trader, slug, primary }: { trader: Trader; slug: string; p
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [pwSaved, setPwSaved] = useState(false);
@@ -1848,27 +1858,15 @@ function ProfileTab({ trader, slug, primary }: { trader: Trader; slug: string; p
           ].map(({ label, val, set }) => (
             <div key={label}>
               <label className="mb-1.5 block text-xs font-medium text-gray-600">{label}</label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={val}
-                  onChange={(e) => {
-                    set(e.target.value);
-                    setPwError(null);
-                  }}
-                  placeholder={label === 'New Password' ? 'At least 8 characters' : ''}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
-                />
-                {label === 'Current Password' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPw((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  >
-                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                )}
-              </div>
+              <PasswordInput
+                value={val}
+                onChange={(e) => {
+                  set(e.target.value);
+                  setPwError(null);
+                }}
+                placeholder={label === 'New Password' ? 'At least 8 characters' : ''}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+              />
             </div>
           ))}
           {pwError && (

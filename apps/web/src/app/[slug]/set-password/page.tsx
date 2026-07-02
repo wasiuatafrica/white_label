@@ -1,9 +1,10 @@
 'use client';
+import { PasswordInput } from '@/components/ui/password-input';
 import { use, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Shield, Loader2, CheckCircle, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Shield, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 type Partner = {
   firm_name: string;
@@ -21,7 +22,6 @@ export default function SetPasswordPage({ params }: { params: Promise<{ slug: st
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPw, setShowPw] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -134,32 +134,21 @@ export default function SetPasswordPage({ params }: { params: Promise<{ slug: st
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Password
                     </label>
-                    <div className="relative">
-                      <input
-                        type={showPw ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => {
-                          setPassword(e.target.value);
-                          setError(null);
-                        }}
-                        placeholder="At least 8 characters"
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPw((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-                      </button>
-                    </div>
+                    <PasswordInput
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setError(null);
+                      }}
+                      placeholder="At least 8 characters"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent"
+                    />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Confirm Password
                     </label>
-                    <input
-                      type={showPw ? 'text' : 'password'}
+                    <PasswordInput
                       value={confirm}
                       onChange={(e) => {
                         setConfirm(e.target.value);
