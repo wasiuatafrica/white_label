@@ -35,7 +35,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
       key = parsePartnerLogoS3Key(slug, partner.logo_url, config);
       if (!key) {
-        return Response.redirect(partner.logo_url, 302);
+        return Response.json({ error: 'Logo not found' }, { status: 404 });
       }
     }
 

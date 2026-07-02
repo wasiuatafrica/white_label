@@ -37,7 +37,7 @@ export async function getTraderById(traderId: number) {
   return row ? mapTrader(row) : null;
 }
 
-export async function getTraderProfile(traderId: number) {
+export async function getTraderProfile(traderId: number, partnerId: number) {
   const [row] = await db
     .select({
       id: traders.id,
@@ -48,7 +48,7 @@ export async function getTraderProfile(traderId: number) {
       created_at: traders.createdAt,
     })
     .from(traders)
-    .where(eq(traders.id, traderId))
+    .where(and(eq(traders.id, traderId), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ?? null;
 }
@@ -83,11 +83,11 @@ export async function getTraderForLogin(partnerId: number, email: string) {
   return row ?? null;
 }
 
-export async function getTraderPasswordHash(traderId: number) {
+export async function getTraderPasswordHash(traderId: number, partnerId: number) {
   const [row] = await db
     .select({ password_hash: traders.passwordHash })
     .from(traders)
-    .where(eq(traders.id, traderId))
+    .where(and(eq(traders.id, traderId), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row?.password_hash ?? null;
 }
@@ -138,6 +138,7 @@ export async function createTrader(
 
 export async function updateTraderProfile(
   traderId: number,
+  partnerId: number,
   updates: { name?: string; passwordHash?: string }
 ) {
   const set: { name?: string; passwordHash?: string } = {};
@@ -148,7 +149,7 @@ export async function updateTraderProfile(
   const [row] = await db
     .update(traders)
     .set(set)
-    .where(eq(traders.id, traderId))
+    .where(and(eq(traders.id, traderId), eq(traders.partnerId, partnerId)))
     .returning({ id: traders.id, name: traders.name, email: traders.email, status: traders.status });
   return row ?? null;
 }
@@ -177,7 +178,7 @@ export async function setTraderPassword(traderId: number, passwordHash: string) 
   await db.update(traders).set({ passwordHash }).where(eq(traders.id, traderId));
 }
 
-export async function getTraderKyc(traderId: number) {
+export async function getTraderKyc(traderId: number, partnerId: number) {
   const [row] = await db
     .select({
       kyc_status: traders.kycStatus,
@@ -190,13 +191,14 @@ export async function getTraderKyc(traderId: number) {
       kyc_submitted_at: traders.kycSubmittedAt,
     })
     .from(traders)
-    .where(eq(traders.id, traderId))
+    .where(and(eq(traders.id, traderId), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ?? null;
 }
 
 export async function submitTraderKyc(
   traderId: number,
+  partnerId: number,
   data: {
     fullName: string;
     idType: string;
@@ -218,7 +220,7 @@ export async function submitTraderKyc(
       kycSelfieUrl: data.selfieUrl ?? null,
       kycSubmittedAt: sql`NOW()`,
     })
-    .where(eq(traders.id, traderId));
+    .where(and(eq(traders.id, traderId), eq(traders.partnerId, partnerId)));
 }
 
 export async function updateTraderKycStatus(

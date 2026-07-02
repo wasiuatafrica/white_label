@@ -1,9 +1,9 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { generatePartnerAdminPin, partnerPinNeedsGeneration } from '@/lib/admin-pin';
+import { emailsMatch } from '@/lib/email-compare';
 import {
   hashPartnerAdminPin,
-  maybeRehashPartnerAdminPin,
   verifyPartnerAdminPin,
 } from '@/lib/partner-pin-crypto';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
@@ -158,18 +158,97 @@ export async function verifyPartnerPin(slug: string, pin: string) {
     .limit(1);
   if (!row) return null;
 
-  const valid = await verifyPartnerAdminPin(row.adminPin, pin);
-  if (!valid) return false;
+  return verifyPartnerAdminPin(row.adminPin, pin);
+}
 
-  const rehashed = await maybeRehashPartnerAdminPin(row.adminPin, pin);
-  if (rehashed) {
-    await db
-      .update(partners)
-      .set({ adminPin: rehashed, updatedAt: sql`NOW()` })
-      .where(eq(partners.slug, slug));
+export async function verifyPartnerAdminLogin(slug: string, email: string, pin: string) {
+  const [row] = await db
+    .select({
+      id: partners.id,
+      ownerEmail: partners.ownerEmail,
+      adminPin: partners.adminPin,
+    })
+    .from(partners)
+    .where(eq(partners.slug, slug))
+    .limit(1);
+  if (!row) return null;
+
+  if (!emailsMatch(row.ownerEmail, email)) {
+    return false;
   }
 
-  return true;
+  return verifyPartnerAdminPin(row.adminPin, pin);
+}
+
+export async function getPartnerForPinReset(slug: string, email: string) {
+  const [row] = await db
+    .select({
+      id: partners.id,
+      ownerEmail: partners.ownerEmail,
+      firmName: partners.firmName,
+    })
+    .from(partners)
+    .where(eq(partners.slug, slug))
+    .limit(1);
+  if (!row) return null;
+
+  if (!emailsMatch(row.ownerEmail, email)) return null;
+
+  return {
+    id: row.id,
+    firm_name: row.firmName,
+    owner_email: row.ownerEmail,
+  };
+}
+
+export async function setPartnerPinResetOtp(slug: string, otpHash: string, expiresAt: Date) {
+  await db
+    .update(partners)
+    .set({
+      adminPinResetOtpHash: otpHash,
+      adminPinResetOtpExpiresAt: expiresAt,
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(partners.slug, slug));
+}
+
+export async function clearPartnerPinResetOtp(slug: string) {
+  await db
+    .update(partners)
+    .set({
+      adminPinResetOtpHash: null,
+      adminPinResetOtpExpiresAt: null,
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(partners.slug, slug));
+}
+
+export async function getPartnerPinResetOtp(slug: string) {
+  const [row] = await db
+    .select({
+      adminPinResetOtpHash: partners.adminPinResetOtpHash,
+      adminPinResetOtpExpiresAt: partners.adminPinResetOtpExpiresAt,
+    })
+    .from(partners)
+    .where(eq(partners.slug, slug))
+    .limit(1);
+  if (!row) return null;
+  return {
+    otp_hash: row.adminPinResetOtpHash,
+    otp_expires_at: row.adminPinResetOtpExpiresAt,
+  };
+}
+
+export async function updatePartnerAdminPin(slug: string, hashedPin: string) {
+  await db
+    .update(partners)
+    .set({
+      adminPin: hashedPin,
+      adminPinResetOtpHash: null,
+      adminPinResetOtpExpiresAt: null,
+      updatedAt: sql`NOW()`,
+    })
+    .where(eq(partners.slug, slug));
 }
 
 export async function incrementPartnerTraders(partnerId: number, tx: DbOrTx = db) {

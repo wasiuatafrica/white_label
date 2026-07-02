@@ -19,10 +19,13 @@ import { createTraderSetupToken, verifyTraderSetupToken } from '@/lib/trader-set
 import { buildTraderSessionCookie, clearTraderSessionCookie } from '@/lib/trader-session-cookie';
 import { sendEmail } from '@/app/api/utils/send-email';
 import { getPartnerUrl } from '@/lib/tenant';
+import { parseJsonBody } from '@/lib/api-validation';
+import { traderLoginSchema, traderSetPasswordSchema } from '@/lib/api-schemas';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const INVALID_LOGIN = 'Invalid email or password.';
 
 async function sendTraderPasswordSetupEmail(options: {
   slug: string;
@@ -78,14 +81,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const body = await request.json();
-    const { email, password } = body;
+    const parsed = await parseJsonBody(request, traderLoginSchema);
+    if (!parsed.ok) return parsed.response;
 
-    if (!email || !password) {
-      return Response.json({ error: 'Email and password are required' }, { status: 400 });
-    }
-
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const { email: normalizedEmail, password } = parsed.data;
     const rateKey = `${getRequestRateLimitKey(request, 'trader-login')}:${slug}:${normalizedEmail}`;
     const limited = checkRateLimit(rateKey, MAX_LOGIN_ATTEMPTS, LOGIN_WINDOW_MS);
     if (!limited.allowed) {
@@ -103,7 +102,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const partner = await getPartnerWithPinBySlug(slug);
     const trader = await getTraderForLogin(partnerId, normalizedEmail);
-    if (!trader) return Response.json({ error: 'no_account' }, { status: 401 });
+    if (!trader) {
+      return Response.json({ error: INVALID_LOGIN }, { status: 401 });
+    }
 
     if (!trader.password_hash) {
       const setupToken = createTraderSetupToken({
@@ -123,23 +124,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         });
       } catch (emailErr) {
         console.error('Failed to send password setup email:', emailErr);
-        return Response.json(
-          { error: 'Unable to send password setup email. Try again later.' },
-          { status: 503 }
-        );
       }
 
       return Response.json(
         {
-          error: 'no_password',
-          message: 'Check your email for a link to set your password.',
+          error: INVALID_LOGIN,
+          message: 'If an account exists, check your email for next steps.',
         },
         { status: 401 }
       );
     }
 
     const valid = await argon2.verify(trader.password_hash, password);
-    if (!valid) return Response.json({ error: 'invalid_password' }, { status: 401 });
+    if (!valid) return Response.json({ error: INVALID_LOGIN }, { status: 401 });
 
     resetRateLimit(rateKey);
 
@@ -165,18 +162,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 export async function PATCH(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const body = await request.json();
-    const { email, password, setup_token } = body;
+    const parsed = await parseJsonBody(request, traderSetPasswordSchema);
+    if (!parsed.ok) return parsed.response;
 
-    if (!password || password.length < 8) {
-      return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
-    }
+    const { email, password, setup_token: setupToken } = parsed.data;
 
-    if (!setup_token || typeof setup_token !== 'string') {
-      return Response.json({ error: 'setup_token is required' }, { status: 400 });
-    }
-
-    const tokenPayload = verifyTraderSetupToken(setup_token);
+    const tokenPayload = verifyTraderSetupToken(setupToken);
     if (!tokenPayload || tokenPayload.slug !== slug) {
       return Response.json({ error: 'Invalid or expired setup token' }, { status: 400 });
     }

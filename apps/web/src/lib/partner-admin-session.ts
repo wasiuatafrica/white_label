@@ -1,11 +1,13 @@
 import crypto from 'crypto';
 import { getPartnerAdminSessionSecret } from '@/lib/auth-secret';
+import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
 
 export const PARTNER_ADMIN_SESSION_MAX_AGE = 60 * 60 * 12;
 
 export interface PartnerAdminSessionPayload {
   partnerId: number;
   slug: string;
+  iat: number;
   exp: number;
 }
 
@@ -13,12 +15,16 @@ function sign(encoded: string) {
   return crypto.createHmac('sha256', getPartnerAdminSessionSecret()).update(encoded).digest('hex');
 }
 
-function createSignedToken<T extends { exp: number }>(payload: T): string {
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+function createSignedToken<T extends { iat: number; exp: number }>(
+  payload: Omit<T, 'iat' | 'exp'> & { exp: number }
+): string {
+  const encoded = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() } as T)).toString(
+    'base64url'
+  );
   return `${encoded}.${sign(encoded)}`;
 }
 
-function verifySignedToken<T extends { exp: number }>(token: string): T | null {
+function verifySignedToken<T extends { iat?: number; exp: number }>(token: string): T | null {
   try {
     const lastDot = token.lastIndexOf('.');
     if (lastDot < 0) return null;
@@ -41,8 +47,8 @@ export function getPartnerAdminCookieName(slug: string) {
   return `ft9ja_partner_admin_${slug}`;
 }
 
-export function createPartnerAdminSessionToken(payload: Omit<PartnerAdminSessionPayload, 'exp'>) {
-  return createSignedToken({
+export function createPartnerAdminSessionToken(payload: Omit<PartnerAdminSessionPayload, 'iat' | 'exp'>) {
+  return createSignedToken<PartnerAdminSessionPayload>({
     ...payload,
     exp: Date.now() + PARTNER_ADMIN_SESSION_MAX_AGE * 1000,
   });
@@ -99,10 +105,11 @@ export function clearPartnerAdminSessionCookie(
   );
 }
 
-export function parsePartnerAdminSessionFromRequest(request: Request, slug: string) {
+export async function parsePartnerAdminSessionFromRequest(request: Request, slug: string) {
   const token = parseCookies(request.headers.get('cookie')).get(getPartnerAdminCookieName(slug));
   if (!token) return null;
   const session = verifyPartnerAdminSessionToken(token);
   if (!session || session.slug !== slug) return null;
+  if (await isSessionIssuedBeforeRevocation(session.iat)) return null;
   return session;
 }

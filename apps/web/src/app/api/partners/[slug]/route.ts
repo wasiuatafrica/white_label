@@ -21,7 +21,9 @@ import {
   sendPartnerWelcomeEmail,
 } from '@/lib/email/ft9ja-to-partner';
 import { hashPartnerAdminPin, verifyPartnerAdminPin } from '@/lib/partner-pin-crypto';
+import { isAllowedPartnerLogoUrl } from '@/lib/partner-logo-validation';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
+import { revokeAllStatefulSessions } from '@/lib/session-revocation';
 
 const SUPER_ADMIN_FIELDS = ['status', 'monthly_fee_paid'] as const;
 const PARTNER_ADMIN_FIELDS = [
@@ -115,7 +117,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
 
       const newPin = String(body.admin_pin || '');
       if (!isValidPartnerAdminPin(newPin)) {
-        return Response.json({ error: 'Admin PIN must be 4 to 12 digits' }, { status: 400 });
+        return Response.json({ error: 'Admin PIN must be 6 to 12 digits' }, { status: 400 });
       }
 
       const isSuperAdmin = Boolean(adminAuth && !isAdminUnauthorized(adminAuth));
@@ -131,6 +133,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       }
 
       body.admin_pin = await hashPartnerAdminPin(newPin);
+      await revokeAllStatefulSessions();
+    }
+
+    if ('logo_url' in body && body.logo_url != null && body.logo_url !== '') {
+      const logoUrl = String(body.logo_url);
+      if (!isAllowedPartnerLogoUrl(slug, logoUrl)) {
+        return Response.json({ error: 'Logo URL must be an allowed S3 or proxy URL' }, { status: 400 });
+      }
     }
 
     if (body.status === 'active') {

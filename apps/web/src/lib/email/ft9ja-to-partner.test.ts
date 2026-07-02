@@ -114,6 +114,16 @@ const TEMPLATE_CASES: Array<{
       URL: 'https://prime.ft9ja.com/legal',
     },
   },
+  {
+    template: 'p-11-pin-reset',
+    variables: {
+      OWNER_NAME: 'Ada',
+      FIRM_NAME: 'Prime Traders',
+      SLUG: 'prime',
+      OTP: '482913',
+      URL: 'https://prime.ft9ja.com/admin',
+    },
+  },
 ];
 
 describe('FT9ja partner email templates', () => {

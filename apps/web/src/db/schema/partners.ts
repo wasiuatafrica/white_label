@@ -40,6 +40,10 @@ export const partners = pgTable(
     paymentProofUrl: text('payment_proof_url'),
     logoGenerationCount: integer('logo_generation_count').notNull().default(0),
     lastGeneratedLogoUrl: text('last_generated_logo_url'),
+    adminPinResetOtpHash: text('admin_pin_reset_otp_hash'),
+    adminPinResetOtpExpiresAt: timestamp('admin_pin_reset_otp_expires_at', {
+      withTimezone: false,
+    }),
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
   },

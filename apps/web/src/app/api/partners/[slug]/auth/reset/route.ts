@@ -1,4 +1,4 @@
-import { getPartnerIdBySlug, getPartnerWithPinBySlug } from '@/db/queries/partners';
+import { getPartnerBySlug, getPartnerIdBySlug } from '@/db/queries/partners';
 import {
   completePasswordReset,
   getTraderByResetToken,
@@ -7,12 +7,12 @@ import {
 } from '@/db/queries/traders';
 import argon2 from 'argon2';
 import crypto from 'crypto';
-import { sendEmail } from '@/app/api/utils/send-email';
 import {
   checkRateLimit,
   getRequestRateLimitKey,
   resetRateLimit,
 } from '@/lib/rate-limit';
+import { sendTraderPasswordResetEmail } from '@/lib/email/partner-to-trader';
 import { getPartnerUrl } from '@/lib/tenant';
 
 const MAX_RESET_EMAIL_REQUESTS = 5;
@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    const partner = await getPartnerWithPinBySlug(slug);
+    const partner = await getPartnerBySlug(slug);
     if (!partner) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
     const trader = await getTraderForReset(partner.id, normalizedEmail);
@@ -55,29 +55,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     );
 
     try {
-      await sendEmail({
+      await sendTraderPasswordResetEmail({
         to: normalizedEmail,
-        from: 'FT9ja <onboarding@resend.dev>',
-        subject: `Reset your ${partner.firm_name} password`,
-        text: `Reset your ${partner.firm_name} password: ${resetUrl}`,
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-            <h2 style="font-size:20px;font-weight:900;color:#111;margin-bottom:8px">Password Reset</h2>
-            <p style="color:#555;font-size:14px">Hi ${trader.name},</p>
-            <p style="color:#555;font-size:14px">
-              Click the button below to reset your password for <strong>${partner.firm_name}</strong>.
-              This link expires in <strong>1 hour</strong>.
-            </p>
-            <a href="${resetUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#16A34A;color:#fff;font-weight:700;border-radius:8px;text-decoration:none;font-size:14px">
-              Reset My Password
-            </a>
-            <p style="color:#999;font-size:12px;margin-top:24px">
-              If you didn't request this, you can safely ignore this email.
-            </p>
-            <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
-            <p style="color:#ccc;font-size:11px">Powered by FT9ja</p>
-          </div>
-        `,
+        traderName: trader.name,
+        firmName: partner.firm_name,
+        slug,
+        brandColor: partner.brand_color,
+        resetUrl,
       });
     } catch (emailErr) {
       console.error('Failed to send reset email:', emailErr);

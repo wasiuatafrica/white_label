@@ -1,5 +1,6 @@
-import { getPartnerIdBySlug, verifyPartnerPin } from '@/db/queries/partners';
-import { isValidPartnerAdminPin } from '@/lib/admin-pin';
+import { getPartnerIdBySlug, verifyPartnerAdminLogin } from '@/db/queries/partners';
+import { parseJsonBody } from '@/lib/api-validation';
+import { verifyPinSchema } from '@/lib/api-schemas';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
@@ -17,6 +18,7 @@ import {
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_WINDOW_MS = 15 * 60 * 1000;
+const INVALID_CREDENTIALS = 'Invalid email or PIN.';
 
 function cookieOptions() {
   return { secure: process.env.NODE_ENV === 'production' };
@@ -32,14 +34,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const body = await request.json();
-    const { pin } = body;
+    const parsed = await parseJsonBody(request, verifyPinSchema);
+    if (!parsed.ok) return parsed.response;
 
-    if (!pin || !isValidPartnerAdminPin(String(pin))) {
-      return Response.json({ error: 'pin is required' }, { status: 400 });
-    }
-
-    const rateKey = `${getRequestRateLimitKey(request, 'partner-pin')}:${slug}`;
+    const { email, pin } = parsed.data;
+    const rateKey = `${getRequestRateLimitKey(request, 'partner-pin')}:${slug}:${email}`;
     const limited = checkRateLimit(rateKey, MAX_PIN_ATTEMPTS, PIN_WINDOW_MS);
     if (!limited.allowed) {
       return Response.json(
@@ -48,13 +47,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    const valid = await verifyPartnerPin(slug, String(pin));
+    const valid = await verifyPartnerAdminLogin(slug, email, pin);
     if (valid === null) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
     if (!valid) {
-      return Response.json({ valid: false }, { status: 401 });
+      return Response.json({ error: INVALID_CREDENTIALS }, { status: 401 });
     }
 
     resetRateLimit(rateKey);
@@ -70,7 +69,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return res;
   } catch (e) {
     console.error(e);
-    return Response.json({ error: 'Failed to verify PIN' }, { status: 500 });
+    return Response.json({ error: 'Failed to verify credentials' }, { status: 500 });
   }
 }
 

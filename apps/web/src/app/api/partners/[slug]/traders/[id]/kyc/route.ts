@@ -37,7 +37,7 @@ export async function GET(
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const kyc = await getTraderKyc(Number(id));
+    const kyc = await getTraderKyc(Number(id), session.partnerId);
     if (!kyc) return Response.json({ error: 'Not found' }, { status: 404 });
     return Response.json(kyc);
   } catch (e) {
@@ -85,7 +85,7 @@ export async function POST(
       );
     }
 
-    await submitTraderKyc(Number(id), {
+    await submitTraderKyc(Number(id), session.partnerId, {
       fullName: full_name,
       idType: id_type,
       idNumber: id_number,

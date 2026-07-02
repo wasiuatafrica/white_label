@@ -13,6 +13,7 @@
 		"db:migrate-last-generated-logo-url": "node scripts/migrate-last-generated-logo-url.mjs",
 		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs",
 		"create-admin": "node scripts/create-admin.mjs",
+		"db:migrate-plaintext-partner-pins": "node scripts/migrate-plaintext-partner-pins.mjs",
 		"revoke-all-sessions": "node scripts/revoke-all-sessions.mjs"
 	},
 	"dependencies": {
@@ -44,7 +45,8 @@
 		"tailwind-merge": "^3.2.0",
 		"vanilla-colorful": "^0.7.2",
 		"vaul": "^1.1.2",
-		"ws": "^8.18.2"
+		"ws": "^8.18.2",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@tailwindcss/postcss": "^4.1.16",

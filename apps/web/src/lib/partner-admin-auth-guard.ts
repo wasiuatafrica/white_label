@@ -16,7 +16,7 @@ export async function requirePartnerAdmin(
   request: Request,
   slug: string
 ): Promise<PartnerAdminContext | Response> {
-  const session = parsePartnerAdminSessionFromRequest(request, slug);
+  const session = await parsePartnerAdminSessionFromRequest(request, slug);
   if (!session) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }

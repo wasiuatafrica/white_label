@@ -58,9 +58,8 @@ describe('partner admin pin crypto', () => {
     await expect(verifyPartnerAdminPin(hashed, '000000')).resolves.toBe(false);
   });
 
-  it('supports legacy plaintext pins', async () => {
-    await expect(verifyPartnerAdminPin('123456', '123456')).resolves.toBe(true);
-    await expect(verifyPartnerAdminPin('123456', '654321')).resolves.toBe(false);
+  it('rejects legacy plaintext pins', async () => {
+    await expect(verifyPartnerAdminPin('123456', '123456')).resolves.toBe(false);
   });
 });
 

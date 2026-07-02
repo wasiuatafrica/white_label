@@ -41,7 +41,7 @@ async function main() {
   console.log('All sessions revoked.');
   console.log(`- Revocation timestamp (ms): ${revokedAtMs}`);
   console.log(`- Better Auth sessions deleted: ${betterAuthDeleted}`);
-  console.log('- Partner trader and Super Admin cookies issued before this moment are now invalid.');
+  console.log('- Partner admin, trader, and Super Admin cookies issued before this moment are now invalid.');
 }
 
 main().catch((error) => {

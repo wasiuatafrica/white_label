@@ -23,7 +23,7 @@ export async function authorizeUpload(
   }
 
   if (slug) {
-    const partnerAdmin = parsePartnerAdminSessionFromRequest(request, slug);
+    const partnerAdmin = await parsePartnerAdminSessionFromRequest(request, slug);
     if (partnerAdmin) {
       const partnerId = await getPartnerIdBySlug(slug);
       if (partnerId && partnerAdmin.partnerId === partnerId) {

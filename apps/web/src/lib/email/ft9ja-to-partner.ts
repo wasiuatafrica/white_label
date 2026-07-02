@@ -90,6 +90,13 @@ type Ft9jaPartnerTemplateVariables = {
     EFFECTIVE_DATE: string;
     URL: string;
   };
+  'p-11-pin-reset': {
+    OWNER_NAME: string;
+    FIRM_NAME: string;
+    SLUG: string;
+    OTP: string;
+    URL: string;
+  };
 };
 
 export type Ft9jaPartnerTemplate = keyof Ft9jaPartnerTemplateVariables;
@@ -134,6 +141,10 @@ const TEMPLATE_META: Record<Ft9jaPartnerTemplate, { filename: string; subject: s
   'p-10-compliance': {
     filename: 'p-10-compliance.html',
     subject: 'Important Compliance Notice - Action Required',
+  },
+  'p-11-pin-reset': {
+    filename: 'p-11-pin-reset.html',
+    subject: 'Reset your {{FIRM_NAME}} admin PIN',
   },
 };
 
@@ -504,6 +515,23 @@ export async function sendPartnerComplianceNoticeEmail(
       OWNER_NAME: ownerName(partner),
       EFFECTIVE_DATE: formatDate(effectiveDate),
       URL: getPartnerUrl(partner.slug, '/legal'),
+    },
+  });
+}
+
+export async function sendPartnerPinResetEmail(
+  partner: PartnerRecipient,
+  { otp }: { otp: string }
+) {
+  return sendFt9jaPartnerEmail({
+    template: 'p-11-pin-reset',
+    to: partner.owner_email,
+    variables: {
+      OWNER_NAME: ownerName(partner),
+      FIRM_NAME: partner.firm_name,
+      SLUG: partner.slug,
+      OTP: otp,
+      URL: getPartnerUrl(partner.slug, '/admin'),
     },
   });
 }

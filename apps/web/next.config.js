@@ -40,7 +40,7 @@ const securityHeaders = [
 const nextConfig = {
   devIndicators: false,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   env: {
     NEXT_PUBLIC_CREATE_BASE_URL: process.env.NEXT_PUBLIC_CREATE_BASE_URL,

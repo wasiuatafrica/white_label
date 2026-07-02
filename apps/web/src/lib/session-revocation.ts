@@ -1,4 +1,4 @@
-import { getSessionsRevokedAtMs } from '@/db/queries/app-settings';
+import { getSessionsRevokedAtMs, setSessionsRevokedAtMs } from '@/db/queries/app-settings';
 
 const CACHE_TTL_MS = 3_000;
 
@@ -37,4 +37,11 @@ export async function isSessionIssuedBeforeRevocation(iat: number | undefined): 
   if (revokedAtMs <= 0) return false;
   if (iat === undefined) return true;
   return iat < revokedAtMs;
+}
+
+export async function revokeAllStatefulSessions() {
+  const revokedAtMs = Date.now();
+  await setSessionsRevokedAtMs(revokedAtMs);
+  primeSessionsRevokedAtCache(revokedAtMs);
+  return revokedAtMs;
 }

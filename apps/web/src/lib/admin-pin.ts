@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 
-const PIN_PATTERN = /^\d{4,12}$/;
+const PIN_PATTERN = /^\d{6,12}$/;
 
 export function isHashedPartnerPin(pin: string) {
   return pin.startsWith('$argon2');

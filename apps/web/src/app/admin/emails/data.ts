@@ -484,6 +484,37 @@ const T10 = wrap(
     )
 );
 
+const P11 = wrap(
+  '#111827',
+  'FT9ja Partners',
+  h('Reset Your Admin PIN') +
+    p(
+      'Hi {{OWNER_NAME}}, use the code below to reset your admin PIN for <strong>{{FIRM_NAME}}</strong>.'
+    ) +
+    p('This code expires in <strong>15 minutes</strong>. Enter it on the partner admin sign-in page under <strong>Forgot PIN?</strong>') +
+    `<p style="font-size:32px;font-weight:900;letter-spacing:0.25em;color:#111827;margin:28px 0;text-align:center">{{OTP}}</p>` +
+    tbl(
+      dr('Firm', '{{FIRM_NAME}}'),
+      dr('Subdomain', '{{SLUG}}.ft9ja.com')
+    ) +
+    btn('#111827', 'Open Partner Admin &rarr;') +
+    note('If you did not request this reset, you can ignore this email. Your current PIN will remain unchanged.')
+);
+
+const T11 = wrap(
+  '{{BRAND_COLOR}}',
+  '{{FIRM_NAME}}',
+  h('Password Reset') +
+    p(
+      'Hi {{TRADER_NAME}}, we received a request to reset your password for <strong>{{FIRM_NAME}}</strong>.'
+    ) +
+    p('Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.') +
+    btn('{{BRAND_COLOR}}', 'Reset My Password &rarr;') +
+    p('If the button does not work, copy and paste this link into your browser:') +
+    `<p style="margin:0 0 14px;font-size:12px;color:#6B7280;line-height:1.6;word-break:break-all">{{URL}}</p>` +
+    note('If you did not request this, you can safely ignore this email. Your password will not change.')
+);
+
 // ── Registry ───────────────────────────────────────────────────────────────────
 
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
@@ -568,6 +599,14 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     description: 'Sent for policy or legal updates affecting all partners',
     html: P10,
   },
+  {
+    id: 'p-11',
+    category: 'ft9ja-to-partner',
+    filename: 'p-11-pin-reset.html',
+    subject: 'Reset your {{FIRM_NAME}} admin PIN',
+    description: 'Sent when a partner requests a forgot-PIN reset code',
+    html: P11,
+  },
   // Partner → Traders
   {
     id: 't-01',
@@ -648,5 +687,13 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     subject: "KYC Approved — You're Ready for Payouts ✅",
     description: 'Sent when a partner approves a trader KYC submission',
     html: T10,
+  },
+  {
+    id: 't-11',
+    category: 'partner-to-trader',
+    filename: 't-11-password-reset.html',
+    subject: 'Reset your {{FIRM_NAME}} password',
+    description: 'Sent when a trader requests a password reset link',
+    html: T11,
   },
 ];

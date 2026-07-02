@@ -77,8 +77,8 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.error === 'no_password') {
-          throw new Error('no_password');
+        if (data.message) {
+          throw new Error(data.message);
         }
         throw new Error(data.error || 'Login failed');
       }
@@ -86,15 +86,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
     },
     onSuccess: () => router.push(`/${slug}/dashboard`),
     onError: (err: Error) => {
-      if (err.message === 'no_account') {
-        setSignInError('No account found with that email. Did you mean to register?');
-      } else if (err.message === 'no_password') {
-        setSignInError('Check your email for a link to set your password.');
-      } else if (err.message === 'invalid_password') {
-        setSignInError('Incorrect password. Try again or reset it below.');
-      } else {
-        setSignInError('Something went wrong. Please try again.');
-      }
+      setSignInError(err.message || 'Invalid email or password.');
     },
   });
 

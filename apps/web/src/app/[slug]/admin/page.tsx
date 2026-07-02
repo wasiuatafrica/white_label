@@ -1362,9 +1362,15 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   // ── PIN gate ──────────────────────────────────────────────────────────────
   const [pinAuthed, setPinAuthed] = useState<boolean | null>(null);
+  const [pinGateView, setPinGateView] = useState<'login' | 'forgot' | 'reset'>('login');
+  const [adminEmailInput, setAdminEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinLoading, setPinLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetPin, setResetPin] = useState('');
+  const [resetConfirmPin, setResetConfirmPin] = useState('');
   const [currentAdminPin, setCurrentAdminPin] = useState('');
   const [openingReceiptUrl, setOpeningReceiptUrl] = useState<string | null>(null);
 
@@ -1396,17 +1402,78 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       const res = await partnerAdminFetch(`/api/partners/${slug}/verify-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinInput }),
+        body: JSON.stringify({ email: adminEmailInput.trim(), pin: pinInput }),
       });
       const data = await res.json();
       if (res.ok && data.valid) {
         setPinAuthed(true);
       } else {
-        setPinError('Incorrect PIN. Please try again.');
+        setPinError(data.error || 'Invalid email or PIN. Please try again.');
         setPinInput('');
       }
     } catch {
-      setPinError('Could not verify PIN. Check your connection.');
+      setPinError('Could not verify credentials. Check your connection.');
+    } finally {
+      setPinLoading(false);
+    }
+  }
+
+  async function handleForgotPinSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPinLoading(true);
+    setPinError(null);
+    setForgotMessage(null);
+    try {
+      const res = await fetch(`/api/partners/${slug}/admin/forgot-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: adminEmailInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPinError(data.error || 'Could not send reset code.');
+        return;
+      }
+      setForgotMessage(data.message || 'If an account exists for that email, a reset code has been sent.');
+      setPinGateView('reset');
+    } catch {
+      setPinError('Could not send reset code. Check your connection.');
+    } finally {
+      setPinLoading(false);
+    }
+  }
+
+  async function handleResetPinSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (resetPin !== resetConfirmPin) {
+      setPinError('PINs do not match.');
+      return;
+    }
+    setPinLoading(true);
+    setPinError(null);
+    try {
+      const res = await fetch(`/api/partners/${slug}/admin/reset-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: adminEmailInput.trim(),
+          otp: resetOtp,
+          new_pin: resetPin,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPinError(data.error || 'Could not reset PIN.');
+        return;
+      }
+      setPinGateView('login');
+      setPinInput('');
+      setResetOtp('');
+      setResetPin('');
+      setResetConfirmPin('');
+      setForgotMessage('PIN updated. Sign in with your email and new PIN.');
+    } catch {
+      setPinError('Could not reset PIN. Check your connection.');
     } finally {
       setPinLoading(false);
     }
@@ -1666,45 +1733,175 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
             </div>
             <h1 className="text-xl font-black text-gray-900">Partner Admin</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Enter your PIN to access <strong className="text-gray-700">{slug}.ft9ja.com</strong>
+              {pinGateView === 'login' && (
+                <>
+                  Sign in to access <strong className="text-gray-700">{slug}.ft9ja.com</strong>
+                </>
+              )}
+              {pinGateView === 'forgot' && <>Request a PIN reset code</>}
+              {pinGateView === 'reset' && <>Enter your reset code and new PIN</>}
             </p>
           </div>
-          <form
-            onSubmit={handlePinSubmit}
-            className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-          >
-            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Admin PIN</label>
-            <input
-              type="password"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              placeholder="Enter PIN"
-              autoFocus
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-            />
-            {pinError && (
-              <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
-                <AlertCircle size={12} /> {pinError}
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={!pinInput || pinLoading}
-              className="mt-4 w-full rounded-lg bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
+
+          {forgotMessage && pinGateView === 'login' && (
+            <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+              {forgotMessage}
+            </div>
+          )}
+
+          {pinGateView === 'login' && (
+            <form
+              onSubmit={handlePinSubmit}
+              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
             >
-              {pinLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />{' '}
-                  Verifying…
-                </span>
-              ) : (
-                'Unlock Admin'
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Owner email</label>
+              <input
+                type="email"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                placeholder="you@example.com"
+                autoFocus
+                className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Admin PIN</label>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="Enter 6-digit PIN"
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              {pinError && (
+                <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  <AlertCircle size={12} /> {pinError}
+                </div>
               )}
-            </button>
-            <p className="mt-4 text-center text-xs text-gray-400">
-              Your PIN is included in your FT9ja partner approval email.
-            </p>
-          </form>
+              <button
+                type="submit"
+                disabled={!adminEmailInput || !pinInput || pinLoading}
+                className="mt-4 w-full rounded-lg bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
+              >
+                {pinLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />{' '}
+                    Signing in…
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinGateView('forgot');
+                  setPinError(null);
+                  setForgotMessage(null);
+                }}
+                className="mt-3 w-full text-center text-xs font-medium text-gray-500 hover:text-gray-800"
+              >
+                Forgot PIN?
+              </button>
+              <p className="mt-4 text-center text-xs text-gray-400">
+                Use the owner email and PIN from your FT9ja partner approval email.
+              </p>
+            </form>
+          )}
+
+          {pinGateView === 'forgot' && (
+            <form
+              onSubmit={handleForgotPinSubmit}
+              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+            >
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Owner email</label>
+              <input
+                type="email"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                placeholder="you@example.com"
+                autoFocus
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              {pinError && (
+                <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  <AlertCircle size={12} /> {pinError}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={!adminEmailInput || pinLoading}
+                className="mt-4 w-full rounded-lg bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
+              >
+                {pinLoading ? 'Sending…' : 'Send reset code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinGateView('login');
+                  setPinError(null);
+                }}
+                className="mt-3 w-full text-center text-xs text-gray-500 hover:text-gray-800"
+              >
+                Back to sign in
+              </button>
+            </form>
+          )}
+
+          {pinGateView === 'reset' && (
+            <form
+              onSubmit={handleResetPinSubmit}
+              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+            >
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Reset code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={resetOtp}
+                onChange={(e) => setResetOtp(e.target.value)}
+                placeholder="6-digit code"
+                autoFocus
+                className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">New PIN</label>
+              <input
+                type="password"
+                value={resetPin}
+                onChange={(e) => setResetPin(e.target.value)}
+                placeholder="6-12 digit PIN"
+                className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              <label className="mb-1.5 block text-xs font-semibold text-gray-700">Confirm PIN</label>
+              <input
+                type="password"
+                value={resetConfirmPin}
+                onChange={(e) => setResetConfirmPin(e.target.value)}
+                placeholder="Confirm PIN"
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              {pinError && (
+                <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+                  <AlertCircle size={12} /> {pinError}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={!resetOtp || !resetPin || !resetConfirmPin || pinLoading}
+                className="mt-4 w-full rounded-lg bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-40"
+              >
+                {pinLoading ? 'Updating…' : 'Update PIN'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPinGateView('login');
+                  setPinError(null);
+                }}
+                className="mt-3 w-full text-center text-xs text-gray-500 hover:text-gray-800"
+              >
+                Back to sign in
+              </button>
+            </form>
+          )}
+
           <div className="mt-4 text-center">
             <Link href={`/${slug}`} className="text-xs text-gray-400 hover:text-gray-700">
               ← Back to {slug}.ft9ja.com
@@ -1791,6 +1988,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 await partnerAdminFetch(`/api/partners/${slug}/verify-pin`, { method: 'DELETE' });
                 setPinAuthed(false);
                 setPinInput('');
+                setAdminEmailInput('');
                 setCurrentAdminPin('');
               }}
               className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-500 hover:border-gray-300"
@@ -2485,7 +2683,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     type="password"
                     value={brandForm.admin_pin}
                     onChange={(e) => setBrandForm((f) => ({ ...f, admin_pin: e.target.value }))}
-                    placeholder="Enter 4-12 digit PIN"
+                    placeholder="Enter 6-12 digit PIN"
                     maxLength={12}
                     inputMode="numeric"
                     pattern="[0-9]*"

@@ -9,6 +9,8 @@ import {
   getRequestRateLimitKey,
 } from '@/lib/rate-limit';
 import { buildTraderSessionCookie } from '@/lib/trader-session-cookie';
+import { parseJsonBody } from '@/lib/api-validation';
+import { traderRegisterSchema } from '@/lib/api-schemas';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_REGISTER_ATTEMPTS = 5;
@@ -17,16 +19,10 @@ const REGISTER_WINDOW_MS = 60 * 60 * 1000;
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const body = await request.json();
-    const { name, email, password } = body;
+    const parsed = await parseJsonBody(request, traderRegisterSchema);
+    if (!parsed.ok) return parsed.response;
 
-    if (!name || !email || !password) {
-      return Response.json({ error: 'name, email, and password are required' }, { status: 400 });
-    }
-
-    if (password.length < 8) {
-      return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
-    }
+    const { name, email, password } = parsed.data;
 
     const rateKey = `${getRequestRateLimitKey(request, 'trader-register')}:${slug}`;
     const limited = checkRateLimit(rateKey, MAX_REGISTER_ATTEMPTS, REGISTER_WINDOW_MS);
@@ -41,14 +37,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
     if (await traderEmailExists(partnerId, email)) {
-      return Response.json({ error: 'A trader with this email already exists.' }, { status: 409 });
+      return Response.json({ error: 'Registration failed. Try signing in instead.' }, { status: 400 });
     }
 
     const passwordHash = await argon2.hash(password);
     const trader = await createTraderWithCount({
       partnerId,
-      name: String(name).trim(),
-      email: String(email).trim().toLowerCase(),
+      name,
+      email,
       passwordHash,
     });
 

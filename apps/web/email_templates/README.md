@@ -1,6 +1,6 @@
 # Email Templates
 Generated: June 2026
-Total: 20 templates (10 per category)
+Total: 22 templates (11 per category)
 
 ## Folder Structure
 /ft9ja-to-partner/   — Emails from FT9ja to Partner firms
@@ -13,7 +13,7 @@ Total: 20 templates (10 per category)
 {{CURRENT_PROFIT}}, {{CURRENT_DRAWDOWN}}, {{TRADING_DAYS}},
 {{DASHBOARD_URL}}, {{ADMIN_URL}}, {{EVAL_ID}}, {{DATE}},
 {{MONTH}}, {{YEAR}}, {{URL}}, {{OWNER_EMAIL}}, {{FAIL_REASON}},
-{{VERIFIED_DATE}}, {{NEXT_DUE_DATE}}, {{DUE_DATE}}, {{REF}}
+{{VERIFIED_DATE}}, {{NEXT_DUE_DATE}}, {{DUE_DATE}}, {{REF}}, {{OTP}}
 
 ## Usage
 All templates are self-contained HTML files compatible with major

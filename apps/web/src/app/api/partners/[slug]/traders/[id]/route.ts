@@ -13,7 +13,7 @@ export async function GET(
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const trader = await getTraderProfile(Number(id));
+    const trader = await getTraderProfile(Number(id), session.partnerId);
     if (!trader) return Response.json({ error: 'Not found' }, { status: 404 });
     return Response.json(trader);
   } catch (e) {
@@ -47,10 +47,10 @@ export async function PATCH(
         return Response.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
       }
 
-      const existing = await getTraderProfile(Number(id));
+      const existing = await getTraderProfile(Number(id), session.partnerId);
       if (!existing) return Response.json({ error: 'Not found' }, { status: 404 });
 
-      const passwordHash = await getTraderPasswordHash(Number(id));
+      const passwordHash = await getTraderPasswordHash(Number(id), session.partnerId);
       if (passwordHash) {
         if (!current_password) {
           return Response.json({ error: 'Current password is required' }, { status: 400 });
@@ -68,7 +68,7 @@ export async function PATCH(
       return Response.json({ error: 'Nothing to update' }, { status: 400 });
     }
 
-    const result = await updateTraderProfile(Number(id), updates);
+    const result = await updateTraderProfile(Number(id), session.partnerId, updates);
     if (!result) return Response.json({ error: 'Not found' }, { status: 404 });
 
     return Response.json(result);
