@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { getPartnerIdBySlug } from '@/db/queries/partners';
 import { getTraderSessionSecret } from '@/lib/auth-secret';
 import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
 
@@ -51,9 +50,9 @@ export async function parseSessionFromRequest(
   const token = match.slice(cookieName.length + 1);
   const session = verifySessionToken(token);
   if (!session) return null;
-  if (session.slug !== slug) return null;
-  const partnerId = await getPartnerIdBySlug(slug);
-  if (!partnerId || session.partnerId !== partnerId) return null;
+  // HMAC payload already binds partnerId + slug; skip a DB round-trip when
+  // the path slug matches the signed cookie.
+  if (session.slug !== slug || !session.partnerId) return null;
   if (await isSessionIssuedBeforeRevocation(session.iat)) return null;
   return session;
 }

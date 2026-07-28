@@ -242,3 +242,41 @@ export async function listAllTraderRequests() {
       desc(traderRequests.createdAt)
     );
 }
+
+/** Lightweight badge counts for Super Admin nav — avoids loading full list payloads. */
+export async function getAdminBadgeCounts() {
+  const [
+    kycPending,
+    paymentsPending,
+    payoutsPending,
+    traderRequestsPending,
+  ] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(traders)
+      .where(eq(traders.kycStatus, 'submitted'))
+      .then(([row]) => row?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(evaluations)
+      .where(eq(evaluations.status, 'pending_payment'))
+      .then(([row]) => row?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(evaluations)
+      .where(and(eq(evaluations.status, 'passed'), sql`${evaluations.payoutStatus} IS NULL`))
+      .then(([row]) => row?.count ?? 0),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(traderRequests)
+      .where(eq(traderRequests.status, 'pending'))
+      .then(([row]) => row?.count ?? 0),
+  ]);
+
+  return {
+    kycPending,
+    paymentsPending,
+    payoutsPending,
+    traderRequestsPending,
+  };
+}

@@ -1,6 +1,6 @@
 import { listPartners } from '@/db/queries/partners';
 import {
-  getPartnerAvailableBalance,
+  getPartnerAvailableBalances,
   listAllPartnerPayoutRequests,
   updatePartnerPayoutRequest,
 } from '@/db/queries/partner-payout-requests';
@@ -17,13 +17,8 @@ export async function GET(request: Request) {
     ]);
 
     const partnerById = new Map(partners.map((p) => [p.id, p]));
-    const balances = await Promise.all(
-      partners.map(async (partner) => ({
-        partner_id: partner.id,
-        available_balance: await getPartnerAvailableBalance(partner.id),
-      }))
-    );
-    const balanceByPartner = new Map(balances.map((b) => [b.partner_id, b.available_balance]));
+    const partnerIds = [...new Set(requests.map((r) => r.partner_id))];
+    const balanceByPartner = await getPartnerAvailableBalances(partnerIds);
 
     const rows = requests.map((request) => {
       const partner = partnerById.get(request.partner_id);
@@ -78,8 +73,7 @@ export async function PATCH(request: Request) {
 
     return Response.json(result);
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Failed to update payout request';
     console.error(e);
-    return Response.json({ error: message }, { status: 400 });
+    return Response.json({ error: 'Failed to update partner payout request' }, { status: 500 });
   }
 }

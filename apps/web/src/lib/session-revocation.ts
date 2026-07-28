@@ -1,6 +1,8 @@
 import { getSessionsRevokedAtMs, setSessionsRevokedAtMs } from '@/db/queries/app-settings';
 
-const CACHE_TTL_MS = 3_000;
+// Longer TTL cuts app_settings reads on every authed request; revoke-all
+// still primes the cache immediately via primeSessionsRevokedAtCache.
+const CACHE_TTL_MS = 60_000;
 
 let cachedRevokedAtMs = 0;
 let cacheExpiresAt = 0;

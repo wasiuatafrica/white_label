@@ -16,13 +16,32 @@ export async function listPartners() {
   return rows.map(mapPartnerForSuperAdmin);
 }
 
+const PARTNER_ID_CACHE_TTL_MS = 60_000;
+const partnerIdBySlugCache = new Map<string, { id: number | null; expiresAt: number }>();
+
+export function invalidatePartnerIdBySlugCache(slug?: string) {
+  if (slug) {
+    partnerIdBySlugCache.delete(slug);
+    return;
+  }
+  partnerIdBySlugCache.clear();
+}
+
 export async function getPartnerIdBySlug(slug: string) {
+  const now = Date.now();
+  const cached = partnerIdBySlugCache.get(slug);
+  if (cached && now < cached.expiresAt) {
+    return cached.id;
+  }
+
   const [row] = await db
     .select({ id: partners.id })
     .from(partners)
     .where(eq(partners.slug, slug))
     .limit(1);
-  return row?.id ?? null;
+  const id = row?.id ?? null;
+  partnerIdBySlugCache.set(slug, { id, expiresAt: now + PARTNER_ID_CACHE_TTL_MS });
+  return id;
 }
 
 export async function getPartnerBySlug(slug: string) {
@@ -98,6 +117,7 @@ export async function createPartner(data: {
       status: 'pending',
     })
     .returning();
+  invalidatePartnerIdBySlugCache(data.slug);
   return mapPartner(row);
 }
 
@@ -148,6 +168,7 @@ export async function updatePartnerBySlug(slug: string, body: Record<string, unk
 
 export async function deletePartnerBySlug(slug: string) {
   await db.delete(partners).where(eq(partners.slug, slug));
+  invalidatePartnerIdBySlugCache(slug);
 }
 
 export async function verifyPartnerPin(slug: string, pin: string) {

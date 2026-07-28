@@ -77,6 +77,72 @@ export async function getPartnerAvailableBalance(partnerId: number, tx: DbOrTx =
   return Math.max(earnings - reserved, 0);
 }
 
+/** Batch balances for many partners (2 queries total instead of 2N). */
+export async function getPartnerAvailableBalances(
+  partnerIds: number[],
+  tx: DbOrTx = db
+): Promise<Map<number, number>> {
+  const balances = new Map<number, number>();
+  if (partnerIds.length === 0) return balances;
+
+  for (const id of partnerIds) {
+    balances.set(id, 0);
+  }
+
+  const [earningsRows, reservedRows] = await Promise.all([
+    tx
+      .select({
+        partnerId: evaluations.partnerId,
+        total: sql<string>`COALESCE(SUM(${evaluations.partnerEarningsAmount}), 0)`,
+      })
+      .from(evaluations)
+      .where(
+        and(
+          inArray(evaluations.partnerId, partnerIds),
+          sql`${evaluations.verifiedAmount} IS NOT NULL`,
+          sql`${evaluations.status} NOT IN ('pending_payment', 'payment_rejected')`
+        )
+      )
+      .groupBy(evaluations.partnerId),
+    tx
+      .select({
+        partnerId: partnerPayoutRequests.partnerId,
+        total: sql<string>`COALESCE(SUM(${partnerPayoutRequests.amountRequested}), 0)`,
+      })
+      .from(partnerPayoutRequests)
+      .where(
+        and(
+          inArray(partnerPayoutRequests.partnerId, partnerIds),
+          inArray(partnerPayoutRequests.status, [...RESERVED_PAYOUT_STATUSES])
+        )
+      )
+      .groupBy(partnerPayoutRequests.partnerId),
+  ]);
+
+  const earningsByPartner = new Map(
+    earningsRows.map((row) => [row.partnerId, parseFloat(row.total || '0')])
+  );
+  const reservedByPartner = new Map(
+    reservedRows.map((row) => [row.partnerId, parseFloat(row.total || '0')])
+  );
+
+  for (const id of partnerIds) {
+    const earnings = earningsByPartner.get(id) ?? 0;
+    const reserved = reservedByPartner.get(id) ?? 0;
+    balances.set(id, Math.max(earnings - reserved, 0));
+  }
+
+  return balances;
+}
+
+export async function countPendingPartnerPayoutRequests(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(partnerPayoutRequests)
+    .where(eq(partnerPayoutRequests.status, 'pending'));
+  return row?.count ?? 0;
+}
+
 export async function createPartnerPayoutRequest(data: {
   partnerId: number;
   amountRequested: string | number;

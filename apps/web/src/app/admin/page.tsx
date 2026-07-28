@@ -825,6 +825,7 @@ function KYCTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-kyc'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setSelected(null);
     },
   });
@@ -1694,6 +1695,7 @@ function PaymentsTab({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setConfirming(null);
     },
     onError: () => setConfirming(null),
@@ -1721,6 +1723,7 @@ function PaymentsTab({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-payments'] });
       qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setRejecting(null);
     },
     onError: () => setRejecting(null),
@@ -2012,6 +2015,7 @@ function EvaluationPaymentsTab({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
       qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setConfirming(null);
     },
     onError: () => setConfirming(null),
@@ -2039,6 +2043,7 @@ function EvaluationPaymentsTab({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-evaluation-payments'] });
       qc.invalidateQueries({ queryKey: ['admin-payments'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setRejecting(null);
     },
     onError: () => setRejecting(null),
@@ -2557,7 +2562,10 @@ function PayoutsTab() {
       if (!res.ok) throw new Error('Failed');
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-payouts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-payouts'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
+    },
   });
 
   const filtered = rows.filter((r) => {
@@ -2791,6 +2799,7 @@ function PartnerPayoutsTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-partner-payouts'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setUpdatingId(null);
     },
     onError: () => setUpdatingId(null),
@@ -3047,6 +3056,7 @@ function RequestsTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-requests'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setSelected(null);
       setAdminNotes('');
       setDeciding(null);
@@ -3074,6 +3084,7 @@ function RequestsTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-aso-requests'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
       setSelected(null);
       setAdminNotes('');
       setDeciding(null);
@@ -3654,77 +3665,29 @@ export default function AdminPage() {
     };
   }, []);
 
-  const { data: kycRows = [] } = useQuery<KYCRow[]>({
-    queryKey: ['admin-kyc'],
+  const { data: badges } = useQuery({
+    queryKey: ['admin-badge-counts'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/kyc');
+      const res = await fetch('/api/admin/badge-counts');
       if (!res.ok) throw new Error('Failed');
-      return res.json();
+      return res.json() as Promise<{
+        kycPending: number;
+        paymentsPending: number;
+        payoutsPending: number;
+        partnerPayoutsPending: number;
+        requestsPending: number;
+        partnerSignupsAbandoned: number;
+      }>;
     },
     enabled: authed,
+    staleTime: 30_000,
   });
-  const { data: paymentRows = [] } = useQuery<PaymentRow[]>({
-    queryKey: ['admin-payments'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/payments');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const { data: payoutRows = [] } = useQuery<PayoutRow[]>({
-    queryKey: ['admin-payouts'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/payouts');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const { data: requestRows = [] } = useQuery<RequestRow[]>({
-    queryKey: ['admin-requests'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/requests');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const { data: asoRequestRows = [] } = useQuery<AsoRequestRow[]>({
-    queryKey: ['admin-aso-requests'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/aso-requests');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const { data: partnerSignupRows = [] } = useQuery<PartnerSignupRow[]>({
-    queryKey: ['admin-partner-signups'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/partner-signup-events');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const { data: partnerPayoutRows = [] } = useQuery<PartnerPayoutRequestRow[]>({
-    queryKey: ['admin-partner-payouts'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/partner-payouts');
-      if (!res.ok) throw new Error('Failed');
-      return res.json();
-    },
-    enabled: authed,
-  });
-  const kycPending = kycRows.filter((r) => r.kyc_status === 'submitted').length;
-  const paymentsPending = paymentRows.length;
-  const payoutsPending = payoutRows.filter((r) => !r.payout_status).length;
-  const partnerPayoutsPending = partnerPayoutRows.filter((r) => r.status === 'pending').length;
-  const requestsPending =
-    requestRows.filter((r) => r.status === 'pending').length +
-    asoRequestRows.filter((r) => r.status === 'pending').length;
-  const partnerSignupsAbandoned = partnerSignupRows.filter((r) => r.status === 'abandoned').length;
+  const kycPending = badges?.kycPending ?? 0;
+  const paymentsPending = badges?.paymentsPending ?? 0;
+  const payoutsPending = badges?.payoutsPending ?? 0;
+  const partnerPayoutsPending = badges?.partnerPayoutsPending ?? 0;
+  const requestsPending = badges?.requestsPending ?? 0;
+  const partnerSignupsAbandoned = badges?.partnerSignupsAbandoned ?? 0;
 
   const logout = async () => {
     await fetch('/api/admin/auth', { method: 'DELETE' });

@@ -1,13 +1,17 @@
 /**
- * ⚠ ANYTHING PLATFORM — DO NOT REWRITE THIS FILE ⚠
- *
- * Shipped v2 better-auth client. Signup/signin pages and the mobile app all
- * import from here. Safe to leave as-is; unsafe to pass an explicit baseURL
- * (relative paths are correct — the pages + mobile WebView handle origin
- * routing via trustedOrigins on the server).
+ * Better Auth client stub — platform account auth is disabled.
+ * Partner / admin auth does not use this module.
  */
-import { createAuthClient } from 'better-auth/react';
 
-export const authClient = createAuthClient();
+function disabled(): never {
+  throw new Error('Platform account auth is disabled');
+}
+
+export const authClient = {
+  signIn: { email: async () => disabled() },
+  signUp: { email: async () => disabled() },
+  signOut: async () => disabled(),
+  useSession: () => ({ data: null, isPending: false, error: null }),
+};
 
 export const { signIn, signUp, signOut, useSession } = authClient;

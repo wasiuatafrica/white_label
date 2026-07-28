@@ -5,7 +5,8 @@
     "heroku-postbuild": "yarn workspace web build",
     "db:generate": "yarn workspace web db:generate",
     "db:migrate": "yarn workspace web db:migrate",
-    "db:push": "yarn workspace web db:push"
+    "db:push": "yarn workspace web db:push",
+    "db:copy": "bash scripts/copy-neon-db.sh"
   },
   "engines": {
     "node": "24.x"

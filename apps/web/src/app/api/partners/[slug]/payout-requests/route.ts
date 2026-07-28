@@ -1,8 +1,6 @@
-import { getPartnerIdBySlug } from '@/db/queries/partners';
 import {
   createPartnerPayoutRequest,
   findPendingPartnerPayoutRequest,
-  getPartnerAvailableBalance,
   getPartnerReservedPayoutTotal,
   getPartnerTotalEarnings,
   listPartnerPayoutRequests,
@@ -19,11 +17,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   try {
     const rows = await listPartnerPayoutRequests(auth.partnerId);
-    const [available_balance, total_earnings, total_reserved] = await Promise.all([
-      getPartnerAvailableBalance(auth.partnerId),
+    const [total_earnings, total_reserved] = await Promise.all([
       getPartnerTotalEarnings(auth.partnerId),
       getPartnerReservedPayoutTotal(auth.partnerId),
     ]);
+    const available_balance = Math.max(total_earnings - total_reserved, 0);
     return Response.json({
       requests: rows,
       available_balance,

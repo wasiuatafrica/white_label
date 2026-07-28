@@ -71,6 +71,14 @@ export async function listPartnerSignupEvents() {
   return rows.map(mapPartnerSignupEvent);
 }
 
+export async function countAbandonedPartnerSignupEvents(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(partnerSignupEvents)
+    .where(eq(partnerSignupEvents.status, 'abandoned'));
+  return row?.count ?? 0;
+}
+
 export async function getPartnerSignupEventByAttemptId(attemptId: string) {
   const [row] = await db
     .select()

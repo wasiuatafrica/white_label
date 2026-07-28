@@ -278,6 +278,14 @@ export async function listAllAsoRequests() {
     );
 }
 
+export async function countPendingAsoRequests(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(asoRequests)
+    .where(eq(asoRequests.status, 'pending'));
+  return row?.count ?? 0;
+}
+
 export async function getAsoApprovalNotice(requestId: number) {
   const [row] = await db
     .select({
