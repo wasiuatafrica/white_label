@@ -27,6 +27,10 @@
     "OPENAI_API_KEY": {
       "description": "OpenAI API key for partner AI logo generation",
       "required": false
+    },
+    "CRON_SECRET": {
+      "description": "Secret token for Heroku Scheduler curl to /api/cron/partner-licenses",
+      "required": false
     }
   },
   "formation": {

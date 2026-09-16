@@ -1,5 +1,8 @@
 import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
+import { getBatchPartnerLicenseCoverage } from '@/db/queries/partner-license-invoices';
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
+import { exemptLicenseCoverage } from '@/lib/partner-license-billing';
+import { isLicenseRecurringExempt } from '@/lib/partner-pricing';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export async function GET(request: Request) {
@@ -8,7 +11,27 @@ export async function GET(request: Request) {
 
   try {
     const partners = await listPartners();
-    return Response.json(partners);
+    const partnerIds = partners.map((p) => p.id);
+    const coverageMap = await getBatchPartnerLicenseCoverage(partnerIds);
+
+    const enriched = partners.map((p) => ({
+      ...p,
+      monthly_fee_paid: isLicenseRecurringExempt(p.slug) ? true : p.monthly_fee_paid,
+      license_coverage: coverageMap.get(p.id) ?? {
+        ...(isLicenseRecurringExempt(p.slug)
+          ? exemptLicenseCoverage()
+          : {
+              isCovered: false,
+              status: 'none' as const,
+              periodStart: null,
+              periodEnd: null,
+              nextDueAt: null,
+            }),
+        latestInvoice: null,
+      },
+    }));
+
+    return Response.json(enriched);
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to fetch partners' }, { status: 500 });

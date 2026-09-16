@@ -12,6 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { partnerStatusEnum, partnerTemplateEnum } from './enums';
 import { evaluations } from './evaluations';
+import { partnerLicenseInvoices } from './partner-license-invoices';
 import { partnerPayoutRequests } from './partner-payout-requests';
 import { traderRequests } from './trader-requests';
 import { traders } from './traders';
@@ -55,6 +56,7 @@ export const partnersRelations = relations(partners, ({ many }) => ({
   evaluations: many(evaluations),
   traderRequests: many(traderRequests),
   payoutRequests: many(partnerPayoutRequests),
+  licenseInvoices: many(partnerLicenseInvoices),
 }));
 
 export type Partner = typeof partners.$inferSelect;

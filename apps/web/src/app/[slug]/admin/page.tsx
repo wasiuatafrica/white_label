@@ -10,6 +10,7 @@ import {
 import { PasswordInput } from '@/components/ui/password-input';
 import { MAX_PARTNER_LOGO_GENERATIONS } from '@/lib/openai/logo-limits';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
+import { getMonthlyChartItemKey } from '@/lib/partner-admin-analytics';
 import {
   FT9JA_BASE_PRICES,
   getExpectedPrice,
@@ -17,6 +18,12 @@ import {
   getWholesalePrice,
   toMoneyNumber as pricingToMoney,
 } from '@/lib/partner-pricing';
+import {
+  getInvoiceLifecycleStatus,
+  licenseLifecycleBadgeClass,
+  licenseLifecycleLabel,
+  nextDueAtForInvoice,
+} from '@/lib/partner-license-billing';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -38,15 +45,29 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Upload,
   Users,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import { use, useEffect, useRef, useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
+import useUpload from '@/utils/useUpload';
 
 const partnerAdminFetch = (input: string, init: RequestInit = {}) =>
   fetch(input, { ...init, credentials: 'include' });
+
+function formatDateShort(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return '—';
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  return d.toLocaleDateString('en-NG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Africa/Lagos',
+  });
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +91,38 @@ type Partner = {
   template: string;
   fee_markup: number | string | null;
 };
+
+type PartnerLicenseInvoice = {
+  id: number;
+  partner_id: number;
+  invoice_number: string;
+  amount: string;
+  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived';
+  period_start: string;
+  period_end: string;
+  due_at: string;
+  payment_proof_url?: string | null;
+  receipt_uploaded_at?: string | null;
+  paid_at?: string | null;
+  verified_amount?: string | null;
+  verified_by?: string | null;
+  verification_note?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type LicenseCoverageData = {
+  isCovered: boolean;
+  status: 'paid' | 'waived' | 'receipt_uploaded' | 'overdue' | 'pending' | 'expired' | 'none' | 'exempt';
+  periodStart: string | null;
+  periodEnd: string | null;
+  nextDueAt: string | null;
+  latestInvoice: PartnerLicenseInvoice | null;
+};
+
+function isLicensePaymentActionable(status: LicenseCoverageData['status'] | undefined): boolean {
+  return status === 'pending' || status === 'overdue' || status === 'expired';
+}
 
 type Trader = {
   id: number;
@@ -1004,11 +1057,12 @@ function AnalyticsTab({
   // If still empty (no evals at all), show placeholder months
   const chartKeys: string[] = last6Keys.length > 0 ? last6Keys : ['', '', '', '', '', ''];
 
-  const monthlyData = chartKeys.map((key) => {
+  const monthlyData = chartKeys.map((key, index) => {
     const [, mm] = key.split('-');
     const label = mm ? (MONTH_LABELS[mm] ?? key) : '—';
     const monthEvals = confirmed.filter((ev) => (ev.purchase_date ?? '').startsWith(key));
     return {
+      key: getMonthlyChartItemKey(key, index),
       label,
       count: monthEvals.length,
       revenue: monthEvals.reduce(
@@ -1075,7 +1129,7 @@ function AnalyticsTab({
             const barH =
               maxRevenue > 0 ? Math.max((m.revenue / maxRevenue) * 100, m.revenue > 0 ? 8 : 0) : 0;
             return (
-              <div key={m.label} className="flex flex-1 flex-col items-center gap-1.5">
+              <div key={m.key} className="flex flex-1 flex-col items-center gap-1.5">
                 <div className="text-xs font-semibold text-gray-700">
                   {m.count > 0 ? fmtMoney(m.revenue) : ''}
                 </div>
@@ -1511,11 +1565,16 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   // ── Admin state ────────────────────────────────────────────────────────────
   const [tab, setTab] = useState<
-    'overview' | 'payments' | 'payouts' | 'analytics' | 'traders' | 'settings'
+    'overview' | 'payments' | 'payouts' | 'analytics' | 'traders' | 'settings' | 'license'
   >('overview');
   const [showAddTrader, setShowAddTrader] = useState(false);
   const [newTrader, setNewTrader] = useState({ name: '', email: '' });
   const [addError, setAddError] = useState<string | null>(null);
+
+  const [uploadLicenseReceipt, { loading: uploadingLicenseReceipt }] = useUpload();
+  const [receiptUploadSuccess, setReceiptUploadSuccess] = useState<string | null>(null);
+  const [receiptUploadError, setReceiptUploadError] = useState<string | null>(null);
+  const licenseProofFileRef = useRef<HTMLInputElement>(null);
 
   const [brandForm, setBrandForm] = useState({
     firm_name: '',
@@ -1596,6 +1655,59 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   const allEvals = evalData?.evaluations ?? [];
   const pendingEvals = allEvals.filter((e) => e.status === 'pending_payment');
+
+  const { data: licenseData, isLoading: licenseLoading, refetch: refetchLicense } = useQuery<{
+    invoices: PartnerLicenseInvoice[];
+    coverage: LicenseCoverageData;
+  }>({
+    queryKey: ['partner-license-invoices', slug],
+    queryFn: async () => {
+      const res = await partnerAdminFetch(`/api/partners/${slug}/license-invoices`);
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+    enabled: !!partner,
+  });
+
+  const handleLicenseProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReceiptUploadError(null);
+    setReceiptUploadSuccess(null);
+    try {
+      const res = await uploadLicenseReceipt({ file, slug });
+      if (!res.url) {
+        throw new Error(res.error || 'Failed to upload file');
+      }
+      const postRes = await partnerAdminFetch(`/api/partners/${slug}/license-invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_proof_url: res.url }),
+      });
+      const data = await postRes.json();
+      if (!postRes.ok) {
+        throw new Error(data.error || 'Failed to submit receipt');
+      }
+      setReceiptUploadSuccess('Receipt uploaded successfully. Awaiting FT9ja confirmation.');
+      refetchLicense();
+      qc.invalidateQueries({ queryKey: ['partner', slug] });
+    } catch (err: unknown) {
+      setReceiptUploadError(err instanceof Error ? err.message : 'Failed to upload receipt');
+    } finally {
+      if (licenseProofFileRef.current) {
+        licenseProofFileRef.current.value = '';
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'license') {
+        setTab('license');
+      }
+    }
+  }, []);
 
   const addTrader = useMutation({
     mutationFn: async (data: { name: string; email: string; partner_id: number }) => {
@@ -1938,6 +2050,12 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       badge: pendingEvals.length,
     },
     { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: 0 },
+    {
+      id: 'license',
+      label: 'License',
+      icon: <ShieldCheck size={13} />,
+      badge: isLicensePaymentActionable(licenseData?.coverage?.status) ? 1 : 0,
+    },
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={13} />, badge: 0 },
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
     { id: 'settings', label: 'Settings', icon: <KeyRound size={13} />, badge: 0 },
@@ -2016,6 +2134,27 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
         {/* ── Overview ── */}
         {tab === 'overview' && (
           <div className="space-y-5">
+            {(licenseData?.coverage?.status === 'overdue' ||
+              licenseData?.coverage?.status === 'expired') && (
+              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-red-900">
+                    License fee payment is overdue
+                  </div>
+                  <div className="text-xs text-red-700">
+                    Your ₦95,000 license period has ended. Upload your payment receipt now to keep your firm active and avoid suspension.
+                  </div>
+                </div>
+                <button
+                  onClick={() => setTab('license')}
+                  className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100"
+                >
+                  Upload Receipt →
+                </button>
+              </div>
+            )}
+
             {pendingEvals.length > 0 && (
               <div className="flex items-start gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
                 <Clock size={16} className="mt-0.5 shrink-0 text-yellow-600" />
@@ -2059,9 +2198,39 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               />
               <StatCard
                 label="License"
-                value={partner.monthly_fee_paid ? 'Paid ✓' : 'Unpaid'}
+                value={
+                  licenseData?.coverage?.status === 'exempt'
+                    ? 'Exempt'
+                    : licenseData?.coverage?.isCovered
+                    ? licenseData.coverage.status === 'waived'
+                      ? 'Complimentary'
+                      : 'Covered ✓'
+                    : licenseData?.coverage?.status === 'receipt_uploaded'
+                    ? 'In Review'
+                    : licenseData?.coverage?.status === 'overdue' ||
+                        licenseData?.coverage?.status === 'expired'
+                    ? 'Expired ⚠️'
+                    : 'Unpaid'
+                }
                 icon={<ShieldCheck size={16} />}
-                color={partner.monthly_fee_paid ? '#16A34A' : '#DC2626'}
+                color={
+                  licenseData?.coverage?.status === 'exempt'
+                    ? '#2563EB'
+                    : licenseData?.coverage?.isCovered
+                    ? licenseData.coverage.status === 'waived'
+                      ? '#2563EB'
+                      : '#16A34A'
+                    : licenseData?.coverage?.status === 'receipt_uploaded'
+                    ? '#D97706'
+                    : '#DC2626'
+                }
+                sub={
+                  licenseData?.coverage?.status === 'exempt'
+                    ? 'No recurring license fee'
+                    : licenseData?.coverage?.periodEnd
+                    ? `Through ${new Date(licenseData.coverage.periodEnd).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                    : undefined
+                }
               />
             </div>
 
@@ -2079,7 +2248,19 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     },
                     {
                       label: 'License Status',
-                      value: partner.monthly_fee_paid ? '✅ Paid' : '❌ Unpaid',
+                      value:
+                        licenseData?.coverage?.status === 'exempt'
+                          ? 'Exempt (no recurring fee)'
+                          : licenseData?.coverage?.isCovered
+                          ? licenseData.coverage.status === 'waived'
+                            ? '🎁 Complimentary'
+                            : '✅ Covered'
+                          : licenseData?.coverage?.status === 'receipt_uploaded'
+                          ? '⏳ Receipt in Review'
+                          : licenseData?.coverage?.status === 'overdue' ||
+                              licenseData?.coverage?.status === 'expired'
+                          ? '⚠️ Expired'
+                          : '❌ Unpaid',
                     },
                   ].map((r) => (
                     <div
@@ -2763,6 +2944,343 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── License ── */}
+        {tab === 'license' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-black text-gray-900">Partner License & Billing</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {licenseData?.coverage?.status === 'exempt'
+                  ? 'This firm is exempt from the recurring ₦95,000 license fee.'
+                  : '₦95,000 per 30-day period. Keep your license active to maintain your branded storefront and onboarding.'}
+              </p>
+            </div>
+
+            {(licenseData?.coverage?.status === 'overdue' ||
+              licenseData?.coverage?.status === 'expired') && (
+              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-600" />
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-red-900">
+                    Your license payment is overdue
+                  </div>
+                  <div className="text-xs text-red-700 mt-0.5">
+                    Your previous 30-day license period has ended. Transfer ₦95,000 and upload your receipt to keep your firm active and avoid suspension.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {receiptUploadSuccess && (
+              <div className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4">
+                <CheckCircle size={18} className="mt-0.5 shrink-0 text-green-600" />
+                <div className="flex-1 text-xs text-green-800 font-medium">
+                  {receiptUploadSuccess}
+                </div>
+                <button
+                  onClick={() => setReceiptUploadSuccess(null)}
+                  className="text-green-600 hover:text-green-900"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {receiptUploadError && (
+              <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-600" />
+                <div className="flex-1 text-xs text-red-800 font-medium">
+                  {receiptUploadError}
+                </div>
+                <button
+                  onClick={() => setReceiptUploadError(null)}
+                  className="text-red-600 hover:text-red-900"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-gray-500" /> Current License Status
+                  </h3>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                      licenseData?.coverage?.status === 'exempt'
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : licenseData?.coverage?.isCovered && licenseData.coverage.status === 'waived'
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : licenseData?.coverage?.isCovered
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : licenseData?.coverage?.status === 'receipt_uploaded'
+                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                        : licenseData?.coverage?.status === 'overdue' ||
+                            licenseData?.coverage?.status === 'expired'
+                        ? 'border-red-200 bg-red-50 text-red-700'
+                        : 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                    }`}
+                  >
+                    {licenseData?.coverage?.status === 'exempt'
+                      ? 'Exempt'
+                      : licenseData?.coverage?.isCovered && licenseData.coverage.status === 'waived'
+                      ? '🎁 Complimentary'
+                      : licenseData?.coverage?.isCovered
+                      ? '✓ Covered'
+                      : licenseData?.coverage?.status === 'receipt_uploaded'
+                      ? '⏳ Receipt in Review'
+                      : licenseData?.coverage?.status === 'overdue' ||
+                          licenseData?.coverage?.status === 'expired'
+                      ? '⚠️ Expired'
+                      : 'Payment Due'}
+                  </span>
+                </div>
+
+                <div className="space-y-3 border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between text-xs py-1">
+                    <span className="text-gray-500">Coverage Period</span>
+                    <span className="font-semibold text-gray-900">
+                      {licenseData?.coverage?.status === 'exempt'
+                        ? 'Ongoing'
+                        : licenseData?.coverage?.periodStart && licenseData?.coverage?.periodEnd
+                        ? `${formatDateShort(licenseData.coverage.periodStart)} – ${formatDateShort(licenseData.coverage.periodEnd)}${
+                            licenseData.coverage.status === 'expired' ? ' (expired)' : ''
+                          }`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs py-1">
+                    <span className="text-gray-500">License Fee</span>
+                    <span className="font-semibold text-gray-900">
+                      {licenseData?.coverage?.status === 'exempt' ? 'Exempt' : '₦95,000 / 30 days'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs py-1">
+                    <span className="text-gray-500">Next Renewal Due</span>
+                    <span className="font-semibold text-gray-900">
+                      {licenseData?.coverage?.status === 'exempt'
+                        ? 'None'
+                        : licenseData?.coverage?.nextDueAt
+                        ? formatDateShort(licenseData.coverage.nextDueAt)
+                        : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-5 border-t border-gray-100 pt-4">
+                  {licenseData?.coverage?.status === 'exempt' ? (
+                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+                      This firm is exempt from the recurring FT9ja partner license subscription.
+                    </div>
+                  ) : licenseData?.coverage?.isCovered && licenseData.coverage.status === 'waived' ? (
+                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+                      🎁 This 30-day period has been granted complimentary by FT9ja Super Admin.
+                    </div>
+                  ) : licenseData?.coverage?.status === 'receipt_uploaded' ? (
+                    <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-xs text-amber-800 flex items-center justify-between">
+                      <span>⏳ Renewal receipt uploaded. Awaiting FT9ja confirmation.</span>
+                      {licenseData.coverage.latestInvoice?.payment_proof_url && (
+                        <button
+                          onClick={() =>
+                            openReceipt(
+                              licenseData.coverage.latestInvoice!.payment_proof_url!
+                            )
+                          }
+                          className="font-semibold underline ml-2 shrink-0 hover:text-amber-900"
+                        >
+                          View receipt
+                        </button>
+                      )}
+                    </div>
+                  ) : licenseData?.coverage?.isCovered ? (
+                    <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-xs text-green-800">
+                      ✓ Your firm license is fully active and in good standing.
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        ref={licenseProofFileRef}
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={handleLicenseProofUpload}
+                      />
+                      <button
+                        onClick={() => licenseProofFileRef.current?.click()}
+                        disabled={uploadingLicenseReceipt}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 text-xs font-semibold text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors disabled:opacity-60"
+                      >
+                        {uploadingLicenseReceipt ? (
+                          <>
+                            <Loader2
+                              size={15}
+                              style={{ animation: 'spin 0.8s linear infinite' }}
+                            />{' '}
+                            Uploading receipt…
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={15} /> Click to upload renewal payment receipt
+                          </>
+                        )}
+                      </button>
+                      <p className="mt-1.5 text-[11px] text-gray-400 text-center">
+                        Accepts JPG, PNG, or PDF up to 10MB.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {licenseData?.coverage?.status === 'exempt' ? (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-6 shadow-sm">
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">Recurring billing</h3>
+                  <p className="text-xs text-blue-800">
+                    This firm is not billed the monthly partner license fee. No renewal invoice or
+                    payment receipt is required.
+                  </p>
+                </div>
+              ) : (
+              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <Banknote size={16} className="text-gray-500" /> Payment Transfer Details
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Transfer the ₦95,000 license fee directly using official FT9ja bank details.
+                  </p>
+
+                  <div className="rounded-lg bg-gray-50 border border-gray-100 p-3.5 space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Bank Name</span>
+                      <span className="font-bold text-gray-900">Zenith Bank</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Account Name</span>
+                      <span className="font-bold text-gray-900">Asokoro Technologies</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Account Number</span>
+                      <span className="font-mono font-bold text-gray-900 text-sm">1217002454</span>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-200 pt-2">
+                      <span className="text-gray-500">Payment Reference</span>
+                      <span className="font-mono font-bold text-green-700">{slug}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-[11px] text-gray-400">
+                  Always use your firm slug <strong className="text-gray-600">{slug}</strong> as your transfer remark so our reconciliations match your payment swiftly.
+                </p>
+              </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">License Invoice History</h3>
+                  <p className="text-xs text-gray-500">All 30-day license cycles and invoices issued for your firm</p>
+                </div>
+              </div>
+
+              {licenseLoading ? (
+                <div className="p-8 text-center text-xs text-gray-400">Loading invoices…</div>
+              ) : !licenseData?.invoices || licenseData.invoices.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-400">No invoices issued yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-500 border-b border-gray-100">
+                      <tr>
+                        <th className="px-6 py-3 font-semibold">Invoice #</th>
+                        <th className="px-6 py-3 font-semibold">Period Range</th>
+                        <th className="px-6 py-3 font-semibold">Renewal Due</th>
+                        <th className="px-6 py-3 font-semibold">Amount</th>
+                        <th className="px-6 py-3 font-semibold">Status</th>
+                        <th className="px-6 py-3 font-semibold text-right">Receipt / Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {licenseData.invoices.map((inv) => {
+                        const displayStatus = getInvoiceLifecycleStatus({
+                          status: inv.status,
+                          periodEnd: inv.period_end,
+                        });
+                        return (
+                        <tr key={inv.id} className="hover:bg-gray-50/50">
+                          <td className="px-6 py-3.5 font-mono font-medium text-gray-900">
+                            {inv.invoice_number}
+                          </td>
+                          <td className="px-6 py-3.5 text-gray-600">
+                            {formatDateShort(inv.period_start)} – {formatDateShort(inv.period_end)}
+                          </td>
+                          <td className="px-6 py-3.5 text-gray-600">
+                            {formatDateShort(
+                              nextDueAtForInvoice({
+                                status: inv.status,
+                                periodStart: inv.period_start,
+                                periodEnd: inv.period_end,
+                                dueAt: inv.due_at,
+                              })
+                            )}
+                          </td>
+                          <td className="px-6 py-3.5 font-semibold text-gray-900">
+                            ₦{Number(inv.amount).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-3.5">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${licenseLifecycleBadgeClass(displayStatus)}`}
+                            >
+                              {displayStatus === 'paid'
+                                ? '✓ Paid'
+                                : displayStatus === 'waived'
+                                ? 'Complimentary'
+                                : displayStatus === 'expired'
+                                ? 'Expired'
+                                : licenseLifecycleLabel(displayStatus)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3.5 text-right">
+                            {inv.payment_proof_url ? (
+                              <button
+                                onClick={() => openReceipt(inv.payment_proof_url!)}
+                                disabled={openingReceiptUrl === inv.payment_proof_url}
+                                className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                              >
+                                {openingReceiptUrl === inv.payment_proof_url ? (
+                                  <Loader2 size={12} style={{ animation: 'spin 0.8s linear infinite' }} />
+                                ) : (
+                                  <FileText size={12} />
+                                )}
+                                View Receipt
+                              </button>
+                            ) : licenseData?.coverage?.status !== 'exempt' &&
+                              (inv.status === 'pending' || inv.status === 'overdue') ? (
+                              <button
+                                onClick={() => licenseProofFileRef.current?.click()}
+                                className="font-semibold text-green-700 hover:underline"
+                              >
+                                Upload Receipt →
+                              </button>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -5,6 +5,12 @@ import {
   updatePartnerBySlug,
 } from '@/db/queries/partners';
 import {
+  createRenewalInvoice,
+  getPartnerLicenseCoverage,
+  markInvoiceEmailSent,
+  recordFirstActivationPaidInvoice,
+} from '@/db/queries/partner-license-invoices';
+import {
   generatePartnerAdminPin,
   isValidPartnerAdminPin,
   partnerPinNeedsGeneration,
@@ -15,12 +21,15 @@ import {
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
 import {
+  getPartnerLifecycleEmailPlan,
   sendPartnerFirmLiveEmail,
+  sendPartnerLicenseInvoiceEmail,
   sendPartnerLicensePaymentConfirmedEmail,
   sendPartnerSuspensionEmail,
   sendPartnerWelcomeEmail,
 } from '@/lib/email/ft9ja-to-partner';
 import { hashPartnerAdminPin, verifyPartnerAdminPin } from '@/lib/partner-pin-crypto';
+import { addDays, computeNextPeriod, generateInvoiceNumber } from '@/lib/partner-license-billing';
 import { isAllowedPartnerLogoUrl } from '@/lib/partner-logo-validation';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
 import { revokeAllStatefulSessions } from '@/lib/session-revocation';
@@ -166,6 +175,46 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
+    if (existing && existing.status === 'pending' && partner.status === 'active') {
+      await recordFirstActivationPaidInvoice({
+        partnerId: partner.id,
+        slug: partner.slug,
+        paymentProofUrl: existing.payment_proof_url,
+      });
+    } else if (existing && existing.status === 'suspended' && partner.status === 'active') {
+      const coverage = await getPartnerLicenseCoverage(partner.id);
+      if (
+        !coverage.isCovered &&
+        coverage.status !== 'exempt' &&
+        (!coverage.latestInvoice || ['paid', 'waived'].includes(coverage.latestInvoice.status))
+      ) {
+        const nextPeriod = coverage.latestInvoice?.period_end
+          ? computeNextPeriod(new Date(coverage.latestInvoice.period_end))
+          : { periodStart: new Date(), periodEnd: addDays(new Date(), 30), dueAt: new Date() };
+
+        const invoice = await createRenewalInvoice({
+          partnerId: partner.id,
+          slug: partner.slug,
+          periodStart: nextPeriod.periodStart,
+          periodEnd: nextPeriod.periodEnd,
+          dueAt: nextPeriod.dueAt,
+          invoiceNumber: generateInvoiceNumber(partner.slug, nextPeriod.periodStart),
+        });
+
+        try {
+          await sendPartnerLicenseInvoiceEmail(partner, {
+            invoiceId: invoice.invoice_number,
+            dueDate: nextPeriod.dueAt,
+            periodStart: nextPeriod.periodStart,
+            periodEnd: nextPeriod.periodEnd,
+          });
+          await markInvoiceEmailSent(invoice.id);
+        } catch (err) {
+          console.error('Failed to send reinstate renewal invoice email:', err);
+        }
+      }
+    }
+
     if (existing) {
       await sendPartnerLifecycleEmails(existing, partner, generatedAdminPinPlain);
     }
@@ -196,22 +245,30 @@ async function sendPartnerLifecycleEmails(
   current: NonNullable<Awaited<ReturnType<typeof getPartnerPrivateBySlug>>>,
   generatedAdminPinPlain: string | null
 ) {
-  const emails: Array<Promise<unknown>> = [];
+  const plan = getPartnerLifecycleEmailPlan({
+    previousStatus: previous.status,
+    currentStatus: current.status,
+    previousMonthlyFeePaid: Boolean(previous.monthly_fee_paid),
+    currentMonthlyFeePaid: Boolean(current.monthly_fee_paid),
+    generatedAdminPinPlain,
+  });
 
-  if (previous.status === 'pending' && current.status === 'active') {
-    emails.push(sendPartnerWelcomeEmail(current, generatedAdminPinPlain ?? undefined));
-    emails.push(sendPartnerFirmLiveEmail(current));
-  } else if (previous.status === 'suspended' && current.status === 'active') {
-    emails.push(sendPartnerFirmLiveEmail(current));
-  }
-
-  if (previous.status === 'active' && current.status === 'suspended') {
-    emails.push(sendPartnerSuspensionEmail(current));
-  }
-
-  if (!previous.monthly_fee_paid && current.monthly_fee_paid) {
-    emails.push(sendPartnerLicensePaymentConfirmedEmail(current));
-  }
+  const emails: Array<Promise<unknown>> = plan.map((action) => {
+    switch (action.type) {
+      case 'welcome':
+        return sendPartnerWelcomeEmail(current, action.adminPinPlain);
+      case 'firm-live':
+        return sendPartnerFirmLiveEmail(current);
+      case 'suspension':
+        return sendPartnerSuspensionEmail(current);
+      case 'payment-confirmed':
+        return sendPartnerLicensePaymentConfirmedEmail(current);
+      default: {
+        const _exhaustive: never = action;
+        return Promise.resolve(_exhaustive);
+      }
+    }
+  });
 
   const results = await Promise.allSettled(emails);
   for (const result of results) {

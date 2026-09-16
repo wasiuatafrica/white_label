@@ -1,5 +1,6 @@
 import type { Evaluation } from './schema/evaluations';
 import type { Partner } from './schema/partners';
+import type { PartnerLicenseInvoice } from './schema/partner-license-invoices';
 import type { PartnerPayoutRequest } from './schema/partner-payout-requests';
 import type { PartnerSignupEvent } from './schema/partner-signup-events';
 import type { Trader } from './schema/traders';
@@ -163,3 +164,27 @@ export function mapPartnerPayoutRequest(row: PartnerPayoutRequest) {
     processed_at: row.processedAt,
   };
 }
+
+export function mapPartnerLicenseInvoice(row: PartnerLicenseInvoice) {
+  return {
+    id: row.id,
+    partner_id: row.partnerId,
+    invoice_number: row.invoiceNumber,
+    amount: row.amount,
+    status: row.status,
+    period_start: row.periodStart,
+    period_end: row.periodEnd,
+    due_at: row.dueAt,
+    payment_proof_url: row.paymentProofUrl,
+    receipt_uploaded_at: row.receiptUploadedAt,
+    paid_at: row.paidAt,
+    verified_amount: row.verifiedAmount,
+    verified_by: row.verifiedBy,
+    verification_note: row.verificationNote,
+    invoice_email_sent_at: row.invoiceEmailSentAt,
+    overdue_email_sent_at: row.overdueEmailSentAt,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+}
+

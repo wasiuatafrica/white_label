@@ -1,5 +1,5 @@
 import { getPartnerPrivateBySlug } from '@/db/queries/partners';
-import { partnerOwnsEvaluationReceipt } from '@/db/queries/evaluations';
+import { partnerOwnsReceipt } from '@/db/queries/receipts';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
@@ -49,7 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     ]);
     const isLegacyReceiptKey = hasAllowedS3KeyPrefix(key, ['uploads/receipts/']);
     const ownsLegacyReceipt =
-      isLegacyReceiptKey && (await partnerOwnsEvaluationReceipt(partner.id, receiptUrl));
+      isLegacyReceiptKey && (await partnerOwnsReceipt(partner.id, receiptUrl));
 
     if (!isSlugScopedKey && !ownsLegacyReceipt) {
       return Response.json({ error: 'Receipt URL is not allowed' }, { status: 403 });

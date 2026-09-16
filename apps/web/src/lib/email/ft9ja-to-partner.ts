@@ -1,4 +1,5 @@
 import { sendEmail } from '@/app/api/utils/send-email';
+import { addDays, formatPeriodRange } from '@/lib/partner-license-billing';
 import { getPartnerUrl } from '@/lib/tenant';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -24,15 +25,13 @@ type Ft9jaPartnerTemplateVariables = {
     OWNER_NAME: string;
     FIRM_NAME: string;
     SLUG: string;
-    ADMIN_PIN: string;
     URL: string;
   };
   'p-03-invoice': {
     OWNER_NAME: string;
     INVOICE_ID: string;
     FIRM_NAME: string;
-    MONTH: string;
-    YEAR: string;
+    PERIOD_RANGE: string;
     DUE_DATE: string;
     URL: string;
   };
@@ -40,8 +39,7 @@ type Ft9jaPartnerTemplateVariables = {
     OWNER_NAME: string;
     FIRM_NAME: string;
     REF: string;
-    MONTH: string;
-    YEAR: string;
+    PERIOD_RANGE: string;
     NEXT_DUE_DATE: string;
     URL: string;
   };
@@ -293,7 +291,6 @@ function partnerVariables(partner: PartnerRecipient) {
     OWNER_NAME: ownerName(partner),
     FIRM_NAME: partner.firm_name,
     SLUG: partner.slug,
-    ADMIN_PIN: partner.admin_pin || '',
     URL: getPartnerUrl(partner.slug, '/admin'),
   };
 }
@@ -326,6 +323,45 @@ function licenseReference(partner: PartnerRecipient, date: Date) {
   return `LIC-${partner.slug.toUpperCase()}-${date.getFullYear()}${month}`;
 }
 
+export type PartnerLifecycleEmailAction =
+  | { type: 'welcome'; adminPinPlain?: string }
+  | { type: 'firm-live' }
+  | { type: 'suspension' }
+  | { type: 'payment-confirmed' };
+
+export function getPartnerLifecycleEmailPlan(params: {
+  previousStatus: 'pending' | 'active' | 'suspended';
+  currentStatus: 'pending' | 'active' | 'suspended';
+  previousMonthlyFeePaid: boolean;
+  currentMonthlyFeePaid: boolean;
+  generatedAdminPinPlain?: string | null;
+}): PartnerLifecycleEmailAction[] {
+  const actions: PartnerLifecycleEmailAction[] = [];
+
+  if (params.previousStatus === 'pending' && params.currentStatus === 'active') {
+    actions.push({
+      type: 'welcome',
+      ...(params.generatedAdminPinPlain ? { adminPinPlain: params.generatedAdminPinPlain } : {}),
+    });
+  } else if (params.previousStatus === 'suspended' && params.currentStatus === 'active') {
+    actions.push({ type: 'firm-live' });
+  }
+
+  if (params.previousStatus === 'active' && params.currentStatus === 'suspended') {
+    actions.push({ type: 'suspension' });
+  }
+
+  if (
+    !params.previousMonthlyFeePaid &&
+    params.currentMonthlyFeePaid &&
+    params.previousStatus !== 'pending'
+  ) {
+    actions.push({ type: 'payment-confirmed' });
+  }
+
+  return actions;
+}
+
 export async function sendPartnerWelcomeEmail(
   partner: PartnerRecipient,
   adminPinPlaintext?: string
@@ -353,8 +389,15 @@ export async function sendPartnerFirmLiveEmail(partner: PartnerRecipient) {
 
 export async function sendPartnerLicensePaymentConfirmedEmail(
   partner: PartnerRecipient,
-  paidAt = new Date()
+  options?: {
+    paidAt?: Date;
+    periodEnd?: Date;
+    periodRange?: string;
+  }
 ) {
+  const paidAt = options?.paidAt ?? new Date();
+  const nextDueDate = options?.periodEnd ?? addDays(paidAt, 30);
+  const periodRange = options?.periodRange ?? formatPeriodRange(paidAt, nextDueDate);
   return sendFt9jaPartnerEmail({
     template: 'p-04-payment-confirmed',
     to: partner.owner_email,
@@ -362,10 +405,9 @@ export async function sendPartnerLicensePaymentConfirmedEmail(
       OWNER_NAME: ownerName(partner),
       FIRM_NAME: partner.firm_name,
       REF: licenseReference(partner, paidAt),
-      MONTH: formatMonth(paidAt),
-      YEAR: formatYear(paidAt),
-      NEXT_DUE_DATE: formatDate(addMonths(paidAt, 1)),
-      URL: getPartnerUrl(partner.slug, '/admin'),
+      PERIOD_RANGE: periodRange,
+      NEXT_DUE_DATE: formatDate(nextDueDate),
+      URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
 }
@@ -388,8 +430,22 @@ export async function sendPartnerSuspensionEmail(
 
 export async function sendPartnerLicenseInvoiceEmail(
   partner: PartnerRecipient,
-  { invoiceId, dueDate, period = new Date() }: { invoiceId: string; dueDate: Date; period?: Date }
+  {
+    invoiceId,
+    dueDate,
+    periodStart = new Date(),
+    periodEnd,
+    periodRange,
+  }: {
+    invoiceId: string;
+    dueDate: Date;
+    periodStart?: Date;
+    periodEnd?: Date;
+    periodRange?: string;
+  }
 ) {
+  const pEnd = periodEnd ?? addDays(periodStart, 30);
+  const pRange = periodRange ?? formatPeriodRange(periodStart, pEnd);
   return sendFt9jaPartnerEmail({
     template: 'p-03-invoice',
     to: partner.owner_email,
@@ -397,10 +453,9 @@ export async function sendPartnerLicenseInvoiceEmail(
       OWNER_NAME: ownerName(partner),
       INVOICE_ID: invoiceId,
       FIRM_NAME: partner.firm_name,
-      MONTH: formatMonth(period),
-      YEAR: formatYear(period),
+      PERIOD_RANGE: pRange,
       DUE_DATE: formatDate(dueDate),
-      URL: getPartnerUrl(partner.slug, '/admin'),
+      URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
 }
@@ -422,7 +477,7 @@ export async function sendPartnerPaymentOverdueEmail(
       DAYS_OVERDUE: String(daysOverdue),
       DUE_DATE: formatDate(dueDate),
       SUSPEND_DATE: formatDate(suspendDate),
-      URL: getPartnerUrl(partner.slug, '/admin'),
+      URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
 }

@@ -55,6 +55,7 @@ const SECTIONS: Section[] = [
       { id: 'partner-admin', label: 'Partner Admin' },
       { id: 'partner-branding', label: 'Branding & Templates' },
       { id: 'partner-pricing', label: 'Pricing & Markup' },
+      { id: 'partner-license', label: 'License & Renewals' },
     ],
   },
   {
@@ -85,6 +86,7 @@ const SECTIONS: Section[] = [
     icon: <Code2 size={14} />,
     subsections: [
       { id: 'api-partners', label: 'Partners' },
+      { id: 'api-license', label: 'License & Billing' },
       { id: 'api-traders', label: 'Traders' },
       { id: 'api-evaluations', label: 'Evaluations' },
       { id: 'api-auth', label: 'Authentication' },
@@ -773,9 +775,32 @@ export default function DocsPage() {
             per sale are <Code>verified_amount − wholesale_amount</Code> (25% of base + markup when
             fully paid).
           </P>
+
+          <H3 id="partner-license">License Renewals & Billing Pipeline</H3>
+          <P>
+            Partners operate on a rolling <strong>30-day license cycle (₦95,000 per 30-day period)</strong> anchored to their original approval date (in the <Code>Africa/Lagos</Code> timezone).
+          </P>
           <Callout type="info">
-            Partners also pay a <strong>₦95,000/month platform license fee</strong> to FT9ja. This
-            keeps their firm active. Failure to pay results in temporary suspension.
+            <strong>First 30 days prepaid:</strong> When a partner signs up on <Code>/apply</Code>, their initial payment receipt covers their first 30 days of active service. When Super Admin approves the partner (<Code>pending → active</Code>), an initial <Code>paid</Code> invoice is recorded automatically. The anniversary begins on approval, so admin review delay does not consume their paid window.
+          </Callout>
+          <ul className="mb-6 space-y-2">
+            {[
+              'Rolling 30-Day Periods: Period n is strictly [start + (n-1)*30d, start + n*30d). Even if a renewal receipt is uploaded or approved late, the original anniversary date never slides.',
+              'Daily Automated Cron: A Heroku Scheduler job triggers POST /api/cron/partner-licenses daily with authorization header Bearer <CRON_SECRET>. When now >= period_end, it creates the next pending invoice and sends email P-03.',
+              'Partner License Tab: Partners view period status, due dates, and upload renewal transfer receipts directly in their private admin panel at /{slug}/admin (License tab or ?tab=license).',
+              'Receipt Review: Uploading a receipt sets status to receipt_uploaded. Super Admin reviews on the Partner Licenses tab: Confirm (₦95,000, marks paid, sends P-04), Reject (requires explanation note), or Waive.',
+              'Complimentary Grants: Super Admin can grant 30-day complimentary periods (marks open invoice as waived or creates the next 30-day period as waived). Waived periods provide full active coverage without sending payment emails.',
+              '7-Day Overdue Notice: Invoices unpaid 7 days after their due date with no uploaded receipt trigger a single P-05 Overdue notice. No automatic suspension is performed.',
+              'Manual Suspension: Super Admin can manually suspend overdue firms from the Partners list. Storefronts and new signups are blocked, but existing active trader evaluations remain accessible and partner admin stays open to pay.',
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
+                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-[#16A34A]" />
+                {item}
+              </li>
+            ))}
+          </ul>
+          <Callout type="warning">
+            <strong>Heroku Scheduler Configuration:</strong> Configure a daily Heroku Scheduler job running <Code>curl -s -X POST -H "Authorization: Bearer $CRON_SECRET" https://partners.ft9ja.com/api/cron/partner-licenses</Code>. No dedicated clock dyno is required.
           </Callout>
 
           {/* ── TRADER PORTAL ─────────────────────────────────────────── */}
@@ -968,6 +993,43 @@ export default function DocsPage() {
             path="/api/partners/[slug]"
             desc="Update partner fields. Any subset of fields can be sent."
             body={`{\n  "status": "active",\n  "brand_color": "#1D4ED8",\n  "template": "bold",\n  "fee_markup": 15000,\n  "admin_pin": "1234",\n  "monthly_fee_paid": true\n}`}
+          />
+
+          <H3 id="api-license">License & Billing</H3>
+          <Endpoint
+            method="GET"
+            path="/api/partners/[slug]/license-invoices"
+            desc="Fetch current coverage status and all license invoices for a partner."
+            auth="Partner admin session cookie"
+            response={`{\n  "invoices": [\n    {\n      "id": 1,\n      "invoice_number": "INV-APEX-20260916",\n      "amount": "95000.00",\n      "status": "paid",\n      "period_start": "2026-09-16T00:00:00Z",\n      "period_end": "2026-10-16T00:00:00Z",\n      "due_at": "2026-09-16T00:00:00Z"\n    }\n  ],\n  "coverage": {\n    "isCovered": true,\n    "status": "paid",\n    "periodStart": "2026-09-16T00:00:00Z",\n    "periodEnd": "2026-10-16T00:00:00Z",\n    "nextDueAt": "2026-10-16T00:00:00Z"\n  }\n}`}
+          />
+          <Endpoint
+            method="POST"
+            path="/api/partners/[slug]/license-invoices"
+            desc="Upload renewal proof of payment for an open license invoice."
+            auth="Partner admin session cookie"
+            body={`{\n  "payment_proof_url": "https://s3.../receipt.jpg",\n  "invoice_id": 2\n}`}
+            response={`{ "success": true, "invoice": { "id": 2, "status": "receipt_uploaded" } }`}
+          />
+          <Endpoint
+            method="GET"
+            path="/api/admin/license-invoices"
+            desc="Super Admin list of all partner license invoices across firms."
+            auth="Super Admin session cookie"
+          />
+          <Endpoint
+            method="PATCH"
+            path="/api/admin/license-invoices"
+            desc="Super Admin actions: approve (confirms payment & sends P-04), reject (requires reason), waive, or grant_complimentary (adds 30d window)."
+            auth="Super Admin session cookie"
+            body={`{\n  "action": "approve",\n  "invoice_id": 2,\n  "verified_amount": 95000,\n  "force_approve": false,\n  "verification_note": "Zenith transfer confirmed"\n}`}
+          />
+          <Endpoint
+            method="POST"
+            path="/api/cron/partner-licenses"
+            desc="Daily Heroku Scheduler cron job to issue renewals and send overdue notices."
+            auth="CRON_SECRET (Bearer token or x-cron-secret header)"
+            response={`{\n  "ok": true,\n  "summary": {\n    "renewalsIssued": 1,\n    "overdueNoticesSent": 0\n  }\n}`}
           />
 
           <H3 id="api-traders">Traders</H3>
@@ -1249,7 +1311,7 @@ export default function DocsPage() {
             headers={['#', 'Filename', 'When to Send']}
             rows={[
               ['P-01', 'p-01-welcome.html', 'Partner application approved'],
-              ['P-02', 'p-02-firm-live.html', 'Firm status goes active for first time'],
+              ['P-02', 'p-02-firm-live.html', 'Firm reactivated from suspension'],
               ['P-03', 'p-03-invoice.html', '1st of each month — license invoice'],
               ['P-04', 'p-04-payment-confirmed.html', 'License payment confirmed'],
               ['P-05', 'p-05-payment-overdue.html', '7+ days after missed payment'],

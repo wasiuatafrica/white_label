@@ -2,6 +2,7 @@ import { getAdminBadgeCounts } from '@/db/queries/admin';
 import { countPendingAsoRequests } from '@/db/queries/aso-requests';
 import { countAbandonedPartnerSignupEvents } from '@/db/queries/partner-signup-events';
 import { countPendingPartnerPayoutRequests } from '@/db/queries/partner-payout-requests';
+import { countPendingReviewLicenseInvoices } from '@/db/queries/partner-license-invoices';
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
 
 export async function GET(request: Request) {
@@ -9,12 +10,14 @@ export async function GET(request: Request) {
   if (isAdminUnauthorized(auth)) return auth;
 
   try {
-    const [core, asoPending, partnerPayoutsPending, partnerSignupsAbandoned] = await Promise.all([
-      getAdminBadgeCounts(),
-      countPendingAsoRequests(),
-      countPendingPartnerPayoutRequests(),
-      countAbandonedPartnerSignupEvents(),
-    ]);
+    const [core, asoPending, partnerPayoutsPending, partnerSignupsAbandoned, licenseInvoicesPending] =
+      await Promise.all([
+        getAdminBadgeCounts(),
+        countPendingAsoRequests(),
+        countPendingPartnerPayoutRequests(),
+        countAbandonedPartnerSignupEvents(),
+        countPendingReviewLicenseInvoices(),
+      ]);
 
     return Response.json({
       kycPending: core.kycPending,
@@ -23,6 +26,7 @@ export async function GET(request: Request) {
       partnerPayoutsPending,
       requestsPending: core.traderRequestsPending + asoPending,
       partnerSignupsAbandoned,
+      licenseInvoicesPending,
     });
   } catch (e) {
     console.error(e);

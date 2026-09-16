@@ -7,6 +7,8 @@
     "db:migrate": "yarn workspace web db:migrate",
     "db:push": "yarn workspace web db:push",
     "db:push:pglite": "yarn workspace web db:push:pglite",
+    "local:admin": "yarn workspace web create-admin:local",
+    "local:partner-renewal": "yarn workspace web create-partner-renewal:local",
     "db:copy": "bash scripts/copy-neon-db.sh"
   },
   "engines": {
@@ -22,7 +24,7 @@
     "react-native-screens": "4.16.0"
   },
   "devDependencies": {
-    "eslint": "^9.27.0",
+    "eslint": "^10.10.0",
     "oxfmt": "^0.35.0",
     "oxlint": "^1.50.0",
     "typescript-eslint": "^8.33.0"

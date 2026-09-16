@@ -7,6 +7,7 @@ export * from './evaluations';
 export * from './trade-accounts';
 export * from './trader-requests';
 export * from './partner-payout-requests';
+export * from './partner-license-invoices';
 export * from './aso-requests';
 export * from './partner-signup-events';
 export * from './app-settings';

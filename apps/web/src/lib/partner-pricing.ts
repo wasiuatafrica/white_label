@@ -1,3 +1,5 @@
+import { normalizePartnerSlug } from './tenant';
+
 export type EvalType = 'SS' | 'SSL';
 
 export const FT9JA_BASE_PRICES: Record<EvalType, number> = {
@@ -6,6 +8,18 @@ export const FT9JA_BASE_PRICES: Record<EvalType, number> = {
 };
 
 export const PARTNER_DISCOUNT_RATE = 0.25;
+
+export const PARTNER_LICENSE_FEE = 95_000;
+export const PARTNER_LICENSE_PERIOD_DAYS = 30;
+export const PARTNER_MONTHLY_LICENSE_FEE = PARTNER_LICENSE_FEE;
+
+/** Partners that never receive recurring ₦95,000 license invoices. */
+export const LICENSE_RECURRING_EXEMPT_SLUGS = new Set(['apexfunds']);
+
+export function isLicenseRecurringExempt(slug: string | null | undefined): boolean {
+  if (!slug) return false;
+  return LICENSE_RECURRING_EXEMPT_SLUGS.has(normalizePartnerSlug(slug));
+}
 
 export function toMoneyNumber(value: number | string | null | undefined): number {
   return Number(value || 0);

@@ -41,3 +41,11 @@ export const asoRequestStatusEnum = pgEnum('aso_request_status', [
   'rejected',
   'completed',
 ]);
+export const partnerLicenseInvoiceStatusEnum = pgEnum('partner_license_invoice_status', [
+  'pending',
+  'receipt_uploaded',
+  'overdue',
+  'paid',
+  'waived',
+]);
+

@@ -307,7 +307,11 @@ export default function ApplyPage() {
     setProofFileName(file.name);
     try {
       const uploadIntent = await requestPartnerApplyUploadIntent(attemptIdRef.current);
-      const result = await upload({ file, uploadIntent });
+      const result = await upload({
+        file,
+        uploadIntent,
+        slug: isValidPartnerSlug(form.slug) ? form.slug : undefined,
+      });
       if (result.url) {
         set('payment_proof_url', result.url);
         void trackSignup('payment_started', 2);

@@ -97,7 +97,7 @@ const P03 = wrap(
     tbl(
       dr('Invoice #', 'INV-{{INVOICE_ID}}'),
       dr('Firm', '{{FIRM_NAME}}'),
-      dr('Period', '{{MONTH}} {{YEAR}}'),
+      dr('Period', '{{PERIOD_RANGE}}'),
       dr('Amount Due', '&#8358;95,000'),
       dr('Due Date', '{{DUE_DATE}}')
     ) +
@@ -118,7 +118,7 @@ const P04 = wrap(
     tbl(
       dr('Payment Ref', '{{REF}}'),
       dr('Amount', '&#8358;95,000'),
-      dr('Period', '{{MONTH}} {{YEAR}}'),
+      dr('Period', '{{PERIOD_RANGE}}'),
       dr('Next Due', '{{NEXT_DUE_DATE}}'),
       dr('Status', '&#9989; Paid')
     ) +
@@ -532,7 +532,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     category: 'ft9ja-to-partner',
     filename: 'p-02-firm-live.html',
     subject: 'Your Firm is Now Live 🎉',
-    description: 'Sent when a partner firm goes active for the first time',
+    description: 'Sent when a suspended partner firm is reactivated',
     html: P02,
   },
   {

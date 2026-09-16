@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AdminLoginPanel } from '@/components/admin/admin-login-panel';
@@ -7,6 +7,12 @@ import { AdminsTab } from '@/components/admin/admins-tab';
 import { AuditTab } from '@/components/admin/audit-tab';
 import { getPartnerUrl } from '@/lib/tenant';
 import { splitVerifiedAmount, type EvalType } from '@/lib/partner-pricing';
+import {
+  getInvoiceLifecycleStatus,
+  licenseLifecycleBadgeClass,
+  licenseLifecycleLabel,
+  nextDueAtForInvoice,
+} from '@/lib/partner-license-billing';
 import {
   CheckCircle,
   Clock,
@@ -32,6 +38,8 @@ import {
   KeyRound,
   LogOut,
   ClipboardList,
+  Gift,
+  ShieldCheck,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -50,6 +58,39 @@ type Partner = {
   payment_proof_url: string | null;
   admin_pin_configured: boolean;
   created_at: string;
+  license_coverage?: {
+    isCovered: boolean;
+    status: 'paid' | 'waived' | 'receipt_uploaded' | 'overdue' | 'pending' | 'expired' | 'none' | 'exempt';
+    periodStart: string | null;
+    periodEnd: string | null;
+    nextDueAt: string | null;
+    latestInvoice?: unknown;
+  };
+};
+
+type AdminLicenseInvoiceRow = {
+  id: number;
+  partner_id: number;
+  invoice_number: string;
+  amount: string;
+  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived';
+  period_start: string;
+  period_end: string;
+  due_at: string;
+  payment_proof_url?: string | null;
+  receipt_uploaded_at?: string | null;
+  paid_at?: string | null;
+  verified_amount?: string | null;
+  verified_by?: string | null;
+  verification_note?: string | null;
+  created_at: string;
+  updated_at: string;
+  partner_slug: string;
+  partner_firm_name: string;
+  partner_owner_name: string | null;
+  partner_owner_email: string;
+  partner_status: string;
+  partner_brand_color: string;
 };
 
 type KYCRow = {
@@ -519,6 +560,9 @@ function PartnersTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [grantingPartner, setGrantingPartner] = useState<{ id: number; slug: string; name: string } | null>(null);
+  const [grantReason, setGrantReason] = useState('');
+  const [grantError, setGrantError] = useState<string | null>(null);
   const qc = useQueryClient();
 
   const { data: partners = [], isLoading } = useQuery<Partner[]>({
@@ -527,6 +571,41 @@ function PartnersTab({
       const res = await fetch('/api/partners');
       if (!res.ok) throw new Error('Failed');
       return res.json();
+    },
+  });
+
+  const grantComplimentary = useMutation({
+    mutationFn: async ({
+      partner_id,
+      slug,
+      reason,
+    }: {
+      partner_id: number;
+      slug: string;
+      reason: string;
+    }) => {
+      setGrantError(null);
+      const res = await fetch('/api/admin/license-invoices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'grant_complimentary', partner_id, slug, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to grant complimentary period');
+      }
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-partners'] });
+      qc.invalidateQueries({ queryKey: ['admin-license-invoices'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
+      setGrantingPartner(null);
+      setGrantReason('');
+      setGrantError(null);
+    },
+    onError: (err: Error) => {
+      setGrantError(err.message);
     },
   });
 
@@ -640,11 +719,9 @@ function PartnersTab({
             {filtered.map((p) => {
               const sc = getStatusConfig(p.status);
               return (
-                <div
-                  key={p.id}
-                  className="flex flex-col gap-3 px-4 py-4 hover:bg-gray-50 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div key={p.id} className="px-4 py-4 hover:bg-gray-50 sm:px-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
                       style={{ backgroundColor: p.brand_color }}
@@ -712,9 +789,17 @@ function PartnersTab({
                         <span>
                           Fee:{' '}
                           <strong
-                            className={p.monthly_fee_paid ? 'text-green-600' : 'text-red-500'}
+                            className={
+                              p.license_coverage?.status === 'exempt' || p.monthly_fee_paid
+                                ? 'text-green-600'
+                                : 'text-red-500'
+                            }
                           >
-                            {p.monthly_fee_paid ? 'Paid' : 'Unpaid'}
+                            {p.license_coverage?.status === 'exempt'
+                              ? 'Exempt'
+                              : p.monthly_fee_paid
+                                ? 'Paid'
+                                : 'Unpaid'}
                           </strong>
                         </span>
                       </div>
@@ -732,17 +817,46 @@ function PartnersTab({
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-gray-400">Fee Paid</div>
+                      <div className="text-xs text-gray-400">License</div>
                       <div className="text-sm font-semibold">
-                        {p.monthly_fee_paid ? (
-                          <span className="text-[#16A34A]">Yes</span>
+                        {p.license_coverage?.status === 'exempt' ? (
+                          <span className="text-blue-600">Exempt</span>
+                        ) : p.license_coverage?.isCovered && p.license_coverage.status === 'waived' ? (
+                          <span className="text-blue-600">Complimentary</span>
+                        ) : p.license_coverage?.isCovered ? (
+                          <span className="text-[#16A34A]">Paid ✓</span>
+                        ) : p.license_coverage?.status === 'receipt_uploaded' ? (
+                          <span className="text-amber-600">Review</span>
+                        ) : p.license_coverage?.status === 'overdue' ||
+                          p.license_coverage?.status === 'expired' ? (
+                          <span className="text-red-500">Expired</span>
                         ) : (
-                          <span className="text-red-500">No</span>
+                          <span className="text-red-500">Unpaid</span>
                         )}
                       </div>
+                      {p.license_coverage?.status === 'exempt' ? (
+                        <div className="text-[10px] text-gray-400">No recurring fee</div>
+                      ) : p.license_coverage?.periodEnd ? (
+                        <div className="text-[10px] text-gray-400">
+                          thru {formatDate(p.license_coverage.periodEnd)}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {p.license_coverage?.status !== 'exempt' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGrantingPartner({ id: p.id, slug: p.slug, name: p.firm_name });
+                        setGrantReason('Complimentary 30-day period');
+                        setGrantError(null);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      <Gift size={12} /> Grant 30d Comp
+                    </button>
+                    )}
                     <Link
                       href={getPartnerUrl(p.slug, '/admin')}
                       className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50"
@@ -788,7 +902,57 @@ function PartnersTab({
                     )}
                   </div>
                 </div>
-              );
+
+                {grantingPartner?.id === p.id && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-3">
+                    <div className="text-xs font-bold text-blue-900">
+                      Grant 30 Days Complimentary License for {p.firm_name}
+                    </div>
+                    {grantError && (
+                      <div className="text-xs text-red-600">{grantError}</div>
+                    )}
+                    <div>
+                      <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                        Reason * (required)
+                      </label>
+                      <input
+                        type="text"
+                        value={grantReason}
+                        onChange={(e) => setGrantReason(e.target.value)}
+                        placeholder="e.g. Partner launch bonus or promotional waiver"
+                        className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() =>
+                          grantComplimentary.mutate({
+                            partner_id: p.id,
+                            slug: p.slug,
+                            reason: grantReason,
+                          })
+                        }
+                        disabled={grantComplimentary.isPending || !grantReason.trim()}
+                        className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {grantComplimentary.isPending ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <Gift size={11} />
+                        )}
+                        Confirm Grant
+                      </button>
+                      <button
+                        onClick={() => setGrantingPartner(null)}
+                        className="rounded border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
             })}
           </div>
         )}
@@ -2535,6 +2699,503 @@ function EvaluationPaymentsTab({
   );
 }
 
+// ─── Partner License Invoices Tab ─────────────────────────────────────────────
+
+function LicenseInvoicesTab({
+  onOpenReceipt,
+  openingReceiptUrl,
+}: {
+  onOpenReceipt: (receiptUrl: string) => void;
+  openingReceiptUrl: string | null;
+}) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'receipt_uploaded' | 'overdue' | 'pending' | 'paid' | 'waived'
+  >('all');
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [waivingId, setWaivingId] = useState<number | null>(null);
+
+  const [verifiedAmount, setVerifiedAmount] = useState('95000');
+  const [forceApprove, setForceApprove] = useState(false);
+  const [verificationNote, setVerificationNote] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const qc = useQueryClient();
+
+  const { data: invoices = [], isLoading } = useQuery<AdminLicenseInvoiceRow[]>({
+    queryKey: ['admin-license-invoices'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/license-invoices');
+      if (!res.ok) throw new Error('Failed to fetch license invoices');
+      return res.json();
+    },
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: async (payload: {
+      action: 'approve' | 'reject' | 'waive';
+      invoice_id: number;
+      partner_slug?: string;
+      verified_amount?: number;
+      force_approve?: boolean;
+      verification_note?: string;
+    }) => {
+      setActionError(null);
+      const res = await fetch('/api/admin/license-invoices', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to process license invoice');
+      }
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-license-invoices'] });
+      qc.invalidateQueries({ queryKey: ['admin-partners'] });
+      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
+      setApprovingId(null);
+      setRejectingId(null);
+      setWaivingId(null);
+      setVerificationNote('');
+      setForceApprove(false);
+      setActionError(null);
+    },
+    onError: (err: Error) => {
+      setActionError(err.message);
+    },
+  });
+
+  const filtered = invoices.filter((inv) => {
+    const q = search.trim().toLowerCase();
+    const matchSearch =
+      !q ||
+      inv.invoice_number.toLowerCase().includes(q) ||
+      inv.partner_firm_name.toLowerCase().includes(q) ||
+      inv.partner_slug.toLowerCase().includes(q) ||
+      inv.partner_owner_email.toLowerCase().includes(q);
+    const matchStatus = statusFilter === 'all' || inv.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const pendingReceiptCount = invoices.filter((i) => i.status === 'receipt_uploaded').length;
+  const overdueCount = invoices.filter((i) => i.status === 'overdue').length;
+  const paidCount = invoices.filter((i) => i.status === 'paid' || i.status === 'waived').length;
+
+  return (
+    <div className="space-y-5">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+          <div className="text-xs font-medium text-gray-400">Total Invoices</div>
+          <div className="text-2xl font-bold text-gray-900 mt-1">{invoices.length}</div>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
+          <div className="text-xs font-medium text-amber-700">Receipts in Review</div>
+          <div className="text-2xl font-bold text-amber-800 mt-1">{pendingReceiptCount}</div>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50/50 p-4 sm:p-5">
+          <div className="text-xs font-medium text-red-700">Overdue Invoices</div>
+          <div className="text-2xl font-bold text-red-800 mt-1">{overdueCount}</div>
+        </div>
+        <div className="rounded-xl border border-green-200 bg-green-50/50 p-4 sm:p-5">
+          <div className="text-xs font-medium text-green-700">Paid / Complimentary</div>
+          <div className="text-2xl font-bold text-green-800 mt-1">{paidCount}</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search invoice #, firm, or email…"
+            className="w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#16A34A]/20 focus:border-[#16A34A]"
+          />
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          {(['all', 'receipt_uploaded', 'overdue', 'pending', 'paid', 'waived'] as const).map(
+            (st) => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+                  statusFilter === st
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {st === 'all'
+                  ? 'All'
+                  : st === 'receipt_uploaded'
+                  ? `Review (${pendingReceiptCount})`
+                  : st === 'overdue'
+                  ? `Overdue (${overdueCount})`
+                  : st === 'pending'
+                  ? 'Pending'
+                  : st === 'paid'
+                  ? 'Paid'
+                  : 'Complimentary'}
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      {actionError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex justify-between items-center">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-500 hover:text-red-800">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Invoices Table */}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        {isLoading ? (
+          <div className="p-8 text-center text-xs text-gray-400">Loading license invoices…</div>
+        ) : filtered.length === 0 ? (
+          <div className="p-8 text-center text-xs text-gray-400">No license invoices found.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-4 py-3 sm:px-5">Invoice</th>
+                  <th className="px-4 py-3">Firm</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Due</th>
+                  <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map((inv) => {
+                  const displayStatus = getInvoiceLifecycleStatus({
+                    status: inv.status,
+                    periodEnd: inv.period_end,
+                  });
+                  const dueLabel =
+                    displayStatus === 'paid' || displayStatus === 'waived'
+                      ? 'Next due'
+                      : displayStatus === 'expired'
+                        ? 'Renewal due'
+                        : 'Due';
+                  const isExpanded =
+                    approvingId === inv.id || rejectingId === inv.id || waivingId === inv.id;
+                  return (
+                    <Fragment key={inv.id}>
+                      <tr className="hover:bg-gray-50/80 align-top">
+                        <td className="px-4 py-3 sm:px-5">
+                          <div className="font-mono text-xs font-bold text-gray-900">
+                            {inv.invoice_number}
+                          </div>
+                          {inv.verification_note ? (
+                            <div className="mt-1 max-w-[220px] text-[11px] italic text-gray-500">
+                              Note: {inv.verification_note}
+                              {inv.verified_by ? ` (by ${inv.verified_by})` : ''}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-gray-900">{inv.partner_firm_name}</div>
+                          <div className="mt-0.5 text-xs text-gray-400">{inv.partner_slug}</div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">
+                          {inv.partner_owner_email}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-600">
+                          {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-600">
+                          <div>
+                            {formatDate(
+                              nextDueAtForInvoice({
+                                status: inv.status,
+                                periodStart: inv.period_start,
+                                periodEnd: inv.period_end,
+                                dueAt: inv.due_at,
+                              }).toISOString()
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-gray-400">{dueLabel}</div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-gray-900">
+                          ₦{Number(inv.amount).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${licenseLifecycleBadgeClass(displayStatus)}`}
+                          >
+                            {displayStatus === 'paid'
+                              ? '✓ Paid'
+                              : displayStatus === 'waived'
+                              ? '🎁 Complimentary'
+                              : displayStatus === 'receipt_uploaded'
+                              ? '⏳ Receipt in Review'
+                              : displayStatus === 'overdue'
+                              ? '⚠️ Overdue'
+                              : displayStatus === 'expired'
+                              ? 'Expired'
+                              : licenseLifecycleLabel(displayStatus)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                            {inv.payment_proof_url && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenReceipt(inv.payment_proof_url!)}
+                                disabled={openingReceiptUrl === inv.payment_proof_url}
+                                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                              >
+                                {openingReceiptUrl === inv.payment_proof_url ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <FileText size={12} />
+                                )}
+                                View Receipt
+                              </button>
+                            )}
+
+                            {inv.status === 'receipt_uploaded' && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setRejectingId(null);
+                                    setWaivingId(null);
+                                    setApprovingId(inv.id);
+                                    setVerifiedAmount(String(Number(inv.amount)));
+                                    setVerificationNote('');
+                                    setForceApprove(false);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D]"
+                                >
+                                  <CheckCircle size={12} /> Confirm Payment
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setApprovingId(null);
+                                    setWaivingId(null);
+                                    setRejectingId(inv.id);
+                                    setVerificationNote('');
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                                >
+                                  <X size={12} /> Reject
+                                </button>
+                              </>
+                            )}
+
+                            {(inv.status === 'pending' ||
+                              inv.status === 'overdue' ||
+                              inv.status === 'receipt_uploaded') && (
+                              <button
+                                onClick={() => {
+                                  setApprovingId(null);
+                                  setRejectingId(null);
+                                  setWaivingId(inv.id);
+                                  setVerificationNote('');
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                              >
+                                <Gift size={12} /> Waive (Comp)
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr>
+                          <td colSpan={8} className="bg-gray-50/60 px-4 py-3 sm:px-5">
+                            {approvingId === inv.id && (
+                              <div className="rounded-lg border border-green-200 bg-green-50/50 p-3.5 space-y-3">
+                                <div className="text-xs font-bold text-green-900">
+                                  Confirm Partner License Payment
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                      Verified Amount (₦)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={verifiedAmount}
+                                      onChange={(e) => setVerifiedAmount(e.target.value)}
+                                      className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                      Verification Note (Optional)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={verificationNote}
+                                      onChange={(e) => setVerificationNote(e.target.value)}
+                                      placeholder="e.g. Zenith transfer confirmed"
+                                      className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                                    />
+                                  </div>
+                                </div>
+                                {Number(verifiedAmount) < 95000 && (
+                                  <label className="flex items-center gap-2 text-xs text-amber-800">
+                                    <input
+                                      type="checkbox"
+                                      checked={forceApprove}
+                                      onChange={(e) => setForceApprove(e.target.checked)}
+                                      className="accent-[#16A34A]"
+                                    />
+                                    Amount is below ₦95,000. Force approve with note?
+                                  </label>
+                                )}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() =>
+                                      reviewMutation.mutate({
+                                        action: 'approve',
+                                        invoice_id: inv.id,
+                                        partner_slug: inv.partner_slug,
+                                        verified_amount: Number(verifiedAmount),
+                                        force_approve: forceApprove,
+                                        verification_note: verificationNote,
+                                      })
+                                    }
+                                    disabled={reviewMutation.isPending}
+                                    className="inline-flex items-center gap-1 rounded bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
+                                  >
+                                    {reviewMutation.isPending ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <CheckCircle size={11} />
+                                    )}
+                                    Approve & Send P-04
+                                  </button>
+                                  <button
+                                    onClick={() => setApprovingId(null)}
+                                    className="rounded border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {rejectingId === inv.id && (
+                              <div className="rounded-lg border border-red-200 bg-red-50/50 p-3.5 space-y-3">
+                                <div className="text-xs font-bold text-red-900">
+                                  Reject Payment Receipt
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                    Rejection Reason * (Required for partner to fix)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={verificationNote}
+                                    onChange={(e) => setVerificationNote(e.target.value)}
+                                    placeholder="e.g. Incomplete transaction details or unreadable screenshot"
+                                    className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() =>
+                                      reviewMutation.mutate({
+                                        action: 'reject',
+                                        invoice_id: inv.id,
+                                        verification_note: verificationNote,
+                                      })
+                                    }
+                                    disabled={reviewMutation.isPending || !verificationNote.trim()}
+                                    className="inline-flex items-center gap-1 rounded bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                                  >
+                                    {reviewMutation.isPending ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <X size={11} />
+                                    )}
+                                    Confirm Rejection
+                                  </button>
+                                  <button
+                                    onClick={() => setRejectingId(null)}
+                                    className="rounded border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {waivingId === inv.id && (
+                              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-3">
+                                <div className="text-xs font-bold text-blue-900">
+                                  Waive / Grant 30 Days Complimentary
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                    Reason / Note * (Required for audit log)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={verificationNote}
+                                    onChange={(e) => setVerificationNote(e.target.value)}
+                                    placeholder="e.g. Promotional launch month or high-volume partner grant"
+                                    className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() =>
+                                      reviewMutation.mutate({
+                                        action: 'waive',
+                                        invoice_id: inv.id,
+                                        verification_note: verificationNote,
+                                      })
+                                    }
+                                    disabled={reviewMutation.isPending || !verificationNote.trim()}
+                                    className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                  >
+                                    {reviewMutation.isPending ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <Gift size={11} />
+                                    )}
+                                    Confirm Waive
+                                  </button>
+                                  <button
+                                    onClick={() => setWaivingId(null)}
+                                    className="rounded border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Payouts Tab ──────────────────────────────────────────────────────────────
 
 function PayoutsTab() {
@@ -3629,6 +4290,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<
     | 'partners'
     | 'partner-signups'
+    | 'license-invoices'
     | 'traders'
     | 'trade-accounts'
     | 'kyc'
@@ -3677,6 +4339,7 @@ export default function AdminPage() {
         partnerPayoutsPending: number;
         requestsPending: number;
         partnerSignupsAbandoned: number;
+        licenseInvoicesPending?: number;
       }>;
     },
     enabled: authed,
@@ -3688,6 +4351,7 @@ export default function AdminPage() {
   const partnerPayoutsPending = badges?.partnerPayoutsPending ?? 0;
   const requestsPending = badges?.requestsPending ?? 0;
   const partnerSignupsAbandoned = badges?.partnerSignupsAbandoned ?? 0;
+  const licenseInvoicesPending = badges?.licenseInvoicesPending ?? 0;
 
   const logout = async () => {
     await fetch('/api/admin/auth', { method: 'DELETE' });
@@ -3742,6 +4406,12 @@ export default function AdminPage() {
       label: 'Partner Signups',
       icon: <UserPlus size={13} />,
       badge: partnerSignupsAbandoned,
+    },
+    {
+      id: 'license-invoices',
+      label: 'Partner Licenses',
+      icon: <ShieldCheck size={13} />,
+      badge: licenseInvoicesPending,
     },
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
     { id: 'trade-accounts', label: 'Trade Accounts', icon: <KeyRound size={13} />, badge: 0 },
@@ -3835,6 +4505,12 @@ export default function AdminPage() {
           <PartnersTab onOpenReceipt={openReceipt} openingReceiptUrl={openingReceiptUrl} />
         )}
         {tab === 'partner-signups' && <PartnerSignupsTab />}
+        {tab === 'license-invoices' && (
+          <LicenseInvoicesTab
+            onOpenReceipt={openReceipt}
+            openingReceiptUrl={openingReceiptUrl}
+          />
+        )}
         {tab === 'traders' && <TradersTab />}
         {tab === 'trade-accounts' && <TradeAccountsTab />}
         {tab === 'kyc' && <KYCTab />}
