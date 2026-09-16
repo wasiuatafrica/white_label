@@ -3,10 +3,12 @@ import { getPartnerAdminSessionSecret } from '@/lib/auth-secret';
 import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
 
 export const PARTNER_ADMIN_SESSION_MAX_AGE = 60 * 60 * 12;
+export const PARTNER_ADMIN_VIEW_SESSION_MAX_AGE = 60 * 60;
 
 export interface PartnerAdminSessionPayload {
   partnerId: number;
   slug: string;
+  mode?: 'readonly';
   iat: number;
   exp: number;
 }
@@ -47,10 +49,18 @@ export function getPartnerAdminCookieName(slug: string) {
   return `ft9ja_partner_admin_${slug}`;
 }
 
-export function createPartnerAdminSessionToken(payload: Omit<PartnerAdminSessionPayload, 'iat' | 'exp'>) {
+export function createPartnerAdminSessionToken(
+  payload: Omit<PartnerAdminSessionPayload, 'iat' | 'exp'>
+) {
+  const maxAge =
+    payload.mode === 'readonly'
+      ? PARTNER_ADMIN_VIEW_SESSION_MAX_AGE
+      : PARTNER_ADMIN_SESSION_MAX_AGE;
   return createSignedToken<PartnerAdminSessionPayload>({
-    ...payload,
-    exp: Date.now() + PARTNER_ADMIN_SESSION_MAX_AGE * 1000,
+    partnerId: payload.partnerId,
+    slug: payload.slug,
+    ...(payload.mode === 'readonly' ? { mode: 'readonly' as const } : {}),
+    exp: Date.now() + maxAge * 1000,
   });
 }
 
@@ -83,12 +93,12 @@ function buildCookie(name: string, value: string, maxAge: number, secure: boolea
 export function createPartnerAdminSessionCookie(
   slug: string,
   token: string,
-  options: { secure?: boolean } = {}
+  options: { secure?: boolean; maxAge?: number } = {}
 ) {
   return buildCookie(
     getPartnerAdminCookieName(slug),
     token,
-    PARTNER_ADMIN_SESSION_MAX_AGE,
+    options.maxAge ?? PARTNER_ADMIN_SESSION_MAX_AGE,
     options.secure ?? process.env.NODE_ENV === 'production'
   );
 }

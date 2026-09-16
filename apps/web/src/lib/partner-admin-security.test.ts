@@ -6,9 +6,16 @@ import {
   verifyPartnerAdminPin,
 } from '@/lib/partner-pin-crypto';
 import {
+  isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
+  requirePartnerAdminWrite,
+} from '@/lib/partner-admin-auth-guard';
+import {
+  createPartnerAdminSessionCookie,
   createPartnerAdminSessionToken,
   verifyPartnerAdminSessionToken,
 } from '@/lib/partner-admin-session';
+import { primeSessionsRevokedAtCache } from '@/lib/session-revocation';
 import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit';
 import {
   createTraderSetupToken,
@@ -69,6 +76,63 @@ describe('partner admin session', () => {
     const session = verifyPartnerAdminSessionToken(token);
     expect(session?.partnerId).toBe(9);
     expect(session?.slug).toBe('acme');
+  });
+
+  it('creates a read-only session with 1-hour expiry', () => {
+    const token = createPartnerAdminSessionToken({
+      partnerId: 9,
+      slug: 'acme',
+      mode: 'readonly',
+    });
+    const session = verifyPartnerAdminSessionToken(token);
+    expect(session?.mode).toBe('readonly');
+    expect(session?.exp).toBeGreaterThan(Date.now());
+    expect(session?.exp).toBeLessThanOrEqual(Date.now() + 60 * 60 * 1000 + 1000);
+  });
+
+  it('omits mode on PIN sessions', () => {
+    const token = createPartnerAdminSessionToken({ partnerId: 9, slug: 'acme' });
+    const session = verifyPartnerAdminSessionToken(token);
+    expect(session?.mode).toBeUndefined();
+  });
+});
+
+function sessionRequest(slug: string, mode?: 'readonly') {
+  const token = createPartnerAdminSessionToken({
+    partnerId: 9,
+    slug,
+    ...(mode ? { mode } : {}),
+  });
+  const cookie = createPartnerAdminSessionCookie(slug, token, {
+    maxAge: mode === 'readonly' ? 60 * 60 : undefined,
+  });
+  const value = cookie.split(';')[0];
+  return new Request('https://acme.ft9ja.com/admin', {
+    headers: { cookie: value },
+  });
+}
+
+describe('partner admin auth guard', () => {
+  it('marks PIN sessions as writable', async () => {
+    primeSessionsRevokedAtCache(0);
+    const auth = await requirePartnerAdmin(sessionRequest('acme'), 'acme');
+    expect(isPartnerAdminUnauthorized(auth)).toBe(false);
+    if (isPartnerAdminUnauthorized(auth)) return;
+    expect(auth.readOnly).toBe(false);
+    const write = await requirePartnerAdminWrite(sessionRequest('acme'), 'acme');
+    expect(isPartnerAdminUnauthorized(write)).toBe(false);
+  });
+
+  it('forbids writes for read-only sessions', async () => {
+    primeSessionsRevokedAtCache(0);
+    const auth = await requirePartnerAdmin(sessionRequest('acme', 'readonly'), 'acme');
+    expect(isPartnerAdminUnauthorized(auth)).toBe(false);
+    if (isPartnerAdminUnauthorized(auth)) return;
+    expect(auth.readOnly).toBe(true);
+    const write = await requirePartnerAdminWrite(sessionRequest('acme', 'readonly'), 'acme');
+    expect(write).toBeInstanceOf(Response);
+    if (!(write instanceof Response)) return;
+    expect(write.status).toBe(403);
   });
 });
 

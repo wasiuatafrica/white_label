@@ -28,7 +28,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   const { slug } = await params;
   const auth = await requirePartnerAdmin(_request, slug);
   if (isPartnerAdminUnauthorized(auth)) return auth;
-  return Response.json({ authenticated: true });
+  return Response.json({ authenticated: true, readOnly: auth.readOnly });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {

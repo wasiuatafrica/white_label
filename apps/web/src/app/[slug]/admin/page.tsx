@@ -39,6 +39,7 @@ import {
   KeyRound,
   Loader2,
   Lock,
+  Eye,
   Plus,
   Save,
   Send,
@@ -690,10 +691,12 @@ function PayoutsTab({
   evaluations,
   partner,
   primary,
+  viewOnly = false,
 }: {
   evaluations: Evaluation[];
   partner: Partner;
   primary: string;
+  viewOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const slug = partner.slug;
@@ -821,7 +824,7 @@ function PayoutsTab({
       </div>
 
       {/* Payout Request CTA */}
-      {balance > 0 && !hasPending && !showForm && (
+      {balance > 0 && !hasPending && !showForm && !viewOnly && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 flex items-center justify-between gap-4">
           <div>
             <div className="text-base font-black text-gray-900">Ready to withdraw?</div>
@@ -860,7 +863,7 @@ function PayoutsTab({
       )}
 
       {/* Payout Request Form */}
-      {showForm && (
+      {showForm && !viewOnly && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1413,6 +1416,8 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
   // ── PIN gate ──────────────────────────────────────────────────────────────
   const [pinAuthed, setPinAuthed] = useState<boolean | null>(null);
+  const [viewOnly, setViewOnly] = useState(false);
+  const [viewEnded, setViewEnded] = useState(false);
   const [pinGateView, setPinGateView] = useState<'login' | 'forgot' | 'reset'>('login');
   const [adminEmailInput, setAdminEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
@@ -1432,7 +1437,15 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       try {
         const res = await partnerAdminFetch(`/api/partners/${slug}/verify-pin`);
         if (!cancelled) {
-          setPinAuthed(res.ok);
+          if (res.ok) {
+            const data = (await res.json().catch(() => null)) as { readOnly?: boolean } | null;
+            setPinAuthed(true);
+            setViewOnly(Boolean(data?.readOnly));
+            setViewEnded(false);
+          } else {
+            setPinAuthed(false);
+            setViewOnly(false);
+          }
         }
       } catch {
         if (!cancelled) setPinAuthed(false);
@@ -1833,6 +1846,28 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   }
 
   if (!pinAuthed) {
+    if (viewEnded) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F7F4EF] px-6">
+          <div className="w-full max-w-sm text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900">
+              <Eye size={22} className="text-white" />
+            </div>
+            <h1 className="text-xl font-black text-gray-900">View ended</h1>
+            <p className="mt-2 text-sm text-gray-500">
+              This Super Admin view-only session has been closed.
+            </p>
+            <Link
+              href={`/${slug}`}
+              className="mt-6 inline-block text-xs text-gray-400 hover:text-gray-700"
+            >
+              ← Back to {slug}.ft9ja.com
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F7F4EF] px-6">
         <div className="w-full max-w-sm">
@@ -2100,10 +2135,20 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 setPinInput('');
                 setAdminEmailInput('');
                 setCurrentAdminPin('');
+                setViewOnly(false);
+                setViewEnded(true);
               }}
               className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-500 hover:border-gray-300"
             >
-              <Lock size={11} /> Lock
+              {viewOnly ? (
+                <>
+                  <Eye size={11} /> Exit view
+                </>
+              ) : (
+                <>
+                  <Lock size={11} /> Lock
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -2131,6 +2176,17 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
       </nav>
 
       <div className="mx-auto max-w-6xl px-6 py-8">
+        {viewOnly && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-100 px-5 py-4">
+            <Eye size={16} className="mt-0.5 shrink-0 text-gray-500" />
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Viewing partner admin (read-only)</p>
+              <p className="mt-0.5 text-xs text-gray-600">
+                Changes must be made in Super Admin or by the partner.
+              </p>
+            </div>
+          </div>
+        )}
         {/* ── Overview ── */}
         {tab === 'overview' && (
           <div className="space-y-5">
@@ -2150,7 +2206,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   onClick={() => setTab('license')}
                   className="shrink-0 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100"
                 >
-                  Upload Receipt →
+                  {viewOnly ? 'View License →' : 'Upload Receipt →'}
                 </button>
               </div>
             )}
@@ -2319,7 +2375,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
         {/* ── Payouts Tab ── */}
         {tab === 'payouts' && (
-          <PayoutsTab evaluations={allEvals} partner={partner} primary={primary} />
+          <PayoutsTab evaluations={allEvals} partner={partner} primary={primary} viewOnly={viewOnly} />
         )}
 
         {/* ── Analytics Tab ── */}
@@ -2379,6 +2435,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <h3 className="text-base font-semibold text-gray-900">All Traders</h3>
                   <p className="text-xs text-gray-400">{traders.length} registered</p>
                 </div>
+                {!viewOnly && (
                 <button
                   onClick={() => setShowAddTrader(true)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold text-white hover:opacity-90"
@@ -2386,9 +2443,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 >
                   <Plus size={12} /> Add Trader
                 </button>
+                )}
               </div>
 
-              {showAddTrader && (
+              {showAddTrader && !viewOnly && (
                 <div className="border-b border-gray-100 bg-gray-50 p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-sm font-semibold text-gray-900">Add Trader</div>
@@ -2478,7 +2536,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                               {kycBadgeData.label}
                             </span>
                           )}
-                          {t.kyc_status === 'submitted' && (
+                          {t.kyc_status === 'submitted' && !viewOnly && (
                             <>
                               <button
                                 onClick={() =>
@@ -2526,7 +2584,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
 
         {/* ── Settings Tab ── */}
         {tab === 'settings' && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <fieldset disabled={viewOnly} className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             <div className="lg:col-span-3 space-y-5">
               {/* Markup */}
               <div className="rounded-xl border border-gray-200 bg-white p-6">
@@ -2830,6 +2888,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               </div>
 
               {/* PIN */}
+              {!viewOnly && (
               <div className="rounded-xl border border-gray-200 bg-white p-6">
                 <div className="mb-4 flex items-center gap-2">
                   <KeyRound size={15} className="text-gray-500" />
@@ -2869,6 +2928,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <KeyRound size={13} /> Update PIN
                 </button>
               </div>
+              )}
             </div>
 
             {/* Live Preview */}
@@ -2945,7 +3005,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 </div>
               </div>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* ── License ── */}
@@ -3101,6 +3161,10 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   ) : licenseData?.coverage?.isCovered ? (
                     <div className="rounded-lg bg-green-50 border border-green-100 p-3 text-xs text-green-800">
                       ✓ Your firm license is fully active and in good standing.
+                    </div>
+                  ) : viewOnly ? (
+                    <div className="rounded-lg bg-gray-50 border border-gray-100 p-3 text-xs text-gray-600">
+                      License payment actions are hidden in Super Admin view-only mode.
                     </div>
                   ) : (
                     <div>
@@ -3262,7 +3326,8 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                                 )}
                                 View Receipt
                               </button>
-                            ) : licenseData?.coverage?.status !== 'exempt' &&
+                            ) : !viewOnly &&
+                              licenseData?.coverage?.status !== 'exempt' &&
                               (inv.status === 'pending' || inv.status === 'overdue') ? (
                               <button
                                 onClick={() => licenseProofFileRef.current?.click()}

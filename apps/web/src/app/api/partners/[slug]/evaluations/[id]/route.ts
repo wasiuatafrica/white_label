@@ -1,6 +1,6 @@
 import {
   isPartnerAdminUnauthorized,
-  requirePartnerAdmin,
+  requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
 
 export async function PATCH(
@@ -8,7 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string; id: string }> }
 ) {
   const { slug } = await params;
-  const auth = await requirePartnerAdmin(request, slug);
+  const auth = await requirePartnerAdminWrite(request, slug);
   if (isPartnerAdminUnauthorized(auth)) return auth;
 
   return Response.json(

@@ -563,6 +563,7 @@ function PartnersTab({
   const [grantingPartner, setGrantingPartner] = useState<{ id: number; slug: string; name: string } | null>(null);
   const [grantReason, setGrantReason] = useState('');
   const [grantError, setGrantError] = useState<string | null>(null);
+  const [openingAdminSlug, setOpeningAdminSlug] = useState<string | null>(null);
   const qc = useQueryClient();
 
   const { data: partners = [], isLoading } = useQuery<Partner[]>({
@@ -633,6 +634,26 @@ function PartnersTab({
   const totalRevenue = partners.reduce((s, p) => s + parseFloat(p.total_revenue || '0'), 0);
   const activeCount = partners.filter((p) => p.status === 'active').length;
   const pendingCount = partners.filter((p) => p.status === 'pending').length;
+
+  const openPartnerAdminView = async (slug: string) => {
+    setOpeningAdminSlug(slug);
+    try {
+      const res = await fetch('/api/admin/partner-admin-view-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { view_token?: string };
+      if (!data.view_token) return;
+      const path = `/api/partners/${slug}/admin-view?token=${encodeURIComponent(data.view_token)}`;
+      window.open(getPartnerUrl(slug, path), '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Failed to open partner admin view:', error);
+    } finally {
+      setOpeningAdminSlug(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -857,12 +878,14 @@ function PartnersTab({
                       <Gift size={12} /> Grant 30d Comp
                     </button>
                     )}
-                    <Link
-                      href={getPartnerUrl(p.slug, '/admin')}
-                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    <button
+                      type="button"
+                      onClick={() => void openPartnerAdminView(p.slug)}
+                      disabled={openingAdminSlug === p.slug}
+                      className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
                     >
-                      <Eye size={12} /> View
-                    </Link>
+                      <Eye size={12} /> {openingAdminSlug === p.slug ? 'Opening…' : 'View'}
+                    </button>
                     {p.status === 'pending' && (
                       <>
                         <button

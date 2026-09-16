@@ -24,7 +24,7 @@ export async function authorizeUpload(
 
   if (slug) {
     const partnerAdmin = await parsePartnerAdminSessionFromRequest(request, slug);
-    if (partnerAdmin) {
+    if (partnerAdmin && partnerAdmin.mode !== 'readonly') {
       const partnerId = await getPartnerIdBySlug(slug);
       if (partnerId && partnerAdmin.partnerId === partnerId) {
         return { authorized: true };

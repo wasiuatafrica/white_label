@@ -540,7 +540,7 @@ export default function DocsPage() {
                     'Approve / suspend partners',
                     'View platform-wide metrics',
                     'Manage email templates',
-                    'Access all partner admin pages',
+                    'Open any partner admin as read-only',
                   ],
                   color: '#16A34A',
                 },
@@ -1356,7 +1356,7 @@ export default function DocsPage() {
               ['Reject', 'Moves a pending partner to suspended'],
               ['Suspend', "Temporarily disables an active partner's storefront"],
               ['Reinstate', 'Restores a suspended partner to active'],
-              ['View Partner Admin', 'Deep links to /{slug}/admin for any partner'],
+              ['View Partner Admin', 'Opens {slug}.ft9ja.com/admin as a 1-hour read-only Super Admin session (no PIN, writes blocked)'],
               ['Email Templates', 'Access 20 HTML templates and download ZIP'],
               ['Documentation', 'This page'],
             ]}

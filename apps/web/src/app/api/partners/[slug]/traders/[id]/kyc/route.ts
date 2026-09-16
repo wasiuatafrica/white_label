@@ -2,7 +2,7 @@ import { updateTraderKycStatus, getTraderKyc, submitTraderKyc } from '@/db/queri
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 import {
   isPartnerAdminUnauthorized,
-  requirePartnerAdmin,
+  requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
 import { hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
 
@@ -106,7 +106,7 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string; id: string }> }
 ) {
   const { slug, id } = await params;
-  const auth = await requirePartnerAdmin(request, slug);
+  const auth = await requirePartnerAdminWrite(request, slug);
   if (isPartnerAdminUnauthorized(auth)) return auth;
 
   try {

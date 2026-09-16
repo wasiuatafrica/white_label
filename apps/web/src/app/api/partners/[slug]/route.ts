@@ -18,7 +18,7 @@ import {
 import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
 import {
   isPartnerAdminUnauthorized,
-  requirePartnerAdmin,
+  requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
 import {
   getPartnerLifecycleEmailPlan,
@@ -100,7 +100,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
     const hasSuperAdminAuth = Boolean(adminAuth && !isAdminUnauthorized(adminAuth));
 
     if (needsPartnerAdmin && !hasSuperAdminAuth) {
-      const partnerAuth = await requirePartnerAdmin(request, slug);
+      const partnerAuth = await requirePartnerAdminWrite(request, slug);
       if (isPartnerAdminUnauthorized(partnerAuth)) return partnerAuth;
     }
 

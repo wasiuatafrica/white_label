@@ -7,6 +7,7 @@ import {
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
+  requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
 import argon2 from 'argon2';
 
@@ -26,7 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const auth = await requirePartnerAdmin(request, slug);
+  const auth = await requirePartnerAdminWrite(request, slug);
   if (isPartnerAdminUnauthorized(auth)) return auth;
 
   try {
