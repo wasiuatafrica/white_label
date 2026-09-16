@@ -1,1 +1,1 @@
-{"version":"3.2.6","results":[[":src/lib/trading-telemetry.test.ts",{"duration":0,"failed":true}]]}
+{"version":"3.2.6","results":[[":src/lib/email/ft9ja-to-partner.test.ts",{"duration":20.058098999999856,"failed":false}],[":src/lib/partner-admin-security.test.ts",{"duration":220.54949000000033,"failed":false}],[":src/db/pglite-env.test.ts",{"duration":5.586700000000064,"failed":false}],[":src/lib/trading-telemetry.test.ts",{"duration":9.678899000000001,"failed":false}],[":src/lib/email/partner-to-trader.test.ts",{"duration":6.601799999999912,"failed":false}]]}

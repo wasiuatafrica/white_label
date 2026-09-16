@@ -1309,7 +1309,11 @@ export default function DocsPage() {
           <Table
             headers={['Variable', 'Where Used', 'Description']}
             rows={[
-              ['DATABASE_URL', 'Backend', 'Neon PostgreSQL connection string'],
+              [
+                'DATABASE_URL',
+                'Backend',
+                'Neon PostgreSQL connection string. For local PGlite, set to pglite (or pglite:<dir>).',
+              ],
               [
                 'RESEND_API_KEY',
                 'Backend (send-email.js)',

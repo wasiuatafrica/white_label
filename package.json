@@ -6,6 +6,7 @@
     "db:generate": "yarn workspace web db:generate",
     "db:migrate": "yarn workspace web db:migrate",
     "db:push": "yarn workspace web db:push",
+    "db:push:pglite": "yarn workspace web db:push:pglite",
     "db:copy": "bash scripts/copy-neon-db.sh"
   },
   "engines": {

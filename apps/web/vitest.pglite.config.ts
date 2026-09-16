@@ -6,10 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
-    environment: 'jsdom',
+    environment: 'node',
     globals: true,
-    setupFiles: './test/setupTests.ts',
-    exclude: ['**/node_modules/**', '**/dist/**', 'src/db/pglite.push.test.ts'],
+    include: ['src/db/pglite.push.test.ts'],
   },
   resolve: {
     alias: {
@@ -19,5 +18,5 @@ export default defineConfig({
   esbuild: {
     jsx: 'automatic',
   },
-  cacheDir: './.vitest',
+  cacheDir: './.vitest-pglite',
 });

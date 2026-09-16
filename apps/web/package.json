@@ -3,12 +3,15 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev --port 4000",
+		"dev:pglite": "DATABASE_URL=pglite next dev --port 4000",
 		"build": "next build --webpack",
 		"start": "next start --port ${PORT:-3000}",
 		"typecheck": "tsc --noEmit",
+		"test": "vitest run && vitest run --config vitest.pglite.config.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",
+		"db:push:pglite": "DATABASE_URL=pglite drizzle-kit push --force",
 		"db:migrate-logo-generation-count": "node scripts/migrate-logo-generation-count.mjs",
 		"db:migrate-last-generated-logo-url": "node scripts/migrate-last-generated-logo-url.mjs",
 		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs",
@@ -18,6 +21,7 @@
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.3.0",
+		"@electric-sql/pglite": "^0.5.8",
 		"@neondatabase/serverless": "^0.10.4",
 		"@opentelemetry/api": "^1.9.0",
 		"@tanstack/react-query": "^5.72.2",

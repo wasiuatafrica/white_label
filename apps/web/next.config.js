@@ -53,6 +53,8 @@ const nextConfig = {
     '@better-auth/kysely-adapter',
     'kysely',
     'drizzle-orm',
+    '@electric-sql/pglite',
+    'drizzle-kit',
   ],
   rewrites() {
     return [
