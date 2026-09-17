@@ -452,7 +452,7 @@ export default function DocsPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/admin"
+              href="/admin/partners"
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-700"
             >
               <ArrowLeft size={13} /> Admin
@@ -1429,7 +1429,7 @@ export default function DocsPage() {
             </div>
             <p className="text-xs text-gray-400">
               Last updated: June 2026 · FT9ja Partner Platform v1.0 ·{' '}
-              <Link href="/admin" className="text-[#16A34A] hover:underline">
+              <Link href="/admin/partners" className="text-[#16A34A] hover:underline">
                 Back to Admin
               </Link>
             </p>

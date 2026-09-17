@@ -113,17 +113,35 @@ export function AdminsTab() {
             <Loader2 className="animate-spin text-gray-300" size={20} />
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
-            {admins.map((admin) => (
-              <div key={admin.id} className="px-5 py-4">
-                <p className="text-sm font-semibold text-gray-900">{admin.name}</p>
-                <p className="text-xs text-gray-500">{admin.email}</p>
-                <p className="mt-1 text-[11px] text-gray-400">
-                  2FA {admin.totp_enabled ? 'enabled' : 'pending setup'}
-                  {admin.last_login_at ? ` · last login ${new Date(admin.last_login_at).toLocaleString()}` : ''}
-                </p>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  <th className="px-5 py-3">Name</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">2FA</th>
+                  <th className="px-4 py-3">Last login</th>
+                  <th className="px-4 py-3">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {admins.map((admin) => (
+                  <tr key={admin.id} className="hover:bg-gray-50/80">
+                    <td className="px-5 py-3 font-semibold text-gray-900">{admin.name}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{admin.email}</td>
+                    <td className="px-4 py-3 text-xs text-gray-600">
+                      {admin.totp_enabled ? 'Enabled' : 'Pending setup'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {admin.last_login_at ? new Date(admin.last_login_at).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {new Date(admin.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
