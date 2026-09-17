@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AdminLoginPanel } from '@/components/admin/admin-login-panel';
 import { AdminsTab } from '@/components/admin/admins-tab';
 import { AuditTab } from '@/components/admin/audit-tab';
-import { getPartnerUrl } from '@/lib/tenant';
+import { getPartnerUrl, resolvePartnerAdminViewBounceUrl } from '@/lib/tenant';
 import { splitVerifiedAmount, type EvalType } from '@/lib/partner-pricing';
 import {
   getInvoiceLifecycleStatus,
@@ -646,8 +646,11 @@ function PartnersTab({
       if (!res.ok) return;
       const data = (await res.json()) as { view_token?: string };
       if (!data.view_token) return;
-      const path = `/api/partners/${slug}/admin-view?token=${encodeURIComponent(data.view_token)}`;
-      window.open(getPartnerUrl(slug, path), '_blank', 'noopener,noreferrer');
+      window.open(
+        resolvePartnerAdminViewBounceUrl(slug, data.view_token, window.location.origin),
+        '_blank',
+        'noopener,noreferrer'
+      );
     } catch (error) {
       console.error('Failed to open partner admin view:', error);
     } finally {

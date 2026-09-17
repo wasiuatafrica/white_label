@@ -44,6 +44,11 @@ export function getRootDomain() {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN || DEFAULT_ROOT_DOMAIN;
 }
 
+export function isLocalHostname(host: string) {
+  const hostname = host.split(':')[0]?.toLowerCase() ?? '';
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
+}
+
 export function normalizePartnerSlug(value: string) {
   return value
     .trim()
@@ -70,12 +75,60 @@ export function isValidPartnerSlug(slug: string) {
 
 export function getPartnerBaseUrl(slug: string) {
   const rootDomain = getRootDomain();
-  return `https://${normalizePartnerSlug(slug)}.${rootDomain}`;
+  const protocol = isLocalHostname(rootDomain) ? 'http' : 'https';
+  return `${protocol}://${normalizePartnerSlug(slug)}.${rootDomain}`;
 }
 
 export function getPartnerUrl(slug: string, path = '/') {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${getPartnerBaseUrl(slug)}${normalizedPath === '/' ? '' : normalizedPath}`;
+}
+
+export function getPartnerAdminPanelPath(slug: string) {
+  return `/${normalizePartnerSlug(slug)}/admin`;
+}
+
+export function getPartnerAdminViewBouncePath(slug: string, token: string) {
+  const normalized = normalizePartnerSlug(slug);
+  return `/api/partners/${normalized}/admin-view?token=${encodeURIComponent(token)}`;
+}
+
+export function resolvePartnerAdminViewBounceUrl(
+  slug: string,
+  token: string,
+  currentOrigin?: string
+) {
+  const path = getPartnerAdminViewBouncePath(slug, token);
+  if (currentOrigin) {
+    try {
+      const originUrl = new URL(currentOrigin);
+      if (isLocalHostname(originUrl.hostname)) {
+        return `${originUrl.origin}${path}`;
+      }
+    } catch {
+      // fall through to the partner subdomain URL
+    }
+  }
+  return getPartnerUrl(slug, path);
+}
+
+export function getRequestOrigin(request: Request) {
+  const requestUrl = new URL(request.url);
+  const host =
+    request.headers.get('x-forwarded-host') ||
+    request.headers.get('host') ||
+    requestUrl.host;
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const protocol = forwardedProto
+    ? `${forwardedProto}:`
+    : isLocalHostname(host)
+      ? 'http:'
+      : requestUrl.protocol;
+  return `${protocol}//${host}`;
+}
+
+export function getPartnerAdminViewRedirectUrl(request: Request, slug: string) {
+  return new URL(getPartnerAdminPanelPath(slug), `${getRequestOrigin(request)}/`).toString();
 }
 
 export function getTenantSlugFromHost(hostHeader: string | null) {

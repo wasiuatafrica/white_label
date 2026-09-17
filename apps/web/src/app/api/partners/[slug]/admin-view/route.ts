@@ -1,5 +1,6 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
 import { verifyAdminPartnerAdminViewToken } from '@/lib/admin-partner-admin-view-token';
+import { getPartnerAdminViewRedirectUrl } from '@/lib/tenant';
 import {
   PARTNER_ADMIN_VIEW_SESSION_MAX_AGE,
   createPartnerAdminSessionCookie,
@@ -24,11 +25,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     slug,
     mode: 'readonly',
   });
-  const redirectUrl = new URL('/admin', request.url);
+  const redirectUrl = getPartnerAdminViewRedirectUrl(request, slug);
   return new Response(null, {
     status: 302,
     headers: {
-      Location: redirectUrl.toString(),
+      Location: redirectUrl,
       'Set-Cookie': createPartnerAdminSessionCookie(slug, sessionToken, {
         secure: process.env.NODE_ENV === 'production',
         maxAge: PARTNER_ADMIN_VIEW_SESSION_MAX_AGE,
