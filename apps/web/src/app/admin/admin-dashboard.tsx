@@ -591,9 +591,6 @@ function PartnersTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [grantingPartner, setGrantingPartner] = useState<{ id: number; slug: string; name: string } | null>(null);
-  const [grantReason, setGrantReason] = useState('');
-  const [grantError, setGrantError] = useState<string | null>(null);
   const [openingAdminSlug, setOpeningAdminSlug] = useState<string | null>(null);
   const qc = useQueryClient();
 
@@ -603,41 +600,6 @@ function PartnersTab({
       const res = await fetch('/api/partners');
       if (!res.ok) throw new Error('Failed');
       return res.json();
-    },
-  });
-
-  const grantComplimentary = useMutation({
-    mutationFn: async ({
-      partner_id,
-      slug,
-      reason,
-    }: {
-      partner_id: number;
-      slug: string;
-      reason: string;
-    }) => {
-      setGrantError(null);
-      const res = await fetch('/api/admin/license-invoices', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'grant_complimentary', partner_id, slug, reason }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to grant complimentary period');
-      }
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-partners'] });
-      qc.invalidateQueries({ queryKey: ['admin-license-invoices'] });
-      qc.invalidateQueries({ queryKey: ['admin-badge-counts'] });
-      setGrantingPartner(null);
-      setGrantReason('');
-      setGrantError(null);
-    },
-    onError: (err: Error) => {
-      setGrantError(err.message);
     },
   });
 
@@ -787,8 +749,7 @@ function PartnersTab({
                 {filtered.map((p) => {
                   const sc = getStatusConfig(p.status);
                   return (
-                    <Fragment key={p.id}>
-                      <tr className="hover:bg-gray-50/80">
+                      <tr key={p.id} className="hover:bg-gray-50/80">
                         <AdminTd className="sm:px-5">
                           <div className="flex items-center gap-3">
                             <div
@@ -877,19 +838,6 @@ function PartnersTab({
                         </AdminTd>
                         <AdminTd className="text-right">
                           <div className="inline-flex flex-wrap items-center justify-end gap-2">
-                            {p.license_coverage?.status !== 'exempt' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setGrantingPartner({ id: p.id, slug: p.slug, name: p.firm_name });
-                                  setGrantReason('Complimentary 30-day period');
-                                  setGrantError(null);
-                                }}
-                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
-                              >
-                                <Gift size={12} /> Grant 30d Comp
-                              </button>
-                            )}
                             <button
                               type="button"
                               onClick={() => void openPartnerAdminView(p.slug)}
@@ -942,57 +890,6 @@ function PartnersTab({
                           </div>
                         </AdminTd>
                       </tr>
-                      {grantingPartner?.id === p.id ? (
-                        <tr>
-                          <td colSpan={9} className="bg-gray-50/60 px-4 py-3 sm:px-5">
-                            <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3.5 space-y-3">
-                              <div className="text-xs font-bold text-blue-900">
-                                Grant 30 Days Complimentary License for {p.firm_name}
-                              </div>
-                              {grantError && <div className="text-xs text-red-600">{grantError}</div>}
-                              <div>
-                                <label className="mb-1 block text-[11px] font-medium text-gray-600">
-                                  Reason * (required)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={grantReason}
-                                  onChange={(e) => setGrantReason(e.target.value)}
-                                  placeholder="e.g. Partner launch bonus or promotional waiver"
-                                  className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
-                                />
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() =>
-                                    grantComplimentary.mutate({
-                                      partner_id: p.id,
-                                      slug: p.slug,
-                                      reason: grantReason,
-                                    })
-                                  }
-                                  disabled={grantComplimentary.isPending || !grantReason.trim()}
-                                  className="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                                >
-                                  {grantComplimentary.isPending ? (
-                                    <Loader2 size={11} className="animate-spin" />
-                                  ) : (
-                                    <Gift size={11} />
-                                  )}
-                                  Confirm Grant
-                                </button>
-                                <button
-                                  onClick={() => setGrantingPartner(null)}
-                                  className="rounded border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
                   );
                 })}
               </tbody>
