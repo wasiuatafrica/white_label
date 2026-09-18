@@ -3066,8 +3066,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <p className="mt-1 text-xs text-gray-500">
                     Intro pricing of {formatNaira(PARTNER_LICENSE_INTRO_FEE)} applies until{' '}
                     {formatDateShort(licenseData.pricing.intro_ends_at)}, then{' '}
-                    {formatNaira(licenseData.pricing.standard_fee)}. Unused intro time is not paused
-                    if you stop paying.
+                    {formatNaira(licenseData.pricing.standard_fee)}.
                   </p>
                 )}
             </div>
