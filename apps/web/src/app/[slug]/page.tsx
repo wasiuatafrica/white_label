@@ -45,6 +45,7 @@ type Partner = {
   logo_display_url?: string | null;
   template: string | null;
   fee_markup: number | string | null;
+  storefront_frozen?: boolean;
 };
 
 // ─── Partner Info Sections (FAQ, Rules, Contact) ──────────────────────────────
@@ -1436,6 +1437,34 @@ export default function PartnerLandingPage({ params }: { params: Promise<{ slug:
           >
             Visit FT9ja
           </Link>
+        </div>
+      </div>
+    );
+  }
+  if (partner.storefront_frozen) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6">
+        <div className="text-center">
+          <div className="text-4xl mb-4">❄️</div>
+          <h1 className="text-xl font-black text-gray-900">{partner.firm_name}</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            This storefront is frozen until the partner license is renewed. Existing traders can
+            still sign in.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href={`/${slug}/login`}
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800"
+            >
+              Trader login
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Visit FT9ja
+            </Link>
+          </div>
         </div>
       </div>
     );

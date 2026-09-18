@@ -33,7 +33,7 @@ const sections: Section[] = [
     faqs: [
       {
         q: 'What exactly is the FT9ja Partner Program?',
-        a: 'The FT9ja Partner Program lets you launch a fully branded prop trading firm under your own name in under 1 hour — without building infrastructure, handling payouts, or managing compliance. You pay a monthly license fee (₦95,000), brand the firm as yours, and earn 100% of your markup on every evaluation sold.',
+        a: 'The FT9ja Partner Program lets you launch a fully branded prop trading firm under your own name in under 1 hour — without building infrastructure, handling payouts, or managing compliance. New partners pay ₦5,000/month for 3 calendar months from approval, then ₦95,000. Brand the firm as yours, and earn 100% of your markup on every evaluation sold.',
       },
       {
         q: 'Who is this for?',
@@ -69,11 +69,11 @@ const sections: Section[] = [
       },
       {
         q: 'Is there a revenue share or commission to FT9ja?',
-        a: 'No. Zero revenue share. You pay a flat ₦95,000/month license and keep 100% of your markup. If you sell 50 evaluations a month at ₦30,000 markup, you keep all ₦1,500,000 of that — FT9ja does not take a cut.',
+        a: 'No. Zero revenue share. New partners pay ₦5,000/month for 3 calendar months from approval, then ₦95,000, and keep 100% of markup. If you sell 50 evaluations a month at ₦30,000 markup, you keep all ₦1,500,000 of that — FT9ja does not take a cut. Unused intro time is lost if you stop paying, and the storefront freezes 7 days after a missed renewal.',
       },
       {
         q: 'How realistic are the earnings?',
-        a: 'At 50% markup on SS: earn ₦54,375/eval. 3/week = ₦652,500/month. 10/week = ₦2.175M/month. 25/week = ₦5.4M/month. After the ₦95K license fee, top partners earn ₦1M–₦5M+/month net with a strong audience.',
+        a: 'At 50% markup on SS: earn ₦54,375/eval. 3/week = ₦652,500/month. 10/week = ₦2.175M/month. 25/week = ₦5.4M/month. After the license fee (₦5,000 intro, then ₦95,000), top partners earn ₦1M–₦5M+/month net with a strong audience.',
       },
       {
         q: 'When and how do I receive my earnings?',
@@ -263,7 +263,7 @@ export default function PartnerGuidePage() {
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: 'Time to Go Live', value: '1 hour', icon: <Clock size={14} /> },
-              { label: 'Monthly License', value: '₦95K', icon: <Banknote size={14} /> },
+              { label: 'Intro License', value: '₦5K', icon: <Banknote size={14} /> },
               { label: 'Revenue Share', value: '0%', icon: <TrendingUp size={14} /> },
               { label: 'Markup Yours', value: '100%', icon: <Star size={14} /> },
             ].map((s) => (
@@ -303,7 +303,7 @@ export default function PartnerGuidePage() {
               {
                 step: '01',
                 title: 'Apply & Pay License',
-                desc: 'Submit application, pay ₦95K/month license. Setup fee waived for first 50 partners.',
+                desc: 'Submit application, pay ₦5,000 first month (then ₦95,000 after 3 calendar months). Setup fee waived for first 50 partners.',
                 icon: '📝',
               },
               {
@@ -507,8 +507,8 @@ export default function PartnerGuidePage() {
             <div className="border-t border-gray-100 bg-amber-50 px-5 py-3">
               <p className="text-xs text-amber-700">
                 <AlertCircle size={11} className="inline mr-1" />
-                Before deducting ₦95K monthly license fee. Figures based on SS evaluations at 50%
-                markup.
+                Before deducting the license fee (₦5,000/month for 3 calendar months, then ₦95,000).
+                Figures based on SS evaluations at 50% markup.
               </p>
             </div>
           </div>
@@ -549,7 +549,7 @@ export default function PartnerGuidePage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 'Submit partner application at ft9ja.com/apply',
-                'Pay ₦95,000 monthly license fee',
+                'Pay ₦5,000 intro license (then ₦95,000 after 3 calendar months)',
                 'Receive approval email within 24 hours',
                 'Log in to your partner dashboard',
                 'Set firm name, logo, tagline, and colors',

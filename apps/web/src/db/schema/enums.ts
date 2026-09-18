@@ -47,5 +47,6 @@ export const partnerLicenseInvoiceStatusEnum = pgEnum('partner_license_invoice_s
   'overdue',
   'paid',
   'waived',
+  'not_paid',
 ]);
 

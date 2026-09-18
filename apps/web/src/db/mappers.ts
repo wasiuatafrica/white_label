@@ -24,6 +24,8 @@ export function mapPartner(row: Partner) {
     fee_markup: row.feeMarkup,
     monthly_fee_paid: row.monthlyFeePaid,
     setup_fee_waived: row.setupFeeWaived,
+    license_intro_eligible: row.licenseIntroEligible,
+    license_intro_ends_at: row.licenseIntroEndsAt,
     total_traders: row.totalTraders,
     total_revenue: row.totalRevenue,
     payment_proof_url: row.paymentProofUrl,

@@ -23,6 +23,7 @@ type Partner = {
   logo_url: string | null;
   logo_display_url?: string | null;
   status: string;
+  storefront_frozen?: boolean;
 };
 
 type View = 'signin' | 'register' | 'forgot' | 'set_password';
@@ -180,7 +181,9 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
     );
   }
 
+  const isFrozen = Boolean(partner.storefront_frozen);
   const isTabView = view === 'signin' || view === 'register';
+  const visibleView = isFrozen && view === 'register' ? 'signin' : view;
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] font-inter">
@@ -234,7 +237,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            {isTabView && (
+            {isTabView && !isFrozen && (
               <div className="flex border-b border-gray-100">
                 {(['signin', 'register'] as const).map((t) => (
                   <button
@@ -255,8 +258,14 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
 
             <div className="p-6">
               {/* ── Sign In ── */}
-              {view === 'signin' && (
+              {visibleView === 'signin' && (
                 <div className="space-y-4">
+                  {isFrozen && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+                      New registrations are paused while this storefront is frozen. Existing
+                      traders can still sign in.
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1.5 block text-xs font-medium text-gray-600">
                       Email Address
@@ -305,7 +314,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
                       <AlertCircle size={13} className="mt-0.5 shrink-0" />
                       <span>
                         {signInError}
-                        {signInError.includes('register') && (
+                        {signInError.includes('register') && !isFrozen && (
                           <button
                             className="ml-1 font-semibold underline"
                             onClick={() => setView('register')}
@@ -334,16 +343,18 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
                       </>
                     )}
                   </button>
-                  <p className="text-center text-xs text-gray-400">
-                    No account?{' '}
-                    <button
-                      className="font-semibold underline"
-                      style={{ color: primary }}
-                      onClick={() => setView('register')}
-                    >
-                      Register
-                    </button>
-                  </p>
+                  {!isFrozen && (
+                    <p className="text-center text-xs text-gray-400">
+                      No account?{' '}
+                      <button
+                        className="font-semibold underline"
+                        style={{ color: primary }}
+                        onClick={() => setView('register')}
+                      >
+                        Register
+                      </button>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -417,7 +428,7 @@ export default function TraderLoginPage({ params }: { params: Promise<{ slug: st
               )}
 
               {/* ── Register ── */}
-              {view === 'register' && (
+              {visibleView === 'register' && (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-500">
                     Create your trader account with {firmName}.

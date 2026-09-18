@@ -14,7 +14,7 @@ const sections = [
       },
       {
         heading: '2. Partner Program',
-        text: 'FT9ja Partner Program allows approved individuals and entities ("Partners") to operate a white-label prop trading brand using FT9ja\'s infrastructure. Partners pay a monthly license fee of ₦95,000 and are responsible for their own marketing, trader acquisition, and customer communication. FT9ja is not responsible for representations made by Partners to their traders beyond what is documented in these terms.',
+        text: 'FT9ja Partner Program allows approved individuals and entities ("Partners") to operate a white-label prop trading brand using FT9ja\'s infrastructure. New partners pay ₦5,000 per 30-day period for 3 calendar months from activation, then ₦95,000. Existing partners remain on ₦95,000. Partners are responsible for their own marketing, trader acquisition, and customer communication. FT9ja is not responsible for representations made by Partners to their traders beyond what is documented in these terms.',
       },
       {
         heading: '3. Evaluation Services',
@@ -116,7 +116,7 @@ const sections = [
       },
       {
         heading: 'Partner Obligations',
-        text: 'As a Partner you must: (a) Pay the ₦95,000 monthly license fee on time; (b) Truthfully represent the nature of the evaluation product to your traders; (c) Not make guarantees of profit or funding that exceed what FT9ja offers; (d) Handle customer communications professionally; (e) Comply with all applicable laws in your jurisdiction; (f) Not sub-license FT9ja infrastructure to other parties.',
+        text: 'As a Partner you must: (a) Pay the license fee on time (₦5,000 per 30-day period during the 3-calendar-month intro window from activation, then ₦95,000; unused intro time is not paused if you stop paying); (b) Truthfully represent the nature of the evaluation product to your traders; (c) Not make guarantees of profit or funding that exceed what FT9ja offers; (d) Handle customer communications professionally; (e) Comply with all applicable laws in your jurisdiction; (f) Not sub-license FT9ja infrastructure to other parties. If a renewal is unpaid 7 days after the due date, the public storefront is frozen until the current invoice is paid or waived. Partner admin and existing trader accounts remain available.',
       },
       {
         heading: 'Revenue Model',

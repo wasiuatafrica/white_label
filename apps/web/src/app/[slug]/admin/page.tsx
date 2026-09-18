@@ -13,9 +13,12 @@ import { partnerLogoImageSrc } from '@/lib/partner-logo';
 import { getMonthlyChartItemKey } from '@/lib/partner-admin-analytics';
 import {
   FT9JA_BASE_PRICES,
+  formatNaira,
   getExpectedPrice,
   getPartnerEarningsAtBaseMarkup,
   getWholesalePrice,
+  PARTNER_LICENSE_FEE,
+  PARTNER_LICENSE_INTRO_FEE,
   toMoneyNumber as pricingToMoney,
 } from '@/lib/partner-pricing';
 import {
@@ -98,7 +101,7 @@ type PartnerLicenseInvoice = {
   partner_id: number;
   invoice_number: string;
   amount: string;
-  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived';
+  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived' | 'not_paid';
   period_start: string;
   period_end: string;
   due_at: string;
@@ -114,15 +117,48 @@ type PartnerLicenseInvoice = {
 
 type LicenseCoverageData = {
   isCovered: boolean;
-  status: 'paid' | 'waived' | 'receipt_uploaded' | 'overdue' | 'pending' | 'expired' | 'none' | 'exempt';
+  status:
+    | 'paid'
+    | 'waived'
+    | 'receipt_uploaded'
+    | 'overdue'
+    | 'pending'
+    | 'expired'
+    | 'none'
+    | 'exempt'
+    | 'not_paid';
   periodStart: string | null;
   periodEnd: string | null;
   nextDueAt: string | null;
   latestInvoice: PartnerLicenseInvoice | null;
 };
 
+type PartnerLicensePricing = {
+  intro_eligible: boolean;
+  intro_ends_at: string | null;
+  current_fee: number;
+  standard_fee: number;
+  storefront_frozen: boolean;
+};
+
 function isLicensePaymentActionable(status: LicenseCoverageData['status'] | undefined): boolean {
-  return status === 'pending' || status === 'overdue' || status === 'expired';
+  return status === 'pending' || status === 'overdue' || status === 'expired' || status === 'not_paid';
+}
+
+function currentLicenseAmount(data?: {
+  coverage?: LicenseCoverageData;
+  pricing?: PartnerLicensePricing;
+} | null): number {
+  const invoice = data?.coverage?.latestInvoice;
+  if (
+    invoice &&
+    (invoice.status === 'pending' ||
+      invoice.status === 'overdue' ||
+      invoice.status === 'receipt_uploaded')
+  ) {
+    return Number(invoice.amount);
+  }
+  return data?.pricing?.current_fee ?? PARTNER_LICENSE_FEE;
 }
 
 type Trader = {
@@ -1672,6 +1708,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
   const { data: licenseData, isLoading: licenseLoading, refetch: refetchLicense } = useQuery<{
     invoices: PartnerLicenseInvoice[];
     coverage: LicenseCoverageData;
+    pricing?: PartnerLicensePricing;
   }>({
     queryKey: ['partner-license-invoices', slug],
     queryFn: async () => {
@@ -2190,16 +2227,21 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
         {/* ── Overview ── */}
         {tab === 'overview' && (
           <div className="space-y-5">
-            {(licenseData?.coverage?.status === 'overdue' ||
+            {(licenseData?.pricing?.storefront_frozen ||
+              licenseData?.coverage?.status === 'overdue' ||
               licenseData?.coverage?.status === 'expired') && (
               <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
                 <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-600" />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-red-900">
-                    License fee payment is overdue
+                    {licenseData?.pricing?.storefront_frozen
+                      ? 'Your storefront is frozen'
+                      : 'License fee payment is overdue'}
                   </div>
                   <div className="text-xs text-red-700">
-                    Your ₦95,000 license period has ended. Upload your payment receipt now to keep your firm active and avoid suspension.
+                    {licenseData?.pricing?.storefront_frozen
+                      ? 'Your storefront is frozen. Upload payment within the License tab to restore it.'
+                      : `Your ${formatNaira(currentLicenseAmount(licenseData))} license period has ended. Upload your payment receipt now to keep your firm active.`}
                   </div>
                 </div>
                 <button
@@ -3015,21 +3057,36 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
               <h2 className="text-xl font-black text-gray-900">Partner License & Billing</h2>
               <p className="mt-1 text-sm text-gray-500">
                 {licenseData?.coverage?.status === 'exempt'
-                  ? 'This firm is exempt from the recurring ₦95,000 license fee.'
-                  : '₦95,000 per 30-day period. Keep your license active to maintain your branded storefront and onboarding.'}
+                  ? `This firm is exempt from the recurring ${formatNaira(PARTNER_LICENSE_FEE)} license fee.`
+                  : `${formatNaira(currentLicenseAmount(licenseData))} per 30-day period. Keep your license active to maintain your branded storefront and onboarding.`}
               </p>
+              {licenseData?.pricing?.intro_eligible &&
+                licenseData.pricing.intro_ends_at &&
+                new Date(licenseData.pricing.intro_ends_at).getTime() > Date.now() && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Intro pricing of {formatNaira(PARTNER_LICENSE_INTRO_FEE)} applies until{' '}
+                    {formatDateShort(licenseData.pricing.intro_ends_at)}, then{' '}
+                    {formatNaira(licenseData.pricing.standard_fee)}. Unused intro time is not paused
+                    if you stop paying.
+                  </p>
+                )}
             </div>
 
-            {(licenseData?.coverage?.status === 'overdue' ||
+            {(licenseData?.pricing?.storefront_frozen ||
+              licenseData?.coverage?.status === 'overdue' ||
               licenseData?.coverage?.status === 'expired') && (
               <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-600" />
                 <div className="flex-1">
                   <div className="text-sm font-semibold text-red-900">
-                    Your license payment is overdue
+                    {licenseData?.pricing?.storefront_frozen
+                      ? 'Your storefront is frozen'
+                      : 'Your license payment is overdue'}
                   </div>
                   <div className="text-xs text-red-700 mt-0.5">
-                    Your previous 30-day license period has ended. Transfer ₦95,000 and upload your receipt to keep your firm active and avoid suspension.
+                    {licenseData?.pricing?.storefront_frozen
+                      ? 'Your storefront is frozen. Upload payment within the License tab to restore it.'
+                      : `Your previous 30-day license period has ended. Transfer ${formatNaira(currentLicenseAmount(licenseData))} and upload your receipt to keep your firm active.`}
                   </div>
                 </div>
               </div>
@@ -3118,7 +3175,9 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                   <div className="flex items-center justify-between text-xs py-1">
                     <span className="text-gray-500">License Fee</span>
                     <span className="font-semibold text-gray-900">
-                      {licenseData?.coverage?.status === 'exempt' ? 'Exempt' : '₦95,000 / 30 days'}
+                      {licenseData?.coverage?.status === 'exempt'
+                        ? 'Exempt'
+                        : `${formatNaira(currentLicenseAmount(licenseData))} / 30 days`}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs py-1">
@@ -3217,7 +3276,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                     <Banknote size={16} className="text-gray-500" /> Payment Transfer Details
                   </h3>
                   <p className="text-xs text-gray-500 mb-4">
-                    Transfer the ₦95,000 license fee directly using official FT9ja bank details.
+                    Transfer the {formatNaira(currentLicenseAmount(licenseData))} license fee directly using official FT9ja bank details.
                   </p>
 
                   <div className="rounded-lg bg-gray-50 border border-gray-100 p-3.5 space-y-2 text-xs">

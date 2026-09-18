@@ -706,7 +706,7 @@ export default function ApplyPage() {
               <div>
                 <h2 className="text-xl font-black text-gray-900">License payment</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  ₦95,000/month. Setup fee waived for the first 50 partners.
+                ₦5,000 for the first 3 months, then ₦95,000/month.
                 </p>
               </div>
 

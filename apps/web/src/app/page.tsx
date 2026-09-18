@@ -11,7 +11,7 @@ import { useState } from 'react';
 // Example below uses 50% markup on wholesale price.
 
 const stats = [
-  { label: 'Monthly License Fee', value: '₦95,000', sub: '≈ $63/month' },
+  { label: 'Intro License Fee', value: '₦5,000', sub: 'First 3 months, then ₦95,000/month' },
   { label: 'Capital at Risk', value: '₦0', sub: 'FT9ja backs all payouts' },
   { label: 'Hours to Go Live', value: '1', sub: 'From approval to launch' },
 ];
@@ -39,7 +39,7 @@ const steps = [
   {
     num: '01',
     title: 'Apply & Pay the License',
-    desc: 'Submit your application and pay the ₦95,000/month license fee. Setup fee is waived for the first 50 partners.',
+    desc: 'Submit your application and pay ₦5,000 for the first month. The intro lasts 3 calendar months from approval, then ₦95,000/month. Setup fee is waived for the first 50 partners.',
   },
   {
     num: '02',
@@ -283,10 +283,12 @@ export default function HomePage() {
 
               <div className="mt-8 rounded-xl border border-gray-200 p-6">
                 <div className="flex items-end gap-2">
-                  <span className="text-4xl font-black text-gray-900 sm:text-5xl">₦95,000</span>
+                  <span className="text-4xl font-black text-gray-900 sm:text-5xl">₦5,000</span>
                   <span className="mb-1 text-sm text-gray-400">/month</span>
                 </div>
-                <div className="mt-1 text-sm text-gray-400">≈ $63/month · Billed monthly</div>
+                <div className="mt-1 text-sm text-gray-400">
+                  First 3 months, then ₦95,000/month
+                </div>
                 <div className="mt-6 space-y-3">
                   {[
                     'Your own branded subdomain',

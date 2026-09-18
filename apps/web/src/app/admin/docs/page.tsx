@@ -778,7 +778,7 @@ export default function DocsPage() {
 
           <H3 id="partner-license">License Renewals & Billing Pipeline</H3>
           <P>
-            Partners operate on a rolling <strong>30-day license cycle (₦95,000 per 30-day period)</strong> anchored to their original approval date (in the <Code>Africa/Lagos</Code> timezone).
+            Partners operate on a rolling <strong>30-day license cycle</strong> anchored to their original approval date (in the <Code>Africa/Lagos</Code> timezone). New applications after this intro ships pay <strong>₦5,000 per 30-day period for 3 calendar months from activation</strong>, then <strong>₦95,000</strong>. Existing active partners and queued applications stay on ₦95,000. The intro window does not pause if they stop paying.
           </P>
           <Callout type="info">
             <strong>First 30 days prepaid:</strong> When a partner signs up on <Code>/apply</Code>, their initial payment receipt covers their first 30 days of active service. When Super Admin approves the partner (<Code>pending → active</Code>), an initial <Code>paid</Code> invoice is recorded automatically. The anniversary begins on approval, so admin review delay does not consume their paid window.
@@ -788,9 +788,9 @@ export default function DocsPage() {
               'Rolling 30-Day Periods: Period n is strictly [start + (n-1)*30d, start + n*30d). Even if a renewal receipt is uploaded or approved late, the original anniversary date never slides.',
               'Daily Automated Cron: A Heroku Scheduler job triggers POST /api/cron/partner-licenses daily with authorization header Bearer <CRON_SECRET>. When now >= period_end, it creates the next pending invoice and sends email P-03.',
               'Partner License Tab: Partners view period status, due dates, and upload renewal transfer receipts directly in their private admin panel at /{slug}/admin (License tab or ?tab=license).',
-              'Receipt Review: Uploading a receipt sets status to receipt_uploaded. Super Admin reviews on the Partner Licenses tab: Confirm (₦95,000, marks paid, sends P-04), Reject (requires explanation note), or Waive. Confirm Payment is also available on pending/overdue invoices with no receipt (offline payment): a verification note is required, Super Admin may set period start (end is always start + 30 days), and P-04 still sends.',
+              'Receipt Review: Uploading a receipt sets status to receipt_uploaded. Super Admin reviews on the Partner Licenses tab: Confirm (must match invoice.amount unless force-approved, marks paid, sends P-04), Reject (requires explanation note), or Waive. Confirm Payment is also available on pending/overdue invoices with no receipt (offline payment): a verification note is required, Super Admin may set period start (end is always start + 30 days), and P-04 still sends.',
               'Complimentary Grants: Super Admin can grant 30-day complimentary periods (marks open invoice as waived or creates the next 30-day period as waived). Waived periods provide full active coverage without sending payment emails.',
-              '7-Day Overdue Notice: Invoices unpaid 7 days after their due date with no uploaded receipt trigger a single P-05 Overdue notice. No automatic suspension is performed.',
+              '7-Day Store Freeze: Any non-exempt partner that does not renew within 7 days of the invoice due date has the public storefront frozen until the current invoice is paid or waived. New trader signups and evaluation purchases are blocked. Partner admin stays open so they can upload a receipt, and existing traders keep dashboard access. Super Admin disciplinary suspended is a separate action and is not auto-cleared by a license payment. The daily cron sends a one-shot P-06 freeze notice (reuses overdueEmailSentAt).',
               'Manual Suspension: Super Admin can manually suspend overdue firms from the Partners list. Storefronts and new signups are blocked, but existing active trader evaluations remain accessible and partner admin stays open to pay.',
             ].map((item) => (
               <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
@@ -1312,10 +1312,10 @@ export default function DocsPage() {
             rows={[
               ['P-01', 'p-01-welcome.html', 'Partner application approved'],
               ['P-02', 'p-02-firm-live.html', 'Firm reactivated from suspension'],
-              ['P-03', 'p-03-invoice.html', '1st of each month — license invoice'],
+              ['P-03', 'p-03-invoice.html', 'Current-period license invoice issued'],
               ['P-04', 'p-04-payment-confirmed.html', 'License payment confirmed'],
-              ['P-05', 'p-05-payment-overdue.html', '7+ days after missed payment'],
-              ['P-06', 'p-06-suspension.html', 'Firm suspended for non-payment'],
+              ['P-05', 'p-05-payment-overdue.html', 'Preview/overdue copy (store frozen at due+7)'],
+              ['P-06', 'p-06-suspension.html', 'Storefront frozen 7 days after missed renewal'],
               ['P-07', 'p-07-monthly-report.html', 'Last day of each month — stats'],
               ['P-08', 'p-08-trader-milestone.html', 'At 10, 25, 50, 100 traders reached'],
               ['P-09', 'p-09-feature-update.html', 'Significant platform feature releases'],
@@ -1350,7 +1350,7 @@ export default function DocsPage() {
             rows={[
               [
                 'Partner List',
-                'View all registered firms with status, trader count, revenue, and fee payment status',
+                'View all registered firms with status, Frozen badge (license freeze), trader count, revenue, and fee payment status',
               ],
               ['Approve', 'Moves a pending partner to active — their storefront goes live'],
               ['Reject', 'Moves a pending partner to suspended'],

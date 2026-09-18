@@ -13,6 +13,11 @@ import { parseJsonBody } from '@/lib/api-validation';
 import { traderRegisterSchema } from '@/lib/api-schemas';
 import { isUniqueViolation } from '@/lib/db-errors';
 import { traderEmailConflictMessage } from '@/lib/trader-email';
+import {
+  assertPartnerStorefrontOpen,
+  PartnerStorefrontFrozenError,
+  partnerStorefrontFrozenResponse,
+} from '@/lib/partner-storefront-access';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_REGISTER_ATTEMPTS = 5;
@@ -41,6 +46,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
+
+    await assertPartnerStorefrontOpen(slug);
 
     const existing = await getTraderEmailOwner(email);
     if (existing) {
@@ -76,6 +83,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return res;
   } catch (e) {
     console.error(e);
+    if (e instanceof PartnerStorefrontFrozenError) {
+      return partnerStorefrontFrozenResponse();
+    }
     if (isUniqueViolation(e)) {
       const existing = email ? await getTraderEmailOwner(email) : null;
       const message =

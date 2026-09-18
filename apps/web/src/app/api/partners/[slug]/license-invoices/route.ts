@@ -1,5 +1,6 @@
 import {
   getPartnerLicenseCoverage,
+  getPartnerLicensePricing,
   LicenseInvoiceError,
   listLicenseInvoicesForPartner,
   uploadPartnerLicenseReceipt,
@@ -24,14 +25,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       });
     }
 
-    const [invoices, coverage] = await Promise.all([
+    const [invoices, coverage, pricing] = await Promise.all([
       listLicenseInvoicesForPartner(auth.partnerId),
       getPartnerLicenseCoverage(auth.partnerId),
+      getPartnerLicensePricing(auth.partnerId),
     ]);
 
     return Response.json({
       invoices,
       coverage,
+      pricing,
     });
   } catch (e) {
     console.error('[PARTNER_LICENSE_INVOICES_GET]', e);

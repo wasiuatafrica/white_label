@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
+import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { applyPgliteSchema } from '@/db/pglite-schema';
 import * as schema from '@/db/schema';
@@ -17,6 +18,7 @@ import {
   isCalendarYmd,
   isInvoiceCovered,
   isInvoiceEligibleForOverdue,
+  isLicenseStorefrontFrozen,
   OVERDUE_GRACE_PERIOD_MS,
   shiftToCalendarDate,
   summarizeLicenseCoverage,
@@ -33,12 +35,15 @@ import {
   listLicenseInvoicesForPartner,
   markOverdueEmailSent,
   recordFirstActivationPaidInvoice,
+  reconcileStaleOpenLicenseInvoice,
   reviewLicenseInvoice,
   uploadPartnerLicenseReceipt,
 } from '@/db/queries/partner-license-invoices';
 import {
+  addCalendarMonthsLagos,
   isLicenseRecurringExempt,
   PARTNER_LICENSE_FEE,
+  PARTNER_LICENSE_INTRO_FEE,
   PARTNER_LICENSE_PERIOD_DAYS,
 } from './partner-pricing';
 
@@ -112,7 +117,7 @@ describe('Partner License Billing - Unit & Period Math', () => {
       );
     });
 
-    it('returns false when status is pending, overdue, or receipt_uploaded', () => {
+    it('returns false when status is pending, overdue, receipt_uploaded, or not_paid', () => {
       const mid = new Date(Date.UTC(2026, 8, 25, 12, 0, 0));
       expect(
         isInvoiceCovered({ status: 'pending', periodStart: start, periodEnd: end }, mid)
@@ -122,6 +127,9 @@ describe('Partner License Billing - Unit & Period Math', () => {
       ).toBe(false);
       expect(
         isInvoiceCovered({ status: 'receipt_uploaded', periodStart: start, periodEnd: end }, mid)
+      ).toBe(false);
+      expect(
+        isInvoiceCovered({ status: 'not_paid', periodStart: start, periodEnd: end }, mid)
       ).toBe(false);
     });
 
@@ -242,6 +250,59 @@ describe('Partner License Billing - Unit & Period Math', () => {
       expect(exempt.status).toBe('exempt');
       expect(exempt.nextDueAt).toBeNull();
       expect(applyRecurringLicenseExemption('gammafirm', expired)).toEqual(expired);
+    });
+  });
+
+  describe('isLicenseStorefrontFrozen', () => {
+    const dueAt = new Date(Date.UTC(2026, 8, 16, 0, 0, 0));
+    const periodEnd = addDays(dueAt, 30);
+    const pendingCoverage = summarizeLicenseCoverage(
+      {
+        status: 'pending',
+        periodStart: dueAt,
+        periodEnd,
+        dueAt,
+      },
+      dueAt
+    );
+
+    it('is not frozen 6 days after due and is frozen at 7 days', () => {
+      const day6 = new Date(dueAt.getTime() + 6 * 24 * 60 * 60 * 1000);
+      const day7 = new Date(dueAt.getTime() + OVERDUE_GRACE_PERIOD_MS);
+      expect(isLicenseStorefrontFrozen(pendingCoverage, { status: 'pending' }, day6)).toBe(false);
+      expect(isLicenseStorefrontFrozen(pendingCoverage, { status: 'pending' }, day7)).toBe(true);
+    });
+
+    it('does not freeze when a receipt is in review after day 7', () => {
+      const day8 = new Date(dueAt.getTime() + 8 * 24 * 60 * 60 * 1000);
+      expect(
+        isLicenseStorefrontFrozen(
+          pendingCoverage,
+          { status: 'receipt_uploaded', paymentProofUrl: 'https://s3.example.com/r.png' },
+          day8
+        )
+      ).toBe(false);
+    });
+
+    it('does not freeze when currently covered', () => {
+      const day10 = new Date(dueAt.getTime() + 10 * 24 * 60 * 60 * 1000);
+      const covered = summarizeLicenseCoverage(
+        {
+          status: 'paid',
+          periodStart: dueAt,
+          periodEnd,
+          dueAt,
+        },
+        dueAt
+      );
+      expect(isLicenseStorefrontFrozen(covered, { status: 'paid' }, day10)).toBe(false);
+    });
+
+    it('does not freeze exempt partners', () => {
+      const day10 = new Date(dueAt.getTime() + 10 * 24 * 60 * 60 * 1000);
+      expect(
+        isLicenseStorefrontFrozen(exemptLicenseCoverage(), { status: 'pending' }, day10)
+      ).toBe(false);
     });
   });
 });
@@ -747,6 +808,132 @@ describe('Partner License Billing - Database Operations (PGlite)', { timeout: 60
           db
         )
       ).rejects.toThrow('exempt from recurring license invoices');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('records an intro-priced activation invoice and rolls a stale unpaid invoice to not_paid', async () => {
+    const { client, db } = await setupTestDb();
+    try {
+      const [partner] = await db
+        .insert(partners)
+        .values({
+          slug: 'introfirm',
+          firmName: 'Intro Firm',
+          ownerEmail: 'intro@example.com',
+          status: 'pending',
+          adminPin: '123456',
+          licenseIntroEligible: true,
+          monthlyFeePaid: false,
+        })
+        .returning();
+
+      const activatedAt = new Date(Date.UTC(2026, 8, 18, 0, 0, 0));
+      const invoice = await recordFirstActivationPaidInvoice(
+        {
+          partnerId: partner.id,
+          slug: partner.slug,
+          activatedAt,
+        },
+        db
+      );
+
+      expect(Number(invoice?.amount)).toBe(PARTNER_LICENSE_INTRO_FEE);
+      await db
+        .update(partners)
+        .set({ status: 'active' })
+        .where(eq(partners.id, partner.id));
+      const [updated] = await db
+        .select({ licenseIntroEndsAt: partners.licenseIntroEndsAt })
+        .from(partners)
+        .where(eq(partners.id, partner.id))
+        .limit(1);
+      expect(updated.licenseIntroEndsAt?.toISOString()).toBe(
+        addCalendarMonthsLagos(activatedAt, 3).toISOString()
+      );
+
+      const renewalStart = addDays(activatedAt, 30);
+      const renewal = await createRenewalInvoice(
+        {
+          partnerId: partner.id,
+          slug: partner.slug,
+          periodStart: renewalStart,
+          periodEnd: addDays(renewalStart, 30),
+          dueAt: renewalStart,
+          invoiceNumber: 'INV-INTROFIRM-20261018',
+        },
+        db
+      );
+      expect(Number(renewal.amount)).toBe(PARTNER_LICENSE_INTRO_FEE);
+
+      const afterLapse = addCalendarMonthsLagos(activatedAt, 4);
+      const current = await reconcileStaleOpenLicenseInvoice(partner.id, afterLapse, {
+        tx: db,
+      });
+      expect(current).not.toBeNull();
+      expect(Number(current?.amount)).toBe(PARTNER_LICENSE_FEE);
+      expect(new Date(current!.period_start).getTime()).toBeGreaterThanOrEqual(
+        addCalendarMonthsLagos(activatedAt, 3).getTime()
+      );
+
+      const history = await listLicenseInvoicesForPartner(partner.id, db);
+      const stale = history.find((row) => row.id === renewal.id);
+      expect(stale?.status).toBe('not_paid');
+      expect(Number(stale?.amount)).toBe(PARTNER_LICENSE_INTRO_FEE);
+      expect(
+        isInvoiceCovered(
+          {
+            status: 'not_paid',
+            periodStart: new Date(stale!.period_start),
+            periodEnd: new Date(stale!.period_end),
+          },
+          afterLapse
+        )
+      ).toBe(false);
+
+      const stillSamePeriod = addDays(renewalStart, 10);
+      const [samePeriodPartner] = await db
+        .insert(partners)
+        .values({
+          slug: 'introearly',
+          firmName: 'Intro Early',
+          ownerEmail: 'introearly@example.com',
+          status: 'active',
+          adminPin: '123456',
+          licenseIntroEligible: true,
+        })
+        .returning();
+      await recordFirstActivationPaidInvoice(
+        {
+          partnerId: samePeriodPartner.id,
+          slug: samePeriodPartner.slug,
+          activatedAt,
+        },
+        db
+      );
+      const openRenewal = await createRenewalInvoice(
+        {
+          partnerId: samePeriodPartner.id,
+          slug: samePeriodPartner.slug,
+          periodStart: renewalStart,
+          periodEnd: addDays(renewalStart, 30),
+          dueAt: renewalStart,
+          invoiceNumber: 'INV-INTROEARLY-20261018',
+        },
+        db
+      );
+      const unchanged = await reconcileStaleOpenLicenseInvoice(
+        samePeriodPartner.id,
+        stillSamePeriod,
+        { tx: db }
+      );
+      expect(unchanged).toBeNull();
+      const stillOpen = await listLicenseInvoicesForPartner(samePeriodPartner.id, db);
+      expect(stillOpen.find((row) => row.id === openRenewal.id)?.status).toBe('pending');
+      expect(Number(stillOpen.find((row) => row.id === openRenewal.id)?.amount)).toBe(
+        PARTNER_LICENSE_INTRO_FEE
+      );
     } finally {
       await client.close();
     }

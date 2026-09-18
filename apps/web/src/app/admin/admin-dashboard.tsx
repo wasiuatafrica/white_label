@@ -62,9 +62,10 @@ type Partner = {
   payment_proof_url: string | null;
   admin_pin_configured: boolean;
   created_at: string;
+  storefront_frozen?: boolean;
   license_coverage?: {
     isCovered: boolean;
-    status: 'paid' | 'waived' | 'receipt_uploaded' | 'overdue' | 'pending' | 'expired' | 'none' | 'exempt';
+    status: 'paid' | 'waived' | 'receipt_uploaded' | 'overdue' | 'pending' | 'expired' | 'none' | 'exempt' | 'not_paid';
     periodStart: string | null;
     periodEnd: string | null;
     nextDueAt: string | null;
@@ -77,7 +78,7 @@ type AdminLicenseInvoiceRow = {
   partner_id: number;
   invoice_number: string;
   amount: string;
-  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived';
+  status: 'pending' | 'receipt_uploaded' | 'overdue' | 'paid' | 'waived' | 'not_paid';
   period_start: string;
   period_end: string;
   due_at: string;
@@ -779,13 +780,20 @@ function PartnersTab({
                         </AdminTd>
                         <AdminTd className="text-xs text-gray-600">{p.owner_email}</AdminTd>
                         <AdminTd>
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium"
-                            style={{ color: sc.color }}
-                          >
-                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${sc.dot}`} />
-                            {sc.label}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-xs font-medium"
+                              style={{ color: sc.color }}
+                            >
+                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${sc.dot}`} />
+                              {sc.label}
+                            </span>
+                            {p.storefront_frozen && (
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                                Frozen
+                              </span>
+                            )}
+                          </div>
                         </AdminTd>
                         <AdminTd>
                           {p.payment_proof_url ? (
@@ -2594,7 +2602,7 @@ function LicenseInvoicesTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<
-    'all' | 'receipt_uploaded' | 'overdue' | 'pending' | 'paid' | 'waived'
+    'all' | 'receipt_uploaded' | 'overdue' | 'pending' | 'paid' | 'waived' | 'not_paid'
   >('all');
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
@@ -2707,7 +2715,7 @@ function LicenseInvoicesTab({
           />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          {(['all', 'receipt_uploaded', 'overdue', 'pending', 'paid', 'waived'] as const).map(
+          {(['all', 'receipt_uploaded', 'overdue', 'pending', 'paid', 'waived', 'not_paid'] as const).map(
             (st) => (
               <button
                 key={st}
@@ -2728,6 +2736,8 @@ function LicenseInvoicesTab({
                   ? 'Pending'
                   : st === 'paid'
                   ? 'Paid'
+                  : st === 'not_paid'
+                  ? 'Not paid'
                   : 'Complimentary'}
               </button>
             )
@@ -2970,7 +2980,7 @@ function LicenseInvoicesTab({
                                     />
                                   </div>
                                 </div>
-                                {Number(verifiedAmount) < 95000 && (
+                                {Number(verifiedAmount) < Number(inv.amount) && (
                                   <label className="flex items-center gap-2 text-xs text-amber-800">
                                     <input
                                       type="checkbox"
@@ -2978,7 +2988,8 @@ function LicenseInvoicesTab({
                                       onChange={(e) => setForceApprove(e.target.checked)}
                                       className="accent-[#16A34A]"
                                     />
-                                    Amount is below ₦95,000. Force approve with note?
+                                    Amount is below ₦{Number(inv.amount).toLocaleString()}. Force
+                                    approve with note?
                                   </label>
                                 )}
                                 <div className="flex gap-2">

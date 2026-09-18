@@ -16,6 +16,11 @@ import {
 } from '@/lib/partner-admin-auth-guard';
 import { amountsMatch, getTraderPrice, type EvalType } from '@/lib/partner-pricing';
 import { TraderEmailConflictError } from '@/lib/trader-email';
+import {
+  assertPartnerStorefrontOpen,
+  PartnerStorefrontFrozenError,
+  partnerStorefrontFrozenResponse,
+} from '@/lib/partner-storefront-access';
 
 function toPublicTrader(trader: {
   id: number;
@@ -134,6 +139,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
+    await assertPartnerStorefrontOpen(slug);
+
     const partner = await getPartnerPrivateBySlug(slug);
     const expectedAmount = getTraderPrice(eval_type as EvalType, partner?.fee_markup ?? 0);
     if (!amountsMatch(amount, expectedAmount)) {
@@ -185,6 +192,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     );
   } catch (e) {
     console.error(e);
+    if (e instanceof PartnerStorefrontFrozenError) {
+      return partnerStorefrontFrozenResponse();
+    }
     if (e instanceof TraderEmailConflictError) {
       return Response.json({ error: e.message }, { status: 409 });
     }

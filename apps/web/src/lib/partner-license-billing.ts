@@ -119,6 +119,25 @@ export function computeNextPeriod(previousPeriodEnd: Date): {
 }
 
 /**
+ * Next anniversary window whose periodEnd is still in the future.
+ * Skips unused 30-day blocks after a lapse so only the current period is billed.
+ */
+export function computeCurrentAnniversaryPeriod(
+  lastClosedPeriodEnd: Date,
+  now: Date
+): {
+  periodStart: Date;
+  periodEnd: Date;
+  dueAt: Date;
+} {
+  let period = computeNextPeriod(lastClosedPeriodEnd);
+  while (now.getTime() >= period.periodEnd.getTime()) {
+    period = computeNextPeriod(period.periodEnd);
+  }
+  return period;
+}
+
+/**
  * Checks if a pending invoice is overdue (now >= dueAt + 7 days) and has no receipt uploaded.
  */
 export function isInvoiceEligibleForOverdue(
@@ -145,7 +164,8 @@ export type LicenseInvoiceRecordStatus =
   | 'receipt_uploaded'
   | 'overdue'
   | 'paid'
-  | 'waived';
+  | 'waived'
+  | 'not_paid';
 
 export type LicenseCoverageStatus = LicenseInvoiceRecordStatus | 'expired' | 'none' | 'exempt';
 
@@ -203,7 +223,8 @@ export function getInvoiceLifecycleStatus(
     invoice.status === 'receipt_uploaded' ||
     invoice.status === 'overdue' ||
     invoice.status === 'paid' ||
-    invoice.status === 'waived'
+    invoice.status === 'waived' ||
+    invoice.status === 'not_paid'
   ) {
     return invoice.status;
   }
@@ -223,6 +244,8 @@ export function licenseLifecycleLabel(status: LicenseLifecycleStatus): string {
       return 'Overdue';
     case 'pending':
       return 'Pending';
+    case 'not_paid':
+      return 'Not paid';
     case 'expired':
       return 'Expired';
     default: {
@@ -245,6 +268,8 @@ export function licenseLifecycleBadgeClass(status: LicenseLifecycleStatus): stri
       return 'border-red-200 bg-red-50 text-red-700';
     case 'pending':
       return 'border-yellow-200 bg-yellow-50 text-yellow-700';
+    case 'not_paid':
+      return 'border-gray-200 bg-gray-50 text-gray-600';
     default: {
       const _exhaustive: never = status;
       return _exhaustive;
@@ -271,7 +296,7 @@ export function applyRecurringLicenseExemption(
 
 /**
  * Current coverage for a partner based on their latest invoice.
- * nextDueAt is when the next ₦95,000 is owed — period_end for a covered
+ * nextDueAt is when the next license fee is owed — period_end for a covered
  * (or expired) paid/waived window, due_at for an open unpaid invoice.
  */
 export function summarizeLicenseCoverage(
@@ -302,4 +327,32 @@ export function summarizeLicenseCoverage(
     periodEnd,
     nextDueAt: nextDueAtForInvoice(invoice),
   };
+}
+
+type FreezeInvoiceInput = {
+  status: string;
+  paymentProofUrl?: string | null;
+  receiptUploadedAt?: Date | string | null;
+};
+
+/**
+ * Storefront is frozen 7 days after the next due date when the partner is
+ * uncovered and not waiting on Super Admin receipt review.
+ */
+export function isLicenseStorefrontFrozen(
+  coverage: LicenseCoverageSummary,
+  latestInvoice: FreezeInvoiceInput | null,
+  now: Date = new Date()
+): boolean {
+  if (coverage.status === 'exempt' || coverage.isCovered) return false;
+  if (
+    latestInvoice &&
+    (latestInvoice.status === 'receipt_uploaded' ||
+      latestInvoice.paymentProofUrl ||
+      latestInvoice.receiptUploadedAt)
+  ) {
+    return false;
+  }
+  if (!coverage.nextDueAt) return false;
+  return now.getTime() >= asDate(coverage.nextDueAt).getTime() + OVERDUE_GRACE_PERIOD_MS;
 }

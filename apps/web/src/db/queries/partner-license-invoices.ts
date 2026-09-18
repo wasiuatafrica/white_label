@@ -6,10 +6,11 @@ import { partners } from '../schema/partners';
 import type { DbOrTx } from '../types';
 import {
   addDays,
-  computeNextPeriod,
+  computeCurrentAnniversaryPeriod,
   exemptLicenseCoverage,
   generateInvoiceNumber,
   isCalendarYmd,
+  isLicenseStorefrontFrozen,
   OVERDUE_GRACE_PERIOD_MS,
   shiftToCalendarDate,
   summarizeLicenseCoverage,
@@ -17,8 +18,11 @@ import {
 } from '@/lib/partner-license-billing';
 import { isUniqueViolation } from '@/lib/db-errors';
 import {
+  addCalendarMonthsLagos,
+  getPartnerLicenseFee,
   isLicenseRecurringExempt,
   PARTNER_LICENSE_FEE,
+  PARTNER_LICENSE_INTRO_CALENDAR_MONTHS,
   PARTNER_LICENSE_PERIOD_DAYS,
   toMoneyNumber,
 } from '@/lib/partner-pricing';
@@ -65,12 +69,35 @@ export async function recordFirstActivationPaidInvoice(
   const periodEnd = addDays(periodStart, PARTNER_LICENSE_PERIOD_DAYS);
   const invoiceNumber = generateInvoiceNumber(data.slug, periodStart);
 
+  const [partnerRow] = await tx
+    .select({
+      licenseIntroEligible: partners.licenseIntroEligible,
+      licenseIntroEndsAt: partners.licenseIntroEndsAt,
+    })
+    .from(partners)
+    .where(eq(partners.id, data.partnerId))
+    .limit(1);
+
+  let introEndsAt = partnerRow?.licenseIntroEndsAt ?? null;
+  if (partnerRow?.licenseIntroEligible && !introEndsAt) {
+    introEndsAt = addCalendarMonthsLagos(periodStart, PARTNER_LICENSE_INTRO_CALENDAR_MONTHS);
+    await tx
+      .update(partners)
+      .set({
+        licenseIntroEndsAt: introEndsAt,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(partners.id, data.partnerId));
+  }
+
+  const amount = getPartnerLicenseFee(introEndsAt, periodStart);
+
   const [row] = await tx
     .insert(partnerLicenseInvoices)
     .values({
       partnerId: data.partnerId,
       invoiceNumber,
-      amount: String(PARTNER_LICENSE_FEE),
+      amount: String(amount),
       status: 'paid',
       periodStart,
       periodEnd,
@@ -78,7 +105,7 @@ export async function recordFirstActivationPaidInvoice(
       paymentProofUrl: data.paymentProofUrl ?? null,
       receiptUploadedAt: periodStart,
       paidAt: periodStart,
-      verifiedAmount: String(PARTNER_LICENSE_FEE),
+      verifiedAmount: String(amount),
       verifiedBy: 'system/activation',
       verificationNote: 'First month license fee verified via partner application',
       createdAt: periodStart,
@@ -316,9 +343,10 @@ export async function reviewLicenseInvoice(
     }
 
     const verified = toMoneyNumber(data.verifiedAmount ?? existing.amount);
-    if (verified < PARTNER_LICENSE_FEE && !data.forceApprove) {
+    const requiredAmount = toMoneyNumber(existing.amount);
+    if (verified < requiredAmount && !data.forceApprove) {
       throw new LicenseInvoiceError(
-        `Verified amount (${verified}) is below required fee (₦${PARTNER_LICENSE_FEE.toLocaleString()}). Use forceApprove to override.`
+        `Verified amount (${verified}) is below required fee (₦${requiredAmount.toLocaleString()}). Use forceApprove to override.`
       );
     }
 
@@ -434,13 +462,14 @@ export async function grantComplimentaryLicensePeriod(
   const periodStart = latest?.period_end ? new Date(latest.period_end) : now;
   const periodEnd = addDays(periodStart, PARTNER_LICENSE_PERIOD_DAYS);
   const invoiceNumber = generateInvoiceNumber(data.slug, periodStart);
+  const amount = await resolveLicenseFee(data.partnerId, periodStart, tx);
 
   const [row] = await tx
     .insert(partnerLicenseInvoices)
     .values({
       partnerId: data.partnerId,
       invoiceNumber,
-      amount: String(PARTNER_LICENSE_FEE),
+      amount: String(amount),
       status: 'waived',
       periodStart,
       periodEnd,
@@ -592,6 +621,53 @@ export async function syncPartnerMonthlyFeePaidFlag(
   return coverage.isCovered;
 }
 
+async function resolveLicenseFee(partnerId: number, periodStart: Date, tx: DbOrTx) {
+  const [partner] = await tx
+    .select({ licenseIntroEndsAt: partners.licenseIntroEndsAt })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+  return getPartnerLicenseFee(partner?.licenseIntroEndsAt, periodStart);
+}
+
+export type PartnerLicensePricing = {
+  intro_eligible: boolean;
+  intro_ends_at: string | null;
+  current_fee: number;
+  standard_fee: number;
+  storefront_frozen: boolean;
+};
+
+export async function getPartnerLicensePricing(
+  partnerId: number,
+  now: Date = new Date(),
+  tx: DbOrTx = db
+): Promise<PartnerLicensePricing> {
+  const [partner] = await tx
+    .select({
+      slug: partners.slug,
+      licenseIntroEligible: partners.licenseIntroEligible,
+      licenseIntroEndsAt: partners.licenseIntroEndsAt,
+    })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+
+  const coverage = await getPartnerLicenseCoverage(partnerId, now, tx);
+  const periodStart = coverage.periodStart ?? now;
+  const introEndsAt = partner?.licenseIntroEndsAt ?? null;
+
+  return {
+    intro_eligible: Boolean(partner?.licenseIntroEligible),
+    intro_ends_at: introEndsAt ? introEndsAt.toISOString() : null,
+    current_fee: isLicenseRecurringExempt(partner?.slug)
+      ? 0
+      : getPartnerLicenseFee(introEndsAt, periodStart),
+    standard_fee: PARTNER_LICENSE_FEE,
+    storefront_frozen: isLicenseStorefrontFrozen(coverage, coverage.latestInvoice, now),
+  };
+}
+
 // ── Cron / on-demand renewal helpers ──────────────────────────────────────────
 
 export type PartnerRenewalRef = {
@@ -602,47 +678,84 @@ export type PartnerRenewalRef = {
   ownerEmail: string;
 };
 
+export async function getPartnerRenewalRef(
+  partnerId: number,
+  tx: DbOrTx = db
+): Promise<PartnerRenewalRef | null> {
+  const [partner] = await tx
+    .select({
+      id: partners.id,
+      slug: partners.slug,
+      firmName: partners.firmName,
+      ownerName: partners.ownerName,
+      ownerEmail: partners.ownerEmail,
+    })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+  return partner ?? null;
+}
+
+export async function listPartnersNeedingLicenseReconcile(tx: DbOrTx = db): Promise<number[]> {
+  const rows = await tx
+    .select({ id: partners.id, slug: partners.slug })
+    .from(partners)
+    .where(eq(partners.status, 'active'));
+  return rows.filter((row) => !isLicenseRecurringExempt(row.slug)).map((row) => row.id);
+}
+
 export type RenewalInvoiceIssue = {
   partner: PartnerRenewalRef;
   periodStart: Date;
   periodEnd: Date;
   dueAt: Date;
   invoiceNumber: string;
+  amount: number;
 };
 
 function computeRenewalIssue(
-  partner: PartnerRenewalRef,
-  invoices: Array<{ periodStart: Date; periodEnd: Date }>,
+  partner: PartnerRenewalRef & { licenseIntroEndsAt?: Date | null },
+  invoices: Array<{
+    status: string;
+    periodStart: Date;
+    periodEnd: Date;
+  }>,
   now: Date,
   bootstrapIfMissing: boolean
 ): RenewalInvoiceIssue | null {
+  const toIssue = (
+    periodStart: Date,
+    periodEnd: Date,
+    dueAt: Date
+  ): RenewalInvoiceIssue => ({
+    partner,
+    periodStart,
+    periodEnd,
+    dueAt,
+    invoiceNumber: generateInvoiceNumber(partner.slug, periodStart),
+    amount: getPartnerLicenseFee(partner.licenseIntroEndsAt, periodStart),
+  });
+
   if (invoices.length === 0) {
     if (!bootstrapIfMissing) return null;
     const periodStart = now;
     const periodEnd = addDays(periodStart, PARTNER_LICENSE_PERIOD_DAYS);
-    return {
-      partner,
-      periodStart,
-      periodEnd,
-      dueAt: periodStart,
-      invoiceNumber: generateInvoiceNumber(partner.slug, periodStart),
-    };
+    return toIssue(periodStart, periodEnd, periodStart);
   }
 
   const latest = invoices[0];
+  if (isOpenLicenseInvoiceStatus(latest.status)) {
+    return null;
+  }
   if (now.getTime() < latest.periodEnd.getTime()) return null;
 
-  const nextPeriod = computeNextPeriod(latest.periodEnd);
+  const nextPeriod = computeCurrentAnniversaryPeriod(latest.periodEnd, now);
   const exists = invoices.some(
     (inv) => inv.periodStart.getTime() === nextPeriod.periodStart.getTime()
   );
   if (exists) return null;
 
-  return {
-    partner,
-    ...nextPeriod,
-    invoiceNumber: generateInvoiceNumber(partner.slug, nextPeriod.periodStart),
-  };
+  return toIssue(nextPeriod.periodStart, nextPeriod.periodEnd, nextPeriod.dueAt);
 }
 
 /**
@@ -657,6 +770,7 @@ export async function findPartnersNeedingRenewalInvoice(now: Date = new Date(), 
       firmName: partners.firmName,
       ownerName: partners.ownerName,
       ownerEmail: partners.ownerEmail,
+      licenseIntroEndsAt: partners.licenseIntroEndsAt,
     })
     .from(partners)
     .where(eq(partners.status, 'active'));
@@ -710,6 +824,7 @@ export async function findPartnerNeedingRenewalInvoice(
       ownerName: partners.ownerName,
       ownerEmail: partners.ownerEmail,
       status: partners.status,
+      licenseIntroEndsAt: partners.licenseIntroEndsAt,
     })
     .from(partners)
     .where(eq(partners.id, partnerId))
@@ -745,10 +860,95 @@ export async function findPartnerNeedingRenewalInvoice(
       firmName: partner.firmName,
       ownerName: partner.ownerName,
       ownerEmail: partner.ownerEmail,
+      licenseIntroEndsAt: partner.licenseIntroEndsAt,
     },
     invoices,
     now,
     false
+  );
+}
+
+const STALE_UNPAID_NOTE = 'Period ended unpaid; not collected';
+
+/**
+ * Closes a stale pending/overdue invoice as not_paid (audit, not complimentary)
+ * and issues one current-period invoice. Does not stack on an open invoice
+ * whose period still covers now, and does not close receipt_uploaded rows.
+ */
+export async function reconcileStaleOpenLicenseInvoice(
+  partnerId: number,
+  now: Date = new Date(),
+  options: { allowSuspended?: boolean; tx?: DbOrTx } = {}
+): Promise<ReturnType<typeof mapPartnerLicenseInvoice> | null> {
+  const tx = options.tx ?? db;
+  const [partner] = await tx
+    .select({
+      id: partners.id,
+      slug: partners.slug,
+      firmName: partners.firmName,
+      ownerName: partners.ownerName,
+      ownerEmail: partners.ownerEmail,
+      status: partners.status,
+      licenseIntroEndsAt: partners.licenseIntroEndsAt,
+    })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+
+  if (!partner) return null;
+  if (isLicenseRecurringExempt(partner.slug)) return null;
+
+  switch (partner.status) {
+    case 'pending':
+      return null;
+    case 'suspended':
+      if (!options.allowSuspended) return null;
+      break;
+    case 'active':
+      break;
+    default: {
+      const _exhaustive: never = partner.status;
+      return _exhaustive;
+    }
+  }
+
+  const invoices = await tx
+    .select()
+    .from(partnerLicenseInvoices)
+    .where(eq(partnerLicenseInvoices.partnerId, partnerId))
+    .orderBy(desc(partnerLicenseInvoices.periodStart), desc(partnerLicenseInvoices.id));
+
+  const latest = invoices[0];
+  if (
+    latest &&
+    (latest.status === 'pending' || latest.status === 'overdue') &&
+    now.getTime() >= latest.periodEnd.getTime()
+  ) {
+    await tx
+      .update(partnerLicenseInvoices)
+      .set({
+        status: 'not_paid',
+        verificationNote: STALE_UNPAID_NOTE,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(partnerLicenseInvoices.id, latest.id));
+    latest.status = 'not_paid';
+  }
+
+  const issue = computeRenewalIssue(partner, invoices, now, false);
+  if (!issue) return null;
+
+  return createRenewalInvoice(
+    {
+      partnerId: issue.partner.id,
+      slug: issue.partner.slug,
+      periodStart: issue.periodStart,
+      periodEnd: issue.periodEnd,
+      dueAt: issue.dueAt,
+      invoiceNumber: issue.invoiceNumber,
+      amount: issue.amount,
+    },
+    tx
   );
 }
 
@@ -760,15 +960,34 @@ export async function createRenewalInvoice(
     periodEnd: Date;
     dueAt: Date;
     invoiceNumber: string;
+    amount?: number;
   },
   tx: DbOrTx = db
 ) {
+  const [open] = await tx
+    .select()
+    .from(partnerLicenseInvoices)
+    .where(
+      and(
+        eq(partnerLicenseInvoices.partnerId, data.partnerId),
+        inArray(partnerLicenseInvoices.status, [...OPEN_LICENSE_INVOICE_STATUSES])
+      )
+    )
+    .orderBy(desc(partnerLicenseInvoices.periodStart), desc(partnerLicenseInvoices.id))
+    .limit(1);
+
+  if (open && open.periodStart.getTime() !== data.periodStart.getTime()) {
+    return mapPartnerLicenseInvoice(open);
+  }
+
+  const amount = data.amount ?? (await resolveLicenseFee(data.partnerId, data.periodStart, tx));
+
   const inserted = await tx
     .insert(partnerLicenseInvoices)
     .values({
       partnerId: data.partnerId,
       invoiceNumber: data.invoiceNumber,
-      amount: String(PARTNER_LICENSE_FEE),
+      amount: String(amount),
       status: 'pending',
       periodStart: data.periodStart,
       periodEnd: data.periodEnd,

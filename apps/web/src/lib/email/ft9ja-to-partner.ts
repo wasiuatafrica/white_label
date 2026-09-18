@@ -1,5 +1,6 @@
 import { sendEmail } from '@/app/api/utils/send-email';
 import { addDays, formatPeriodRange } from '@/lib/partner-license-billing';
+import { PARTNER_LICENSE_FEE } from '@/lib/partner-pricing';
 import { getPartnerUrl } from '@/lib/tenant';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -12,6 +13,7 @@ type PartnerRecipient = {
   admin_pin?: string | null;
   total_traders?: number;
   total_revenue?: string | number;
+  license_intro_eligible?: boolean | null;
 };
 
 type Ft9jaPartnerTemplateVariables = {
@@ -20,6 +22,7 @@ type Ft9jaPartnerTemplateVariables = {
     FIRM_NAME: string;
     SLUG: string;
     ADMIN_PIN: string;
+    LICENSE_TYPE: string;
   };
   'p-02-firm-live': {
     OWNER_NAME: string;
@@ -33,6 +36,7 @@ type Ft9jaPartnerTemplateVariables = {
     FIRM_NAME: string;
     PERIOD_RANGE: string;
     DUE_DATE: string;
+    AMOUNT: string;
     URL: string;
   };
   'p-04-payment-confirmed': {
@@ -41,6 +45,7 @@ type Ft9jaPartnerTemplateVariables = {
     REF: string;
     PERIOD_RANGE: string;
     NEXT_DUE_DATE: string;
+    AMOUNT: string;
     URL: string;
   };
   'p-05-payment-overdue': {
@@ -49,12 +54,14 @@ type Ft9jaPartnerTemplateVariables = {
     DAYS_OVERDUE: string;
     DUE_DATE: string;
     SUSPEND_DATE: string;
+    AMOUNT: string;
     URL: string;
   };
   'p-06-suspension': {
     OWNER_NAME: string;
     FIRM_NAME: string;
     SUSPEND_DATE: string;
+    AMOUNT: string;
     URL: string;
   };
   'p-07-monthly-report': {
@@ -66,6 +73,7 @@ type Ft9jaPartnerTemplateVariables = {
     TOTAL_TRADERS: string;
     EVALS_SOLD: string;
     GROSS_REVENUE: string;
+    LICENSE_COST: string;
     NET_EARNINGS: string;
     URL: string;
   };
@@ -122,7 +130,7 @@ const TEMPLATE_META: Record<Ft9jaPartnerTemplate, { filename: string; subject: s
   },
   'p-06-suspension': {
     filename: 'p-06-suspension.html',
-    subject: 'Account Suspended - {{FIRM_NAME}}',
+    subject: 'Storefront Frozen - {{FIRM_NAME}}',
   },
   'p-07-monthly-report': {
     filename: 'p-07-monthly-report.html',
@@ -362,6 +370,10 @@ export function getPartnerLifecycleEmailPlan(params: {
   return actions;
 }
 
+const INTRO_LICENSE_TYPE =
+  '₦5,000/month for 3 calendar months from activation, then ₦95,000';
+const STANDARD_LICENSE_TYPE = 'Monthly — ₦95,000';
+
 export async function sendPartnerWelcomeEmail(
   partner: PartnerRecipient,
   adminPinPlaintext?: string
@@ -375,6 +387,9 @@ export async function sendPartnerWelcomeEmail(
       FIRM_NAME,
       SLUG,
       ADMIN_PIN: adminPinPlaintext ?? '',
+      LICENSE_TYPE: partner.license_intro_eligible
+        ? INTRO_LICENSE_TYPE
+        : STANDARD_LICENSE_TYPE,
     },
   });
 }
@@ -393,6 +408,7 @@ export async function sendPartnerLicensePaymentConfirmedEmail(
     paidAt?: Date;
     periodEnd?: Date;
     periodRange?: string;
+    amount?: string | number;
   }
 ) {
   const paidAt = options?.paidAt ?? new Date();
@@ -407,6 +423,7 @@ export async function sendPartnerLicensePaymentConfirmedEmail(
       REF: licenseReference(partner, paidAt),
       PERIOD_RANGE: periodRange,
       NEXT_DUE_DATE: formatDate(nextDueDate),
+      AMOUNT: formatAmount(options?.amount ?? PARTNER_LICENSE_FEE),
       URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
@@ -414,7 +431,8 @@ export async function sendPartnerLicensePaymentConfirmedEmail(
 
 export async function sendPartnerSuspensionEmail(
   partner: PartnerRecipient,
-  suspendedAt = new Date()
+  suspendedAt = new Date(),
+  options?: { amount?: string | number }
 ) {
   return sendFt9jaPartnerEmail({
     template: 'p-06-suspension',
@@ -423,7 +441,8 @@ export async function sendPartnerSuspensionEmail(
       OWNER_NAME: ownerName(partner),
       FIRM_NAME: partner.firm_name,
       SUSPEND_DATE: formatDate(suspendedAt),
-      URL: getPartnerUrl(partner.slug, '/admin'),
+      AMOUNT: formatAmount(options?.amount ?? PARTNER_LICENSE_FEE),
+      URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
 }
@@ -436,12 +455,14 @@ export async function sendPartnerLicenseInvoiceEmail(
     periodStart = new Date(),
     periodEnd,
     periodRange,
+    amount,
   }: {
     invoiceId: string;
     dueDate: Date;
     periodStart?: Date;
     periodEnd?: Date;
     periodRange?: string;
+    amount?: string | number;
   }
 ) {
   const pEnd = periodEnd ?? addDays(periodStart, 30);
@@ -455,6 +476,7 @@ export async function sendPartnerLicenseInvoiceEmail(
       FIRM_NAME: partner.firm_name,
       PERIOD_RANGE: pRange,
       DUE_DATE: formatDate(dueDate),
+      AMOUNT: formatAmount(amount ?? PARTNER_LICENSE_FEE),
       URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
@@ -466,7 +488,8 @@ export async function sendPartnerPaymentOverdueEmail(
     daysOverdue,
     dueDate,
     suspendDate,
-  }: { daysOverdue: number; dueDate: Date; suspendDate: Date }
+    amount,
+  }: { daysOverdue: number; dueDate: Date; suspendDate: Date; amount?: string | number }
 ) {
   return sendFt9jaPartnerEmail({
     template: 'p-05-payment-overdue',
@@ -477,6 +500,7 @@ export async function sendPartnerPaymentOverdueEmail(
       DAYS_OVERDUE: String(daysOverdue),
       DUE_DATE: formatDate(dueDate),
       SUSPEND_DATE: formatDate(suspendDate),
+      AMOUNT: formatAmount(amount ?? PARTNER_LICENSE_FEE),
       URL: getPartnerUrl(partner.slug, '/admin?tab=license'),
     },
   });
@@ -491,6 +515,7 @@ export async function sendPartnerMonthlyReportEmail(
     evalsSold,
     grossRevenue,
     netEarnings,
+    licenseCost,
   }: {
     period: Date;
     newTraders: number;
@@ -498,6 +523,7 @@ export async function sendPartnerMonthlyReportEmail(
     evalsSold: number;
     grossRevenue: string | number;
     netEarnings: string | number;
+    licenseCost?: string | number;
   }
 ) {
   return sendFt9jaPartnerEmail({
@@ -512,6 +538,7 @@ export async function sendPartnerMonthlyReportEmail(
       TOTAL_TRADERS: String(totalTraders),
       EVALS_SOLD: String(evalsSold),
       GROSS_REVENUE: formatAmount(grossRevenue),
+      LICENSE_COST: formatAmount(licenseCost ?? PARTNER_LICENSE_FEE),
       NET_EARNINGS: formatAmount(netEarnings),
       URL: getPartnerUrl(partner.slug, '/admin'),
     },

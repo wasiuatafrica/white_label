@@ -36,6 +36,8 @@ export const partners = pgTable(
     feeMarkup: numeric('fee_markup', { precision: 10, scale: 2 }).notNull().default('0'),
     monthlyFeePaid: boolean('monthly_fee_paid').notNull().default(false),
     setupFeeWaived: boolean('setup_fee_waived').notNull().default(false),
+    licenseIntroEligible: boolean('license_intro_eligible').notNull().default(false),
+    licenseIntroEndsAt: timestamp('license_intro_ends_at', { withTimezone: false }),
     totalTraders: integer('total_traders').notNull().default(0),
     totalRevenue: numeric('total_revenue', { precision: 14, scale: 2 }).notNull().default('0'),
     paymentProofUrl: text('payment_proof_url'),

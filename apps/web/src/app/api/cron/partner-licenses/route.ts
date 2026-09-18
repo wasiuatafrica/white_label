@@ -4,8 +4,7 @@ import {
   markOverdueEmailSent,
 } from '@/db/queries/partner-license-invoices';
 import { isCronAuthorized } from '@/lib/cron-auth';
-import { sendPartnerPaymentOverdueEmail } from '@/lib/email/ft9ja-to-partner';
-import { addDays } from '@/lib/partner-license-billing';
+import { sendPartnerSuspensionEmail } from '@/lib/email/ft9ja-to-partner';
 import { issueDueRenewalInvoices } from '@/lib/partner-license-renewal';
 
 export const dynamic = 'force-dynamic';
@@ -28,29 +27,19 @@ async function handleBillingCron(request: Request) {
   summary.renewalsIssued = renewalResult.issued;
   summary.renewalErrors = renewalResult.errors;
 
-  // Overdue notice (7+ days after due_at, unpaid, no receipt uploaded)
+  // Storefront freeze notice (7+ days after due_at, unpaid, no receipt uploaded)
   const invoicesNeedingOverdueNotice = await findInvoicesNeedingOverdueNotice(now);
   for (const inv of invoicesNeedingOverdueNotice) {
     try {
-      const dueDate = new Date(inv.due_at);
-      const daysOverdue = Math.max(
-        7,
-        Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
-      );
-      const suspendDate = addDays(now, 7);
-
-      await sendPartnerPaymentOverdueEmail(
+      await sendPartnerSuspensionEmail(
         {
           slug: inv.partner_slug,
           firm_name: inv.partner_firm_name,
           owner_name: inv.partner_owner_name,
           owner_email: inv.partner_owner_email,
         },
-        {
-          daysOverdue,
-          dueDate,
-          suspendDate,
-        }
+        now,
+        { amount: inv.amount }
       );
 
       await markOverdueEmailSent(inv.id);
@@ -58,7 +47,7 @@ async function handleBillingCron(request: Request) {
     } catch (err) {
       summary.overdueErrors += 1;
       console.error(
-        `[CRON] Error processing overdue notice for invoice #${inv.invoice_number}:`,
+        `[CRON] Error processing freeze notice for invoice #${inv.invoice_number}:`,
         err
       );
     }

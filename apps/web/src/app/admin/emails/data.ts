@@ -61,7 +61,7 @@ const P01 = wrap(
     tbl(
       dr('Your Firm', '{{FIRM_NAME}}'),
       dr('Subdomain', '{{SLUG}}.ft9ja.com'),
-      dr('License Type', 'Monthly — &#8358;95,000')
+      dr('License Type', '{{LICENSE_TYPE}}')
     ) +
     btn('#16A34A', 'Access Partner Admin &rarr;') +
     note('Questions? Contact your partner success manager at accounts@ft9ja.com')
@@ -98,14 +98,14 @@ const P03 = wrap(
       dr('Invoice #', 'INV-{{INVOICE_ID}}'),
       dr('Firm', '{{FIRM_NAME}}'),
       dr('Period', '{{PERIOD_RANGE}}'),
-      dr('Amount Due', '&#8358;95,000'),
+      dr('Amount Due', '&#8358;{{AMOUNT}}'),
       dr('Due Date', '{{DUE_DATE}}')
     ) +
     p(
       'Transfer to: <strong>Asokoro Technologies</strong>, First Bank — <strong>3012345678</strong>. Use your firm slug as the payment reference.'
     ) +
     btn('#16A34A', 'Confirm Payment &rarr;') +
-    note('Failure to pay by the due date may result in temporary suspension of your firm page.')
+    note('If this invoice is unpaid 7 days after the due date, your storefront will be frozen until you renew.')
 );
 
 const P04 = wrap(
@@ -117,7 +117,7 @@ const P04 = wrap(
     ) +
     tbl(
       dr('Payment Ref', '{{REF}}'),
-      dr('Amount', '&#8358;95,000'),
+      dr('Amount', '&#8358;{{AMOUNT}}'),
       dr('Period', '{{PERIOD_RANGE}}'),
       dr('Next Due', '{{NEXT_DUE_DATE}}'),
       dr('Status', '&#9989; Paid')
@@ -137,10 +137,10 @@ const P05 = wrap(
       'Hi {{OWNER_NAME}}, your monthly license payment for <strong>{{FIRM_NAME}}</strong> is now <strong>{{DAYS_OVERDUE}} days overdue</strong>.'
     ) +
     p(
-      'Your firm page remains active for now, but will be <strong>suspended within 48 hours</strong> if payment is not received.'
+      'Your storefront is now <strong>frozen</strong> until this license payment is received. Existing traders can still access their accounts.'
     ) +
     tbl(
-      dr('Amount Due', '&#8358;95,000'),
+      dr('Amount Due', '&#8358;{{AMOUNT}}'),
       dr('Original Due Date', '{{DUE_DATE}}'),
       dr('Suspension Date', '{{SUSPEND_DATE}}')
     ) +
@@ -156,22 +156,22 @@ const P05 = wrap(
 const P06 = wrap(
   '#111827',
   'FT9ja Partners',
-  h('Account Suspension Notice') +
+  h('Storefront Frozen') +
     p(
-      'Hi {{OWNER_NAME}}, the firm <strong>{{FIRM_NAME}}</strong> has been temporarily suspended due to an unpaid license fee.'
+      'Hi {{OWNER_NAME}}, the <strong>{{FIRM_NAME}}</strong> storefront has been frozen because the license fee was not paid within 7 days of the due date.'
     ) +
     p(
-      'Your firm page is currently offline. Traders cannot access your landing page or purchase evaluations.'
+      'Your public storefront is offline. New trader signups and evaluation purchases are blocked until you renew. Existing traders can still access their dashboards.'
     ) +
     tbl(
       dr('Firm', '{{FIRM_NAME}}'),
-      dr('Suspended On', '{{SUSPEND_DATE}}'),
-      dr('Amount Outstanding', '&#8358;95,000'),
-      dr('Reinstatement', 'Within 2 hours of payment')
+      dr('Frozen On', '{{SUSPEND_DATE}}'),
+      dr('Amount Due', '&#8358;{{AMOUNT}}'),
+      dr('Reinstatement', 'Automatic after payment or waive')
     ) +
-    p('To restore your firm immediately, complete payment and confirm via your admin panel.') +
-    btn('#16A34A', 'Pay &amp; Reinstate &rarr;') +
-    note('Contact accounts@ft9ja.com if you believe this suspension was made in error.')
+    p('To restore your storefront, complete payment and upload your receipt via your admin panel.') +
+    btn('#16A34A', 'Pay &amp; Restore &rarr;') +
+    note('Contact accounts@ft9ja.com if you believe this freeze was made in error.')
 );
 
 const P07 = wrap(
@@ -186,7 +186,7 @@ const P07 = wrap(
       dr('Total Traders', '{{TOTAL_TRADERS}}'),
       dr('Evaluations Sold', '{{EVALS_SOLD}}'),
       dr('Gross Revenue', '&#8358;{{GROSS_REVENUE}}'),
-      dr('License Cost', '&#8358;95,000'),
+      dr('License Cost', '&#8358;{{LICENSE_COST}}'),
       dr('Net Earnings', '&#8358;{{NET_EARNINGS}}')
     ) +
     p(
@@ -556,15 +556,15 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     category: 'ft9ja-to-partner',
     filename: 'p-05-payment-overdue.html',
     subject: '⚠️ License Payment Overdue — Action Required',
-    description: 'Sent when payment is 7+ days late',
+    description: 'Preview copy for overdue license payment; live freeze notice is P-06 at due+7',
     html: P05,
   },
   {
     id: 'p-06',
     category: 'ft9ja-to-partner',
     filename: 'p-06-suspension.html',
-    subject: 'Account Suspended — {{FIRM_NAME}}',
-    description: 'Sent upon firm account suspension due to non-payment',
+    subject: 'Storefront Frozen — {{FIRM_NAME}}',
+    description: 'Sent when the storefront is frozen 7 days after a missed license payment',
     html: P06,
   },
   {

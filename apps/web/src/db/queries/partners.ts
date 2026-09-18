@@ -125,6 +125,7 @@ export async function createPartner(data: {
       paymentProofUrl: data.paymentProofUrl ?? null,
       adminPin: '0000',
       status: 'pending',
+      licenseIntroEligible: true,
     })
     .returning();
   invalidatePartnerIdBySlugCache(data.slug);

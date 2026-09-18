@@ -5,9 +5,6 @@ import {
   updatePartnerBySlug,
 } from '@/db/queries/partners';
 import {
-  createRenewalInvoice,
-  getPartnerLicenseCoverage,
-  markInvoiceEmailSent,
   recordFirstActivationPaidInvoice,
 } from '@/db/queries/partner-license-invoices';
 import {
@@ -23,16 +20,16 @@ import {
 import {
   getPartnerLifecycleEmailPlan,
   sendPartnerFirmLiveEmail,
-  sendPartnerLicenseInvoiceEmail,
   sendPartnerLicensePaymentConfirmedEmail,
   sendPartnerSuspensionEmail,
   sendPartnerWelcomeEmail,
 } from '@/lib/email/ft9ja-to-partner';
 import { hashPartnerAdminPin, verifyPartnerAdminPin } from '@/lib/partner-pin-crypto';
-import { addDays, computeNextPeriod, generateInvoiceNumber } from '@/lib/partner-license-billing';
+import { issueAndNotifyRenewalForPartner } from '@/lib/partner-license-renewal';
 import { isAllowedPartnerLogoUrl } from '@/lib/partner-logo-validation';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
 import { revokeAllStatefulSessions } from '@/lib/session-revocation';
+import { isPartnerStorefrontFrozen } from '@/lib/partner-storefront-access';
 
 const SUPER_ADMIN_FIELDS = ['status', 'monthly_fee_paid'] as const;
 const PARTNER_ADMIN_FIELDS = [
@@ -76,7 +73,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
     if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
-    return Response.json(withPartnerLogoDisplayUrl(partner));
+    const storefront_frozen = await isPartnerStorefrontFrozen(slug);
+    return Response.json({
+      ...withPartnerLogoDisplayUrl(partner),
+      storefront_frozen,
+    });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to fetch partner' }, { status: 500 });
@@ -182,37 +183,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
         paymentProofUrl: existing.payment_proof_url,
       });
     } else if (existing && existing.status === 'suspended' && partner.status === 'active') {
-      const coverage = await getPartnerLicenseCoverage(partner.id);
-      if (
-        !coverage.isCovered &&
-        coverage.status !== 'exempt' &&
-        (!coverage.latestInvoice || ['paid', 'waived'].includes(coverage.latestInvoice.status))
-      ) {
-        const nextPeriod = coverage.latestInvoice?.period_end
-          ? computeNextPeriod(new Date(coverage.latestInvoice.period_end))
-          : { periodStart: new Date(), periodEnd: addDays(new Date(), 30), dueAt: new Date() };
-
-        const invoice = await createRenewalInvoice({
-          partnerId: partner.id,
-          slug: partner.slug,
-          periodStart: nextPeriod.periodStart,
-          periodEnd: nextPeriod.periodEnd,
-          dueAt: nextPeriod.dueAt,
-          invoiceNumber: generateInvoiceNumber(partner.slug, nextPeriod.periodStart),
-        });
-
-        try {
-          await sendPartnerLicenseInvoiceEmail(partner, {
-            invoiceId: invoice.invoice_number,
-            dueDate: nextPeriod.dueAt,
-            periodStart: nextPeriod.periodStart,
-            periodEnd: nextPeriod.periodEnd,
-          });
-          await markInvoiceEmailSent(invoice.id);
-        } catch (err) {
-          console.error('Failed to send reinstate renewal invoice email:', err);
-        }
-      }
+      await issueAndNotifyRenewalForPartner(partner.id);
     }
 
     if (existing) {

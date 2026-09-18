@@ -84,6 +84,7 @@ export async function PATCH(request: Request) {
             paidAt,
             periodEnd,
             periodRange: formatPeriodRange(periodStart, periodEnd),
+            amount: invoice.amount,
           });
         }
       } catch (emailErr) {

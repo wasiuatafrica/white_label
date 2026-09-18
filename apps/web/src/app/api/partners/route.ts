@@ -3,7 +3,7 @@ import { getBatchPartnerLicenseCoverage } from '@/db/queries/partner-license-inv
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
 import { emailSchema } from '@/lib/api-schemas';
 import { isUniqueViolation } from '@/lib/db-errors';
-import { exemptLicenseCoverage } from '@/lib/partner-license-billing';
+import { exemptLicenseCoverage, isLicenseStorefrontFrozen } from '@/lib/partner-license-billing';
 import { isLicenseRecurringExempt } from '@/lib/partner-pricing';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
@@ -15,11 +15,10 @@ export async function GET(request: Request) {
     const partners = await listPartners();
     const partnerIds = partners.map((p) => p.id);
     const coverageMap = await getBatchPartnerLicenseCoverage(partnerIds);
+    const now = new Date();
 
-    const enriched = partners.map((p) => ({
-      ...p,
-      monthly_fee_paid: isLicenseRecurringExempt(p.slug) ? true : p.monthly_fee_paid,
-      license_coverage: coverageMap.get(p.id) ?? {
+    const enriched = partners.map((p) => {
+      const license_coverage = coverageMap.get(p.id) ?? {
         ...(isLicenseRecurringExempt(p.slug)
           ? exemptLicenseCoverage()
           : {
@@ -30,8 +29,18 @@ export async function GET(request: Request) {
               nextDueAt: null,
             }),
         latestInvoice: null,
-      },
-    }));
+      };
+      return {
+        ...p,
+        monthly_fee_paid: isLicenseRecurringExempt(p.slug) ? true : p.monthly_fee_paid,
+        license_coverage,
+        storefront_frozen: isLicenseStorefrontFrozen(
+          license_coverage,
+          license_coverage.latestInvoice,
+          now
+        ),
+      };
+    });
 
     return Response.json(enriched);
   } catch (e) {
