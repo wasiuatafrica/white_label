@@ -4,6 +4,7 @@ import {
   DEFAULT_ADMIN_TAB,
   adminTabPath,
   isAdminTabId,
+  legacyAdminTabRedirect,
 } from './admin-tabs';
 
 describe('admin tabs', () => {
@@ -19,5 +20,10 @@ describe('admin tabs', () => {
     for (const tab of ADMIN_TAB_IDS) {
       expect(adminTabPath(tab)).toBe(`/admin/${tab}`);
     }
+  });
+
+  it('sends the hidden Payments tab to Eval Payments', () => {
+    expect(legacyAdminTabRedirect('payments')).toBe('evaluation-payments');
+    expect(legacyAdminTabRedirect('evaluation-payments')).toBeNull();
   });
 });

@@ -4317,7 +4317,6 @@ export function AdminDashboard({ tab }: { tab: AdminTabId }) {
     { id: 'traders', label: 'Traders', icon: <Users size={13} />, badge: 0 },
     { id: 'trade-accounts', label: 'Trade Accounts', icon: <KeyRound size={13} />, badge: 0 },
     { id: 'kyc', label: 'KYC', icon: <BadgeCheck size={13} />, badge: kycPending },
-    { id: 'payments', label: 'Payments', icon: <CreditCard size={13} />, badge: paymentsPending },
     {
       id: 'evaluation-payments',
       label: 'Eval Payments',

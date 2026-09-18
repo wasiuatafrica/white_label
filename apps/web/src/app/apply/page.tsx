@@ -573,9 +573,6 @@ export default function ApplyPage() {
                   {form.owner_email.trim() && emailAvailability === 'checking' && (
                     <p className="mt-1 text-xs text-gray-400">Checking availability…</p>
                   )}
-                  {form.owner_email.trim() && emailAvailability === 'available' && (
-                    <p className="mt-1 text-xs text-[#16A34A]">This email is available.</p>
-                  )}
                   {form.owner_email.trim() && emailAvailability === 'unavailable' && (
                     <p className="mt-1 text-xs text-red-500">This email is unavailable.</p>
                   )}
