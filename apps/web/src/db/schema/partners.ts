@@ -48,7 +48,10 @@ export const partners = pgTable(
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('partners_slug_idx').on(table.slug)]
+  (table) => [
+    uniqueIndex('partners_slug_idx').on(table.slug),
+    uniqueIndex('partners_owner_email_idx').on(table.ownerEmail),
+  ]
 );
 
 export const partnersRelations = relations(partners, ({ many }) => ({

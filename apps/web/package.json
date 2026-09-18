@@ -15,6 +15,7 @@
 		"db:migrate-logo-generation-count": "node scripts/migrate-logo-generation-count.mjs",
 		"db:migrate-last-generated-logo-url": "node scripts/migrate-last-generated-logo-url.mjs",
 		"db:backfill-evaluation-pricing": "node scripts/backfill-evaluation-pricing.mjs",
+		"db:merge-duplicate-traders": "node scripts/merge-duplicate-traders.mjs",
 		"create-admin": "node scripts/create-admin.mjs",
 		"create-admin:local": "node scripts/create-local-admin.mjs",
 		"create-partner-renewal:local": "node scripts/create-partner-renewal.mjs",

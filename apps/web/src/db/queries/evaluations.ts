@@ -19,10 +19,15 @@ import {
   toMoneyNumber,
   type EvalType,
 } from '@/lib/partner-pricing';
+import {
+  TraderEmailConflictError,
+  traderEmailConflictMessage,
+  traderEmailSignupDecision,
+} from '@/lib/trader-email';
 import type { DbOrTx } from '../types';
 import { incrementPartnerRevenue, incrementPartnerTraders } from './partners';
 import { partners } from '../schema/partners';
-import { createTrader, getTraderByEmail } from './traders';
+import { createTrader, getTraderByEmail, getTraderEmailOwner } from './traders';
 import { createTradeAccountActivation } from './trade-accounts';
 
 const evaluationColumns = {
@@ -242,16 +247,42 @@ export async function createEvaluationWithTrader(data: {
   paymentProofUrl?: string | null;
 }) {
   return db.transaction(async (tx) => {
-    const existingTrader = await getTraderByEmail(data.partnerId, data.email, tx);
-    let traderId = existingTrader?.id;
+    const existingOwner = await getTraderEmailOwner(data.email, tx);
+    const decision = traderEmailSignupDecision(existingOwner?.partnerId ?? null, data.partnerId);
 
-    if (!traderId) {
-      const createdTrader = await createTrader(
-        { partnerId: data.partnerId, name: data.name, email: data.email },
-        tx
-      );
-      traderId = createdTrader.id;
-      await incrementPartnerTraders(data.partnerId, tx);
+    let traderId: number;
+    let existingTrader = null;
+
+    switch (decision) {
+      case 'reuse':
+        existingTrader = await getTraderByEmail(data.partnerId, data.email, tx);
+        if (!existingTrader) {
+          throw new Error('Trader email owner is missing for this partner');
+        }
+        traderId = existingTrader.id;
+        break;
+      case 'create': {
+        const createdTrader = await createTrader(
+          { partnerId: data.partnerId, name: data.name, email: data.email },
+          tx
+        );
+        traderId = createdTrader.id;
+        await incrementPartnerTraders(data.partnerId, tx);
+        break;
+      }
+      case 'conflict': {
+        if (!existingOwner) {
+          throw new Error('Trader email owner is missing for conflict');
+        }
+        throw new TraderEmailConflictError(
+          existingOwner.partnerId,
+          traderEmailConflictMessage(existingOwner.partnerId, data.partnerId)
+        );
+      }
+      default: {
+        const _exhaustive: never = decision;
+        throw new Error(_exhaustive);
+      }
     }
 
     const profitTarget = String(getProfitTargetPercent(data.evalType));

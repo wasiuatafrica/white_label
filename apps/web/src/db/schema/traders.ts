@@ -36,7 +36,7 @@ export const traders = pgTable(
     kycSubmittedAt: timestamp('kyc_submitted_at', { withTimezone: false }),
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('traders_partner_email_idx').on(table.partnerId, table.email)]
+  (table) => [uniqueIndex('traders_email_idx').on(table.email)]
 );
 
 export const tradersRelations = relations(traders, ({ one, many }) => ({

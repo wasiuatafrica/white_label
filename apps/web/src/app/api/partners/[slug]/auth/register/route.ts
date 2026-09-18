@@ -1,5 +1,5 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
-import { createTraderWithCount, traderEmailExists } from '@/db/queries/traders';
+import { createTraderWithCount, getTraderEmailOwner } from '@/db/queries/traders';
 import argon2 from 'argon2';
 import {
   createSessionToken,
@@ -11,18 +11,24 @@ import {
 import { buildTraderSessionCookie } from '@/lib/trader-session-cookie';
 import { parseJsonBody } from '@/lib/api-validation';
 import { traderRegisterSchema } from '@/lib/api-schemas';
+import { isUniqueViolation } from '@/lib/db-errors';
+import { traderEmailConflictMessage } from '@/lib/trader-email';
 
 const SEVEN_DAYS = 7 * 24 * 3600;
 const MAX_REGISTER_ATTEMPTS = 5;
 const REGISTER_WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  let partnerId: number | null = null;
+  let email = '';
+
   try {
     const { slug } = await params;
     const parsed = await parseJsonBody(request, traderRegisterSchema);
     if (!parsed.ok) return parsed.response;
 
-    const { name, email, password } = parsed.data;
+    const { name, password } = parsed.data;
+    email = parsed.data.email;
 
     const rateKey = `${getRequestRateLimitKey(request, 'trader-register')}:${slug}`;
     const limited = checkRateLimit(rateKey, MAX_REGISTER_ATTEMPTS, REGISTER_WINDOW_MS);
@@ -33,11 +39,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       );
     }
 
-    const partnerId = await getPartnerIdBySlug(slug);
+    partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    if (await traderEmailExists(partnerId, email)) {
-      return Response.json({ error: 'Registration failed. Try signing in instead.' }, { status: 400 });
+    const existing = await getTraderEmailOwner(email);
+    if (existing) {
+      return Response.json(
+        { error: traderEmailConflictMessage(existing.partnerId, partnerId) },
+        { status: 409 }
+      );
     }
 
     const passwordHash = await argon2.hash(password);
@@ -66,6 +76,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     return res;
   } catch (e) {
     console.error(e);
+    if (isUniqueViolation(e)) {
+      const existing = email ? await getTraderEmailOwner(email) : null;
+      const message =
+        existing && partnerId
+          ? traderEmailConflictMessage(existing.partnerId, partnerId)
+          : 'A trader with this email already exists.';
+      return Response.json({ error: message }, { status: 409 });
+    }
     return Response.json({ error: 'Registration failed' }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
 import { generatePartnerAdminPin, partnerPinNeedsGeneration } from '@/lib/admin-pin';
-import { emailsMatch } from '@/lib/email-compare';
+import { emailsMatch, normalizeEmail } from '@/lib/email-compare';
+import { lowerEmailEquals } from '@/lib/email-sql';
 import {
   hashPartnerAdminPin,
   verifyPartnerAdminPin,
@@ -78,6 +79,15 @@ export async function slugExists(slug: string) {
   return Boolean(row);
 }
 
+export async function ownerEmailExists(email: string) {
+  const [row] = await db
+    .select({ id: partners.id })
+    .from(partners)
+    .where(lowerEmailEquals(partners.ownerEmail, email))
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function getTakenSlugs(slugs: string[]) {
   if (slugs.length === 0) return new Set<string>();
 
@@ -107,7 +117,7 @@ export async function createPartner(data: {
       slug: data.slug,
       firmName: data.firmName,
       ownerName: data.ownerName ?? null,
-      ownerEmail: data.ownerEmail,
+      ownerEmail: normalizeEmail(data.ownerEmail),
       tagline: data.tagline ?? null,
       description: data.description ?? null,
       brandColor: data.brandColor ?? '#16A34A',

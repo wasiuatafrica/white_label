@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const emailSchema = z.string().trim().email('A valid email is required').transform((v) => v.toLowerCase());
+export const emailSchema = z.string().trim().email('A valid email is required').transform((v) => v.toLowerCase());
 
 export const partnerAdminPinSchema = z
   .string()

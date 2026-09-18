@@ -7,12 +7,15 @@ import {
 } from '@/db/queries/evaluations';
 import { getTraderPublicByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
+import { verifyAdminTraderViewToken } from '@/lib/admin-trader-view-token';
+import { emailSchema } from '@/lib/api-schemas';
+import { isUniqueViolation } from '@/lib/db-errors';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
-import { verifyAdminTraderViewToken } from '@/lib/admin-trader-view-token';
 import { amountsMatch, getTraderPrice, type EvalType } from '@/lib/partner-pricing';
+import { TraderEmailConflictError } from '@/lib/trader-email';
 
 function toPublicTrader(trader: {
   id: number;
@@ -161,10 +164,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: 'name and email are required' }, { status: 400 });
     }
 
+    const parsedEmail = emailSchema.safeParse(email);
+    if (!parsedEmail.success) {
+      return Response.json({ error: 'A valid email is required' }, { status: 400 });
+    }
+
     const result = await createEvaluationWithTrader({
       partnerId,
       name,
-      email,
+      email: parsedEmail.data,
       evalType: eval_type,
       amount: amount || 0,
       paymentMethod: payment_method,
@@ -177,6 +185,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     );
   } catch (e) {
     console.error(e);
+    if (e instanceof TraderEmailConflictError) {
+      return Response.json({ error: e.message }, { status: 409 });
+    }
+    if (isUniqueViolation(e)) {
+      return Response.json(
+        { error: 'This email is already registered with another firm.' },
+        { status: 409 }
+      );
+    }
     return Response.json({ error: 'Failed to create evaluation' }, { status: 500 });
   }
 }

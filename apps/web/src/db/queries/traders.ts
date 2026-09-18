@@ -1,4 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { normalizeEmail } from '@/lib/email-compare';
+import { lowerEmailEquals } from '@/lib/email-sql';
 import { db } from '../index';
 import { mapTrader, mapTraderForPartnerAdmin, mapTraderPublic } from '../mappers';
 import type { DbOrTx } from '../types';
@@ -18,7 +20,7 @@ export async function getTraderByEmail(partnerId: number, email: string, tx: DbO
   const [row] = await tx
     .select()
     .from(traders)
-    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .where(and(lowerEmailEquals(traders.email, email), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ? mapTrader(row) : null;
 }
@@ -27,7 +29,7 @@ export async function getTraderPublicByEmail(partnerId: number, email: string, t
   const [row] = await tx
     .select()
     .from(traders)
-    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .where(and(lowerEmailEquals(traders.email, email), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ? mapTraderPublic(row) : null;
 }
@@ -78,7 +80,7 @@ export async function getTraderForLogin(partnerId: number, email: string) {
       password_hash: traders.passwordHash,
     })
     .from(traders)
-    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .where(and(lowerEmailEquals(traders.email, email), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ?? null;
 }
@@ -92,13 +94,13 @@ export async function getTraderPasswordHash(traderId: number, partnerId: number)
   return row?.password_hash ?? null;
 }
 
-export async function traderEmailExists(partnerId: number, email: string) {
-  const [row] = await db
-    .select({ id: traders.id })
+export async function getTraderEmailOwner(email: string, tx: DbOrTx = db) {
+  const [row] = await tx
+    .select({ id: traders.id, partnerId: traders.partnerId })
     .from(traders)
-    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .where(lowerEmailEquals(traders.email, email))
     .limit(1);
-  return Boolean(row);
+  return row ?? null;
 }
 
 export async function createTraderWithCount(data: {
@@ -128,7 +130,7 @@ export async function createTrader(
     .values({
       partnerId: data.partnerId,
       name: data.name,
-      email: data.email,
+      email: normalizeEmail(data.email),
       status: 'active',
       passwordHash: data.passwordHash ?? null,
     })
@@ -165,7 +167,7 @@ export async function getTraderForPasswordSetup(
     .where(
       and(
         eq(traders.id, traderId),
-        eq(traders.email, email),
+        lowerEmailEquals(traders.email, email),
         eq(traders.partnerId, partnerId),
         isNull(traders.passwordHash)
       )
@@ -238,7 +240,7 @@ export async function getTraderForReset(partnerId: number, email: string) {
   const [row] = await db
     .select({ id: traders.id, name: traders.name })
     .from(traders)
-    .where(and(eq(traders.email, email), eq(traders.partnerId, partnerId)))
+    .where(and(lowerEmailEquals(traders.email, email), eq(traders.partnerId, partnerId)))
     .limit(1);
   return row ?? null;
 }
@@ -256,7 +258,7 @@ export async function getTraderByResetToken(partnerId: number, email: string, to
     .from(traders)
     .where(
       and(
-        eq(traders.email, email),
+        lowerEmailEquals(traders.email, email),
         eq(traders.partnerId, partnerId),
         eq(traders.resetToken, token),
         gt(traders.resetTokenExpires, sql`NOW()`)

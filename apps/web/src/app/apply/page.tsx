@@ -26,8 +26,10 @@ type SlugSuggestion = {
 };
 
 type SlugAvailability = 'idle' | 'checking' | 'available' | 'unavailable';
+type EmailAvailability = 'idle' | 'checking' | 'available' | 'unavailable';
 
 const SLUG_CHECK_DEBOUNCE_MS = 500;
+const EMAIL_CHECK_DEBOUNCE_MS = 500;
 
 export default function ApplyPage() {
   const [step, setStep] = useState(0);
@@ -48,6 +50,7 @@ export default function ApplyPage() {
   const [suggestingSlugs, setSuggestingSlugs] = useState(false);
   const [slugSuggestError, setSlugSuggestError] = useState<string | null>(null);
   const [slugAvailability, setSlugAvailability] = useState<SlugAvailability>('idle');
+  const [emailAvailability, setEmailAvailability] = useState<EmailAvailability>('idle');
 
   const [form, setForm] = useState({
     firm_name: '',
@@ -177,6 +180,44 @@ export default function ApplyPage() {
     };
   }, [form.slug]);
 
+  useEffect(() => {
+    const email = form.owner_email.trim();
+
+    if (!email) {
+      setEmailAvailability('idle');
+      return;
+    }
+
+    setEmailAvailability('checking');
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/partners/check-email?email=${encodeURIComponent(email)}`,
+            { signal: controller.signal }
+          );
+          const data = await res.json();
+          if (!res.ok) {
+            setEmailAvailability('idle');
+            return;
+          }
+
+          setEmailAvailability(data.available ? 'available' : 'unavailable');
+        } catch (e: unknown) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setEmailAvailability('idle');
+        }
+      })();
+    }, EMAIL_CHECK_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [form.owner_email]);
+
   const autoSlug = (name: string) =>
     normalizePartnerSlug(name.replace(/[^a-z0-9]+/gi, '-')).slice(0, 20);
 
@@ -235,6 +276,7 @@ export default function ApplyPage() {
         form.firm_name &&
         form.owner_name &&
         form.owner_email &&
+        emailAvailability === 'available' &&
         form.slug &&
         slugAvailability === 'available'
       );
@@ -519,11 +561,24 @@ export default function ApplyPage() {
                   </label>
                   <input
                     type="email"
-                    className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/20"
+                    className={`w-full rounded-lg border px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ${
+                      emailAvailability === 'unavailable'
+                        ? 'border-red-300 focus:border-red-400 focus:ring-red-100'
+                        : 'border-gray-200 focus:border-[#16A34A] focus:ring-[#16A34A]/20'
+                    }`}
                     placeholder="you@yourfirm.com"
                     value={form.owner_email}
                     onChange={(e) => set('owner_email', e.target.value)}
                   />
+                  {form.owner_email.trim() && emailAvailability === 'checking' && (
+                    <p className="mt-1 text-xs text-gray-400">Checking availability…</p>
+                  )}
+                  {form.owner_email.trim() && emailAvailability === 'available' && (
+                    <p className="mt-1 text-xs text-[#16A34A]">This email is available.</p>
+                  )}
+                  {form.owner_email.trim() && emailAvailability === 'unavailable' && (
+                    <p className="mt-1 text-xs text-red-500">This email is unavailable.</p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-gray-700">

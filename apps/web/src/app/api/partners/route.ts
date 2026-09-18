@@ -1,6 +1,8 @@
-import { createPartner, listPartners, slugExists } from '@/db/queries/partners';
+import { createPartner, listPartners, ownerEmailExists, slugExists } from '@/db/queries/partners';
 import { getBatchPartnerLicenseCoverage } from '@/db/queries/partner-license-invoices';
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
+import { emailSchema } from '@/lib/api-schemas';
+import { isUniqueViolation } from '@/lib/db-errors';
 import { exemptLicenseCoverage } from '@/lib/partner-license-billing';
 import { isLicenseRecurringExempt } from '@/lib/partner-pricing';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
@@ -54,13 +56,16 @@ export async function POST(request: Request) {
     } = body;
 
     const slug = normalizePartnerSlug(String(rawSlug || ''));
+    const parsedEmail = emailSchema.safeParse(owner_email);
 
-    if (!firm_name || !slug || !owner_email) {
+    if (!firm_name || !slug || !parsedEmail.success) {
       return Response.json(
         { error: 'firm_name, slug, and owner_email are required' },
         { status: 400 }
       );
     }
+
+    const ownerEmail = parsedEmail.data;
 
     if (!isValidPartnerSlug(slug)) {
       return Response.json({ error: 'That subdomain is unavailable.' }, { status: 400 });
@@ -77,11 +82,15 @@ export async function POST(request: Request) {
       );
     }
 
+    if (await ownerEmailExists(ownerEmail)) {
+      return Response.json({ error: 'This email is unavailable.' }, { status: 409 });
+    }
+
     const partner = await createPartner({
       slug,
       firmName: firm_name,
       ownerName: owner_name,
-      ownerEmail: owner_email,
+      ownerEmail,
       tagline,
       description,
       brandColor: brand_color,
@@ -93,6 +102,13 @@ export async function POST(request: Request) {
     return Response.json(partnerResponse, { status: 201 });
   } catch (e) {
     console.error(e);
+    if (isUniqueViolation(e)) {
+      const message =
+        e instanceof Error && e.message.includes('partners_slug')
+          ? 'That subdomain is already taken. Please choose another.'
+          : 'This email is unavailable.';
+      return Response.json({ error: message }, { status: 409 });
+    }
     return Response.json({ error: 'Failed to create partner' }, { status: 500 });
   }
 }
