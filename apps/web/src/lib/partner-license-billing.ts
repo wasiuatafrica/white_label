@@ -3,12 +3,45 @@ import { isLicenseRecurringExempt, PARTNER_LICENSE_PERIOD_DAYS } from './partner
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 export const OVERDUE_GRACE_PERIOD_DAYS = 7;
 export const OVERDUE_GRACE_PERIOD_MS = OVERDUE_GRACE_PERIOD_DAYS * DAY_IN_MS;
+const CALENDAR_YMD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
  * Adds an exact number of 24h days to a date.
  */
 export function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_IN_MS);
+}
+
+/**
+ * YYYY-MM-DD from the timestamp's UTC calendar date (matches Super Admin period display).
+ */
+export function formatCalendarYmd(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function isCalendarYmd(value: string): boolean {
+  const match = CALENDAR_YMD_PATTERN.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const utc = Date.UTC(year, month - 1, day);
+  return new Date(utc).toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Moves `original` by whole UTC calendar days so its YYYY-MM-DD matches `ymd`,
+ * keeping the original clock time. End dates should then be addDays(result, 30).
+ */
+export function shiftToCalendarDate(original: Date, ymd: string): Date {
+  if (!isCalendarYmd(ymd)) {
+    throw new RangeError(`Invalid calendar date: ${ymd}`);
+  }
+  const current = formatCalendarYmd(original);
+  if (current === ymd) return new Date(original.getTime());
+  const deltaDays =
+    (Date.parse(`${ymd}T00:00:00.000Z`) - Date.parse(`${current}T00:00:00.000Z`)) / DAY_IN_MS;
+  return addDays(original, deltaDays);
 }
 
 /**

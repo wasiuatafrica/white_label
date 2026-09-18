@@ -9,10 +9,13 @@ import {
   computeNextPeriod,
   exemptLicenseCoverage,
   generateInvoiceNumber,
+  isCalendarYmd,
   OVERDUE_GRACE_PERIOD_MS,
+  shiftToCalendarDate,
   summarizeLicenseCoverage,
   type LicenseCoverageSummary,
 } from '@/lib/partner-license-billing';
+import { isUniqueViolation } from '@/lib/db-errors';
 import {
   isLicenseRecurringExempt,
   PARTNER_LICENSE_FEE,
@@ -25,6 +28,14 @@ export class LicenseInvoiceError extends Error {
     super(message);
     this.name = 'LicenseInvoiceError';
   }
+}
+
+const OPEN_LICENSE_INVOICE_STATUSES = ['pending', 'overdue', 'receipt_uploaded'] as const;
+
+function isOpenLicenseInvoiceStatus(
+  status: string
+): status is (typeof OPEN_LICENSE_INVOICE_STATUSES)[number] {
+  return (OPEN_LICENSE_INVOICE_STATUSES as readonly string[]).includes(status);
 }
 
 /**
@@ -233,6 +244,7 @@ export async function reviewLicenseInvoice(
     forceApprove?: boolean;
     verificationNote?: string | null;
     reviewedBy?: string;
+    periodStartDate?: string | null;
   },
   tx: DbOrTx = db
 ) {
@@ -297,6 +309,12 @@ export async function reviewLicenseInvoice(
   }
 
   if (data.action === 'approve') {
+    if (!isOpenLicenseInvoiceStatus(existing.status)) {
+      throw new LicenseInvoiceError(
+        'Only pending, overdue, or receipt-in-review invoices can be marked paid'
+      );
+    }
+
     const verified = toMoneyNumber(data.verifiedAmount ?? existing.amount);
     if (verified < PARTNER_LICENSE_FEE && !data.forceApprove) {
       throw new LicenseInvoiceError(
@@ -304,25 +322,60 @@ export async function reviewLicenseInvoice(
       );
     }
 
-    const now = new Date();
-    const [row] = await tx
-      .update(partnerLicenseInvoices)
-      .set({
-        status: 'paid',
-        paidAt: now,
-        verifiedAmount: String(verified),
-        verificationNote: data.verificationNote?.trim() || null,
-        verifiedBy: data.reviewedBy ?? 'superadmin',
-        updatedAt: sql`NOW()`,
-      })
-      .where(eq(partnerLicenseInvoices.id, data.invoiceId))
-      .returning();
+    let periodStart = existing.periodStart;
+    let periodEnd = existing.periodEnd;
+    let dueAt = existing.dueAt;
+    if (data.periodStartDate) {
+      if (!isCalendarYmd(data.periodStartDate)) {
+        throw new LicenseInvoiceError('Period start must be a valid YYYY-MM-DD date');
+      }
+      periodStart = shiftToCalendarDate(existing.periodStart, data.periodStartDate);
+      periodEnd = addDays(periodStart, PARTNER_LICENSE_PERIOD_DAYS);
+      dueAt = new Date(periodStart.getTime());
+    }
 
-    await syncPartnerMonthlyFeePaidFlag(existing.partnerId, now, tx);
-    return { invoice: mapPartnerLicenseInvoice(row), partnerId: existing.partnerId };
+    const datesChanged = periodStart.getTime() !== existing.periodStart.getTime();
+    const hasReceipt = Boolean(existing.paymentProofUrl);
+    const note = data.verificationNote?.trim() || '';
+    if ((!hasReceipt || datesChanged) && !note) {
+      throw new LicenseInvoiceError(
+        datesChanged
+          ? 'Verification note is required when changing the license period dates'
+          : 'Verification note is required when marking paid without a receipt'
+      );
+    }
+
+    const now = new Date();
+    try {
+      const [row] = await tx
+        .update(partnerLicenseInvoices)
+        .set({
+          status: 'paid',
+          paidAt: now,
+          periodStart,
+          periodEnd,
+          dueAt,
+          verifiedAmount: String(verified),
+          verificationNote: note || null,
+          verifiedBy: data.reviewedBy ?? 'superadmin',
+          updatedAt: sql`NOW()`,
+        })
+        .where(eq(partnerLicenseInvoices.id, data.invoiceId))
+        .returning();
+
+      await syncPartnerMonthlyFeePaidFlag(existing.partnerId, now, tx);
+      return { invoice: mapPartnerLicenseInvoice(row), partnerId: existing.partnerId };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new LicenseInvoiceError(
+          'Another invoice for this partner already uses that period start date'
+        );
+      }
+      throw error;
+    }
   }
 
-  throw new LicenseInvoiceError(`Invalid action: ${String(data.action)}`);
+  throw new LicenseInvoiceError(`Invalid action: ${String(data.action satisfies never)}`);
 }
 
 /**

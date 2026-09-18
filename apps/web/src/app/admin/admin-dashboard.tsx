@@ -7,12 +7,15 @@ import { AdminsTab } from '@/components/admin/admins-tab';
 import { AuditTab } from '@/components/admin/audit-tab';
 import { adminTabPath, type AdminTabId } from '@/lib/admin-tabs';
 import { getPartnerUrl, resolvePartnerAdminViewBounceUrl } from '@/lib/tenant';
-import { splitVerifiedAmount, type EvalType } from '@/lib/partner-pricing';
+import { splitVerifiedAmount, PARTNER_LICENSE_PERIOD_DAYS, type EvalType } from '@/lib/partner-pricing';
 import {
+  addDays,
+  formatCalendarYmd,
   getInvoiceLifecycleStatus,
   licenseLifecycleBadgeClass,
   licenseLifecycleLabel,
   nextDueAtForInvoice,
+  shiftToCalendarDate,
 } from '@/lib/partner-license-billing';
 import {
   CheckCircle,
@@ -327,6 +330,16 @@ function formatDate(d: string) {
   const [hh, mm] = timePart.split(':');
   const month = months[parseInt(mo ?? '1', 10) - 1] ?? '';
   return `${parseInt(day ?? '1', 10)} ${month} ${yr}, ${hh ?? '00'}:${mm ?? '00'}`;
+}
+
+function previewLicensePeriodEnd(periodStartIso: string, ymd: string): string {
+  try {
+    const original = new Date(periodStartIso);
+    const start = shiftToCalendarDate(original, ymd || formatCalendarYmd(original));
+    return addDays(start, PARTNER_LICENSE_PERIOD_DAYS).toISOString();
+  } catch {
+    return '';
+  }
 }
 
 function formatAccountType(type: string) {
@@ -2590,6 +2603,7 @@ function LicenseInvoicesTab({
   const [verifiedAmount, setVerifiedAmount] = useState('95000');
   const [forceApprove, setForceApprove] = useState(false);
   const [verificationNote, setVerificationNote] = useState('');
+  const [periodStartDate, setPeriodStartDate] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
 
   const qc = useQueryClient();
@@ -2611,6 +2625,7 @@ function LicenseInvoicesTab({
       verified_amount?: number;
       force_approve?: boolean;
       verification_note?: string;
+      period_start?: string;
     }) => {
       setActionError(null);
       const res = await fetch('/api/admin/license-invoices', {
@@ -2632,6 +2647,7 @@ function LicenseInvoicesTab({
       setRejectingId(null);
       setWaivingId(null);
       setVerificationNote('');
+      setPeriodStartDate('');
       setForceApprove(false);
       setActionError(null);
     },
@@ -2838,33 +2854,37 @@ function LicenseInvoicesTab({
                               </button>
                             )}
 
+                            {(inv.status === 'pending' ||
+                              inv.status === 'overdue' ||
+                              inv.status === 'receipt_uploaded') && (
+                              <button
+                                onClick={() => {
+                                  setRejectingId(null);
+                                  setWaivingId(null);
+                                  setApprovingId(inv.id);
+                                  setVerifiedAmount(String(Number(inv.amount)));
+                                  setVerificationNote('');
+                                  setForceApprove(false);
+                                  setPeriodStartDate(formatCalendarYmd(new Date(inv.period_start)));
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D]"
+                              >
+                                <CheckCircle size={12} /> Confirm Payment
+                              </button>
+                            )}
+
                             {inv.status === 'receipt_uploaded' && (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setRejectingId(null);
-                                    setWaivingId(null);
-                                    setApprovingId(inv.id);
-                                    setVerifiedAmount(String(Number(inv.amount)));
-                                    setVerificationNote('');
-                                    setForceApprove(false);
-                                  }}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D]"
-                                >
-                                  <CheckCircle size={12} /> Confirm Payment
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setApprovingId(null);
-                                    setWaivingId(null);
-                                    setRejectingId(inv.id);
-                                    setVerificationNote('');
-                                  }}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
-                                >
-                                  <X size={12} /> Reject
-                                </button>
-                              </>
+                              <button
+                                onClick={() => {
+                                  setApprovingId(null);
+                                  setWaivingId(null);
+                                  setRejectingId(inv.id);
+                                  setVerificationNote('');
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                              >
+                                <X size={12} /> Reject
+                              </button>
                             )}
 
                             {(inv.status === 'pending' ||
@@ -2893,6 +2913,13 @@ function LicenseInvoicesTab({
                                 <div className="text-xs font-bold text-green-900">
                                   Confirm Partner License Payment
                                 </div>
+                                {!inv.payment_proof_url ? (
+                                  <p className="text-[11px] text-gray-600">
+                                    No receipt on this invoice. Marking paid still records ₦
+                                    {Number(inv.amount).toLocaleString()} and sends P-04. Add a note
+                                    describing how payment was confirmed.
+                                  </p>
+                                ) : null}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
                                     <label className="block text-[11px] font-medium text-gray-600 mb-1">
@@ -2907,13 +2934,38 @@ function LicenseInvoicesTab({
                                   </div>
                                   <div>
                                     <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                                      Verification Note (Optional)
+                                      Period start
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={periodStartDate}
+                                      onChange={(e) => setPeriodStartDate(e.target.value)}
+                                      className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
+                                    />
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                      End date (auto):{' '}
+                                      {formatDate(
+                                        previewLicensePeriodEnd(inv.period_start, periodStartDate)
+                                      )}
+                                    </p>
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                                      { !inv.payment_proof_url ||
+                                      periodStartDate !==
+                                        formatCalendarYmd(new Date(inv.period_start))
+                                        ? 'Verification Note * (Required for audit)'
+                                        : 'Verification Note (Optional)'}
                                     </label>
                                     <input
                                       type="text"
                                       value={verificationNote}
                                       onChange={(e) => setVerificationNote(e.target.value)}
-                                      placeholder="e.g. Zenith transfer confirmed"
+                                      placeholder={
+                                        !inv.payment_proof_url
+                                          ? 'e.g. Paid by transfer 16 Sep 2026, before license workflow launch'
+                                          : 'e.g. Zenith transfer confirmed'
+                                      }
                                       className="w-full rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs"
                                     />
                                   </div>
@@ -2939,9 +2991,17 @@ function LicenseInvoicesTab({
                                         verified_amount: Number(verifiedAmount),
                                         force_approve: forceApprove,
                                         verification_note: verificationNote,
+                                        period_start: periodStartDate,
                                       })
                                     }
-                                    disabled={reviewMutation.isPending}
+                                    disabled={
+                                      reviewMutation.isPending ||
+                                      !periodStartDate ||
+                                      ((!inv.payment_proof_url ||
+                                        periodStartDate !==
+                                          formatCalendarYmd(new Date(inv.period_start))) &&
+                                        !verificationNote.trim())
+                                    }
                                     className="inline-flex items-center gap-1 rounded bg-[#16A34A] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#15803D] disabled:opacity-50"
                                   >
                                     {reviewMutation.isPending ? (

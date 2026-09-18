@@ -28,7 +28,7 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { action, invoice_id, partner_id, slug, verified_amount, force_approve, verification_note, reason } = body;
+    const { action, invoice_id, partner_id, slug, verified_amount, force_approve, verification_note, reason, period_start } = body;
 
     if (!action) {
       return Response.json({ error: 'action is required' }, { status: 400 });
@@ -70,6 +70,7 @@ export async function PATCH(request: Request) {
         forceApprove: Boolean(force_approve),
         verificationNote: verification_note,
         reviewedBy: auth.admin.email,
+        periodStartDate: period_start == null || period_start === '' ? null : String(period_start),
       });
 
       // Send P-04 email for approved renewal payment
@@ -94,7 +95,12 @@ export async function PATCH(request: Request) {
         action: 'license_invoice.approve',
         resourceType: 'partner_license_invoice',
         resourceId: String(invoice.id),
-        metadata: { verified_amount, force_approve: Boolean(force_approve), verification_note },
+        metadata: {
+          verified_amount,
+          force_approve: Boolean(force_approve),
+          verification_note,
+          period_start: period_start ?? null,
+        },
         request,
       });
 

@@ -788,7 +788,7 @@ export default function DocsPage() {
               'Rolling 30-Day Periods: Period n is strictly [start + (n-1)*30d, start + n*30d). Even if a renewal receipt is uploaded or approved late, the original anniversary date never slides.',
               'Daily Automated Cron: A Heroku Scheduler job triggers POST /api/cron/partner-licenses daily with authorization header Bearer <CRON_SECRET>. When now >= period_end, it creates the next pending invoice and sends email P-03.',
               'Partner License Tab: Partners view period status, due dates, and upload renewal transfer receipts directly in their private admin panel at /{slug}/admin (License tab or ?tab=license).',
-              'Receipt Review: Uploading a receipt sets status to receipt_uploaded. Super Admin reviews on the Partner Licenses tab: Confirm (₦95,000, marks paid, sends P-04), Reject (requires explanation note), or Waive.',
+              'Receipt Review: Uploading a receipt sets status to receipt_uploaded. Super Admin reviews on the Partner Licenses tab: Confirm (₦95,000, marks paid, sends P-04), Reject (requires explanation note), or Waive. Confirm Payment is also available on pending/overdue invoices with no receipt (offline payment): a verification note is required, Super Admin may set period start (end is always start + 30 days), and P-04 still sends.',
               'Complimentary Grants: Super Admin can grant 30-day complimentary periods (marks open invoice as waived or creates the next 30-day period as waived). Waived periods provide full active coverage without sending payment emails.',
               '7-Day Overdue Notice: Invoices unpaid 7 days after their due date with no uploaded receipt trigger a single P-05 Overdue notice. No automatic suspension is performed.',
               'Manual Suspension: Super Admin can manually suspend overdue firms from the Partners list. Storefronts and new signups are blocked, but existing active trader evaluations remain accessible and partner admin stays open to pay.',
@@ -1020,9 +1020,9 @@ export default function DocsPage() {
           <Endpoint
             method="PATCH"
             path="/api/admin/license-invoices"
-            desc="Super Admin actions: approve (confirms payment & sends P-04), reject (requires reason), waive, or grant_complimentary (adds 30d window)."
+            desc="Super Admin actions: approve (confirms payment & sends P-04; receipt optional with required note; optional period_start YYYY-MM-DD shifts the window, end = start + 30d), reject (requires reason), waive, or grant_complimentary (adds 30d window)."
             auth="Super Admin session cookie"
-            body={`{\n  "action": "approve",\n  "invoice_id": 2,\n  "verified_amount": 95000,\n  "force_approve": false,\n  "verification_note": "Zenith transfer confirmed"\n}`}
+            body={`{\n  "action": "approve",\n  "invoice_id": 2,\n  "verified_amount": 95000,\n  "force_approve": false,\n  "verification_note": "Paid by transfer 16 Sep 2026, before license workflow launch",\n  "period_start": "2026-09-16"\n}`}
           />
           <Endpoint
             method="POST"

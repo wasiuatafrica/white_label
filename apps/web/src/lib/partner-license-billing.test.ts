@@ -10,12 +10,15 @@ import {
   applyRecurringLicenseExemption,
   computeNextPeriod,
   exemptLicenseCoverage,
+  formatCalendarYmd,
   formatPeriodRange,
   generateInvoiceNumber,
   getInvoiceLifecycleStatus,
+  isCalendarYmd,
   isInvoiceCovered,
   isInvoiceEligibleForOverdue,
   OVERDUE_GRACE_PERIOD_MS,
+  shiftToCalendarDate,
   summarizeLicenseCoverage,
 } from './partner-license-billing';
 import type { DbOrTx } from '@/db/types';
@@ -48,6 +51,19 @@ describe('Partner License Billing - Unit & Period Math', () => {
     expect(nextPeriodEnd.getUTCMonth()).toBe(2); // March (0-indexed)
     expect(nextPeriodEnd.getUTCDate()).toBe(2);
     expect(nextPeriodEnd.getTime() - jan31.getTime()).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
+  it('shifts a period start to a new calendar date while keeping clock time', () => {
+    const original = new Date(Date.UTC(2026, 8, 17, 8, 47, 0));
+    expect(formatCalendarYmd(original)).toBe('2026-09-17');
+    expect(isCalendarYmd('2026-09-16')).toBe(true);
+    expect(isCalendarYmd('2026-02-31')).toBe(false);
+
+    const shifted = shiftToCalendarDate(original, '2026-09-16');
+    expect(shifted.toISOString()).toBe('2026-09-16T08:47:00.000Z');
+    expect(addDays(shifted, 30).toISOString()).toBe('2026-10-16T08:47:00.000Z');
+    expect(shiftToCalendarDate(original, '2026-09-17').toISOString()).toBe(original.toISOString());
+    expect(() => shiftToCalendarDate(original, '2026-02-31')).toThrow(/Invalid calendar date/);
   });
 
   it('computes next period aligned with previous periodEnd without sliding', () => {
@@ -391,6 +407,80 @@ describe('Partner License Billing - Database Operations (PGlite)', { timeout: 60
         db
       );
       expect(coverageAfterApprove.isCovered).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('marks a pending invoice paid without a receipt and can shift the 30-day window', async () => {
+    const { client, db } = await setupTestDb();
+    try {
+      const [partner] = await db
+        .insert(partners)
+        .values({
+          slug: 'offlinepay',
+          firmName: 'Offline Pay',
+          ownerEmail: 'offlinepay@example.com',
+          status: 'active',
+          adminPin: '123456',
+          monthlyFeePaid: false,
+        })
+        .returning();
+
+      const periodStart = new Date(Date.UTC(2026, 8, 17, 8, 47, 0));
+      const invoice = await createRenewalInvoice(
+        {
+          partnerId: partner.id,
+          slug: partner.slug,
+          periodStart,
+          periodEnd: addDays(periodStart, 30),
+          dueAt: periodStart,
+          invoiceNumber: 'INV-OFFLINEPAY-20260917',
+        },
+        db
+      );
+
+      await expect(
+        reviewLicenseInvoice(
+          {
+            invoiceId: invoice.id,
+            action: 'approve',
+            verifiedAmount: 95000,
+            reviewedBy: 'admin@ft9ja.com',
+          },
+          db
+        )
+      ).rejects.toThrow(/marking paid without a receipt/);
+
+      const approved = await reviewLicenseInvoice(
+        {
+          invoiceId: invoice.id,
+          action: 'approve',
+          verifiedAmount: 95000,
+          verificationNote: 'Paid by transfer 16 Sep 2026, before license workflow launch',
+          periodStartDate: '2026-09-16',
+          reviewedBy: 'admin@ft9ja.com',
+        },
+        db
+      );
+
+      expect(approved.invoice.status).toBe('paid');
+      expect(approved.invoice.payment_proof_url).toBeNull();
+      expect(approved.invoice.invoice_number).toBe('INV-OFFLINEPAY-20260917');
+      expect(new Date(approved.invoice.period_start).toISOString()).toBe(
+        '2026-09-16T08:47:00.000Z'
+      );
+      expect(new Date(approved.invoice.period_end).toISOString()).toBe(
+        '2026-10-16T08:47:00.000Z'
+      );
+
+      const coverage = await getPartnerLicenseCoverage(
+        partner.id,
+        new Date(Date.UTC(2026, 8, 20, 12, 0, 0)),
+        db
+      );
+      expect(coverage.isCovered).toBe(true);
+      expect(coverage.status).toBe('paid');
     } finally {
       await client.close();
     }
