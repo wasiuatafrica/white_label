@@ -3,8 +3,94 @@ import {
   getPartnerAdminViewRedirectUrl,
   getPartnerBaseUrl,
   getPartnerUrl,
+  getTenantSlugFromHost,
+  isReservedPartnerSlug,
+  isValidPartnerSlug,
   resolvePartnerAdminViewBounceUrl,
 } from '@/lib/tenant';
+
+describe('reserved partner slugs', () => {
+  it('rejects ft9ja, test, and prefix variations', () => {
+    for (const slug of ['ft9ja', 'ft9ja-pro', 'ft9jatrading', 'test', 'test1', 'testing', 'test-firm']) {
+      expect(isReservedPartnerSlug(slug)).toBe(true);
+      expect(isValidPartnerSlug(slug)).toBe(false);
+    }
+  });
+
+  it('blocks pre/post wildcards for high-risk names', () => {
+    for (const slug of [
+      'my-ft9ja',
+      'www-ft9ja',
+      'mytest',
+      'contest',
+      'latest',
+      'my-admin',
+      'admin-panel',
+      'superadmin',
+      'my-local',
+      'localhosting',
+      'my-partner',
+      'partnersdesk',
+      'my-support',
+      'supportdesk',
+      'my-www',
+      'awwwards',
+      'my-app',
+      'app-panel',
+    ]) {
+      expect(isReservedPartnerSlug(slug)).toBe(true);
+    }
+  });
+
+  it('blocks misspellings and one-typo variants', () => {
+    for (const slug of ['ftnaja', 'ftnaija', 'admn', 'suport', 'patner', 'wwww', 'parnter', 'suport-desk']) {
+      expect(isReservedPartnerSlug(slug)).toBe(true);
+    }
+  });
+
+  it('blocks superadmin, customercare, promo, discount, and plurals', () => {
+    for (const slug of [
+      'superadmin',
+      'super-admin',
+      'superadmins',
+      'super-admins',
+      'customercare',
+      'customer-care',
+      'customercares',
+      'promo',
+      'promos',
+      'my-promo',
+      'discount',
+      'discounts',
+      'discount-desk',
+      'accounts',
+      'admins',
+      'applies',
+      'guides',
+      'statuses',
+      'ft9jas',
+    ]) {
+      expect(isReservedPartnerSlug(slug)).toBe(true);
+    }
+  });
+
+  it('still accepts unrelated slugs', () => {
+    for (const slug of ['powers', 'happy', 'harbor', 'traders-hub']) {
+      expect(isReservedPartnerSlug(slug)).toBe(false);
+      expect(isValidPartnerSlug(slug)).toBe(true);
+    }
+  });
+
+  it('does not treat those hosts as partner storefronts', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'ft9ja.com');
+    expect(getTenantSlugFromHost('ft9ja.ft9ja.com')).toBeNull();
+    expect(getTenantSlugFromHost('test.ft9ja.com')).toBeNull();
+    expect(getTenantSlugFromHost('ft9ja-pro.ft9ja.com')).toBeNull();
+    expect(getTenantSlugFromHost('my-admin.ft9ja.com')).toBeNull();
+    expect(getTenantSlugFromHost('powers.ft9ja.com')).toBe('powers');
+    vi.unstubAllEnvs();
+  });
+});
 
 describe('getPartnerBaseUrl', () => {
   afterEach(() => {

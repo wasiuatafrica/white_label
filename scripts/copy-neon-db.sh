@@ -18,8 +18,8 @@
 set -euo pipefail
 
 # --- Edit these (direct Neon URLs, not -pooler) ---
-SOURCE_DATABASE_URL='postgresql://neondb_owner:npg_2mnEyQd5uADF@ep-bold-star-apbi7rav-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
-TARGET_DATABASE_URL='postgresql://neondb_owner:npg_4UZqvXwC6sFb@ep-nameless-frog-awwzat0n-pooler.c-12.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+SOURCE_DATABASE_URL=''
+TARGET_DATABASE_URL=''
 # -------------------------------------------------
 
 KEEP_DUMP=0

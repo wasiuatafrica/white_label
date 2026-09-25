@@ -82,6 +82,7 @@ type Evaluation = {
   trade_account_aso_account_id: number | null;
   trade_account_aso_account_number: number | null;
   trade_account_completed: boolean | null;
+  trade_account_number_added_at: string | null;
   telemetry: {
     has_telemetry: boolean;
     latest_balance: number | null;
@@ -242,6 +243,7 @@ function EvaluationAccountSwitcher({
   primary: string;
   viewOnly?: boolean;
 }) {
+  const now = useNow();
   if (evaluations.length === 0) return null;
 
   return (
@@ -264,9 +266,8 @@ function EvaluationAccountSwitcher({
         {evaluations.map((evaluation) => {
           const isSelected = evaluation.id === selectedId;
           const status = getEffectiveEvalStatus(evaluation);
-          const hasLiveMetrics = Boolean(
-            evaluation.trade_account_number && evaluation.telemetry?.has_telemetry
-          );
+          const syncState = tradeDataSyncState(evaluation, now);
+          const hasLiveMetrics = syncState === 'live';
 
           return (
             <button
@@ -307,7 +308,11 @@ function EvaluationAccountSwitcher({
                   <span className={profitBadgeClassName(evaluation.current_profit)}>
                     {formatProfitLabel(evaluation.current_profit)}
                   </span>
-                ) : evaluation.trade_account_completed ? (
+                ) : syncState === 'incorrect' ? (
+                  <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
+                    Incorrect credentials
+                  </span>
+                ) : syncState === 'waiting' ? (
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
                     Awaiting trade data
                   </span>
@@ -319,6 +324,29 @@ function EvaluationAccountSwitcher({
       </div>
     </div>
   );
+}
+
+const TRADE_DATA_GRACE_MS = 15 * 60 * 1000;
+
+type TradeDataSyncState = 'missing' | 'waiting' | 'incorrect' | 'live';
+
+function tradeDataSyncState(evaluation: Evaluation, now: number): TradeDataSyncState {
+  if (!evaluation.trade_account_completed) return 'missing';
+  if (evaluation.telemetry?.has_telemetry) return 'live';
+  const addedAt = evaluation.trade_account_number_added_at
+    ? new Date(evaluation.trade_account_number_added_at).getTime()
+    : Number.NaN;
+  if (!Number.isFinite(addedAt) || now - addedAt < TRADE_DATA_GRACE_MS) return 'waiting';
+  return 'incorrect';
+}
+
+function useNow(intervalMs = 15_000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
 }
 
 function hasPassedByRules(eval_: Evaluation) {
@@ -917,6 +945,7 @@ function TradingAccountTab({
 }) {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
+  const now = useNow();
   const eligible = evaluations.filter((e) => e.status === 'active' && e.account_creation_code);
   const [localEvalId, setLocalEvalId] = useState<number | null>(eligible[0]?.id ?? null);
   const selectedEvalId = controlledEvalId ?? localEvalId;
@@ -1113,7 +1142,18 @@ function TradingAccountTab({
               </div>
             )}
 
-            {selected?.trade_account_completed ? (
+            {selected && tradeDataSyncState(selected, now) === 'incorrect' ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-800">
+                  <AlertCircle size={15} /> Incorrect credentials
+                </div>
+                <p className="text-xs text-red-700">
+                  No trade data arrived within 15 minutes of adding MT5{' '}
+                  {selected.trade_account_number}. The account number, password, or investor
+                  password is incorrect.
+                </p>
+              </div>
+            ) : selected?.trade_account_completed ? (
               <div className="rounded-xl border border-green-200 bg-green-50 p-5">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-green-800">
                   <CheckCircle size={15} /> Trading account added
@@ -2178,6 +2218,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const viewTokenParam = searchParams.get('view_token');
   const tabParam = searchParams.get('tab');
   const qc = useQueryClient();
+  const now = useNow();
 
   const [activeTab, setActiveTab] = useState<
     'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
@@ -2231,6 +2272,14 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       return res.json();
     },
     enabled: !!email && !!slug,
+    refetchInterval: (query) => {
+      const evaluations = query.state.data?.evaluations ?? [];
+      const waitingOnTradeData = evaluations.some(
+        (evaluation) =>
+          evaluation.trade_account_completed && !evaluation.telemetry?.has_telemetry
+      );
+      return waitingOnTradeData ? 60_000 : false;
+    },
   });
 
   useEffect(() => {
@@ -2664,13 +2713,26 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             )}
 
-            {eval_.trade_account_completed && !eval_.telemetry?.has_telemetry && (
+            {tradeDataSyncState(eval_, now) === 'waiting' && (
               <div className="mb-6 flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4">
                 <Clock size={16} className="mt-0.5 shrink-0 text-gray-400" />
                 <p className="text-sm text-gray-600">
                   Account linked. Waiting for the first trade data sync — metrics refresh every
                   15 minutes.
                 </p>
+              </div>
+            )}
+
+            {tradeDataSyncState(eval_, now) === 'incorrect' && (
+              <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">Incorrect credentials</p>
+                  <p className="mt-0.5 text-xs text-red-700">
+                    No trade data arrived within 15 minutes of adding this account number. The
+                    MT5 account number, password, or investor password is incorrect.
+                  </p>
+                </div>
               </div>
             )}
 

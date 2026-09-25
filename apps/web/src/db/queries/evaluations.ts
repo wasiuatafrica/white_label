@@ -139,6 +139,7 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
       trade_account_aso_account_id: tradeAccounts.asoAccountId,
       trade_account_aso_account_number: tradeAccounts.asoAccountNumber,
       trade_account_completed: sql<boolean>`CASE WHEN ${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> '' THEN true ELSE false END`,
+      trade_account_number_added_at: tradeAccounts.updatedAt,
     })
     .from(evaluations)
     .leftJoin(tradeAccounts, eq(tradeAccounts.evaluationId, evaluations.id))
@@ -187,6 +188,9 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
         trade_account_aso_account_id: row.trade_account_aso_account_id,
         trade_account_aso_account_number: row.trade_account_aso_account_number,
         trade_account_completed: row.trade_account_completed,
+        trade_account_number_added_at: row.trade_account_completed
+          ? row.trade_account_number_added_at
+          : null,
       };
     })
   );
