@@ -81,6 +81,14 @@ describe('reserved partner slugs', () => {
     }
   });
 
+  it('requires at least 4 characters and a leading letter', () => {
+    for (const slug of ['abc', 'ab', 'a', '1abc', '9firm', '1234']) {
+      expect(isValidPartnerSlug(slug)).toBe(false);
+    }
+    expect(isValidPartnerSlug('abcd')).toBe(true);
+    expect(isValidPartnerSlug('a1bc')).toBe(true);
+  });
+
   it('does not treat those hosts as partner storefronts', () => {
     vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'ft9ja.com');
     expect(getTenantSlugFromHost('ft9ja.ft9ja.com')).toBeNull();

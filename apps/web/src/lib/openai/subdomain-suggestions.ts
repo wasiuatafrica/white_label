@@ -69,7 +69,7 @@ export async function generateSubdomainSuggestions(
           'You suggest short, brandable subdomain handles for prop trading firms on ft9ja.com.',
           'Return exactly 3 suggestions as JSON.',
           'Each slug must be lowercase letters, numbers, or single hyphens only.',
-          'No leading or trailing hyphens. Length 3-20 characters.',
+          'Start with a letter. No leading or trailing hyphens. Length 4-20 characters.',
           'Prefer memorable, professional handles related to the firm name or theme.',
           'Avoid generic words like "trading", "forex", "partner", or "ft9ja".',
           'label is a very short human hint (2-4 words) for why the slug fits.',

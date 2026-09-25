@@ -48,7 +48,7 @@ const PLATFORM_PATH_SEGMENTS = new Set([
   'legal',
 ]);
 
-const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const SLUG_PATTERN = /^[a-z][a-z0-9-]{2,61}[a-z0-9]$/;
 
 export function getRootDomain() {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN || DEFAULT_ROOT_DOMAIN;

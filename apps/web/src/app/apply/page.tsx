@@ -495,6 +495,9 @@ export default function ApplyPage() {
                       .ft9ja.com
                     </span>
                   </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    At least 4 characters, starting with a letter.
+                  </p>
                   {form.slug && !suggestingSlugs && slugSuggestions.length === 0 && (
                     <p className="mt-1 text-xs text-gray-400">
                       Your public URL:{' '}

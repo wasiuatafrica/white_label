@@ -708,7 +708,7 @@ export default function DocsPage() {
             headers={['Field', 'Required', 'Notes']}
             rows={[
               ['firm_name', 'Yes', 'Public name shown on storefront'],
-              ['slug', 'Yes', 'URL identifier — must be unique, lowercase, no spaces'],
+              ['slug', 'Yes', 'URL identifier — unique, lowercase, at least 4 characters, must start with a letter'],
               ['owner_name', 'Yes', 'Contact person name'],
               ['owner_email', 'Yes', 'Used for support contact display & email notifications'],
               ['brand_color', 'No', 'Primary hex colour (default: #16A34A)'],
