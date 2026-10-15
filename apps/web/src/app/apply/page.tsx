@@ -231,6 +231,7 @@ export default function ApplyPage() {
     setSlugSuggestions([]);
 
     try {
+      await trackSignup('started', 0);
       const signupIntent = await requestPartnerApplyUploadIntent(attemptIdRef.current);
       const res = await fetch('/api/partners/suggest-slug', {
         method: 'POST',
@@ -348,7 +349,11 @@ export default function ApplyPage() {
     if (!file) return;
     setProofFileName(file.name);
     try {
-      const uploadIntent = await requestPartnerApplyUploadIntent(attemptIdRef.current);
+      await trackSignup('payment_started', 2);
+      const uploadIntent = await requestPartnerApplyUploadIntent(
+        attemptIdRef.current,
+        form.slug
+      );
       const result = await upload({
         file,
         uploadIntent,

@@ -34,7 +34,7 @@ async function requestUploadIntent(options: {
 }) {
 	const body =
 		options.purpose === 'partner_apply'
-			? { purpose: options.purpose, attempt_id: options.attemptId }
+			? { purpose: options.purpose, attempt_id: options.attemptId, slug: options.slug }
 			: { purpose: options.purpose, slug: options.slug };
 
 	const response = await fetch('/api/upload-intent', {
@@ -131,6 +131,6 @@ function useUpload(): [(input: UploadInput) => Promise<UploadResult>, UploadHook
 
 export default useUpload;
 
-export async function requestPartnerApplyUploadIntent(attemptId: string) {
-	return requestUploadIntent({ purpose: 'partner_apply', attemptId });
+export async function requestPartnerApplyUploadIntent(attemptId: string, slug?: string) {
+	return requestUploadIntent({ purpose: 'partner_apply', attemptId, slug });
 }

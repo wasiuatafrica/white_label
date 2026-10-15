@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import {
+  bigint,
   integer,
   pgTable,
   serial,
@@ -26,6 +27,7 @@ export const traders = pgTable(
     status: traderStatusEnum('status').notNull().default('active'),
     resetToken: text('reset_token'),
     resetTokenExpires: timestamp('reset_token_expires', { withTimezone: false }),
+    sessionsRevokedAtMs: bigint('sessions_revoked_at_ms', { mode: 'number' }),
     kycStatus: kycStatusEnum('kyc_status').notNull().default('not_started'),
     kycFullName: text('kyc_full_name'),
     kycIdType: varchar('kyc_id_type', { length: 50 }),

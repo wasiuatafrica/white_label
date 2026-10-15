@@ -16,7 +16,7 @@ import {
   getRequestRateLimitKey,
   resetRateLimit,
 } from '@/lib/rate-limit';
-import { revokeAllStatefulSessions } from '@/lib/session-revocation';
+import { revokePartnerAdminSessions } from '@/lib/session-revocation';
 
 const MAX_RESET_ATTEMPTS = 5;
 const RESET_WINDOW_MS = 15 * 60 * 1000;
@@ -29,7 +29,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const { email, otp, new_pin: newPin } = parsed.data;
     const rateKey = `${getRequestRateLimitKey(request, 'partner-reset-pin')}:${slug}:${email}`;
-    const limited = checkRateLimit(rateKey, MAX_RESET_ATTEMPTS, RESET_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_RESET_ATTEMPTS, RESET_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many attempts. Try again later.' },
@@ -57,8 +59,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const hashedPin = await hashPartnerAdminPin(newPin);
     await updatePartnerAdminPin(slug, hashedPin);
     await clearPartnerPinResetOtp(slug);
-    await revokeAllStatefulSessions();
-    resetRateLimit(rateKey);
+    await revokePartnerAdminSessions(partner.id);
+    await resetRateLimit(rateKey);
 
     return Response.json({ success: true });
   } catch (e) {

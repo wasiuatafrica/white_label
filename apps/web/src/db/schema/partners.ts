@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   integer,
   numeric,
@@ -43,6 +44,7 @@ export const partners = pgTable(
     paymentProofUrl: text('payment_proof_url'),
     logoGenerationCount: integer('logo_generation_count').notNull().default(0),
     lastGeneratedLogoUrl: text('last_generated_logo_url'),
+    adminSessionsRevokedAtMs: bigint('admin_sessions_revoked_at_ms', { mode: 'number' }),
     adminPinResetOtpHash: text('admin_pin_reset_otp_hash'),
     adminPinResetOtpExpiresAt: timestamp('admin_pin_reset_otp_expires_at', {
       withTimezone: false,

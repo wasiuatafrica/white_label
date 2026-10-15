@@ -1,5 +1,5 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
-import { verifyAdminPartnerAdminViewToken } from '@/lib/admin-partner-admin-view-token';
+import { consumeAdminPartnerAdminViewToken } from '@/lib/admin-partner-admin-view-token';
 import { getPartnerAdminViewRedirectUrl } from '@/lib/tenant';
 import {
   PARTNER_ADMIN_VIEW_SESSION_MAX_AGE,
@@ -7,11 +7,21 @@ import {
   createPartnerAdminSessionToken,
 } from '@/lib/partner-admin-session';
 
-export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const token = new URL(request.url).searchParams.get('token') || '';
+async function readToken(request: Request) {
+  const contentType = request.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const body = (await request.json()) as { token?: string };
+    return String(body.token || '');
+  }
+  const form = await request.formData();
+  return String(form.get('token') || '');
+}
 
-  if (!verifyAdminPartnerAdminViewToken(token, slug)) {
+export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const token = await readToken(request);
+  const view = await consumeAdminPartnerAdminViewToken(token, slug);
+  if (!view) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -27,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   });
   const redirectUrl = getPartnerAdminViewRedirectUrl(request, slug);
   return new Response(null, {
-    status: 302,
+    status: 303,
     headers: {
       Location: redirectUrl,
       'Set-Cookie': createPartnerAdminSessionCookie(slug, sessionToken, {

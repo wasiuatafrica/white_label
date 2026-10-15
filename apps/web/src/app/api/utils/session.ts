@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import { getTraderSessionSecret } from '@/lib/auth-secret';
-import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
+import {
+  isSessionIssuedBeforeRevocation,
+  isTraderSessionRevoked,
+} from '@/lib/session-revocation';
 
 export interface TraderSession {
   traderId: number;
@@ -54,5 +57,6 @@ export async function parseSessionFromRequest(
   // the path slug matches the signed cookie.
   if (session.slug !== slug || !session.partnerId) return null;
   if (await isSessionIssuedBeforeRevocation(session.iat)) return null;
+  if (await isTraderSessionRevoked(session.traderId, session.iat)) return null;
   return session;
 }

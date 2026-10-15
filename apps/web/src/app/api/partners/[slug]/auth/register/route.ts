@@ -36,7 +36,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     email = parsed.data.email;
 
     const rateKey = `${getRequestRateLimitKey(request, 'trader-register')}:${slug}`;
-    const limited = checkRateLimit(rateKey, MAX_REGISTER_ATTEMPTS, REGISTER_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_REGISTER_ATTEMPTS, REGISTER_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many registration attempts. Try again later.' },

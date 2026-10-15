@@ -12,6 +12,7 @@ import {
 } from '@/lib/partner-admin-auth-guard';
 import { issueAndNotifyRenewalForPartner } from '@/lib/partner-license-renewal';
 import { isLicenseRecurringExempt } from '@/lib/partner-pricing';
+import { validatePaymentProofUrl } from '@/lib/receipt-url';
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -51,11 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const body = await request.json();
     const { payment_proof_url, invoice_id } = body;
 
-    if (!payment_proof_url || typeof payment_proof_url !== 'string') {
-      return Response.json(
-        { error: 'payment_proof_url is required' },
-        { status: 400 }
-      );
+    const proof = validatePaymentProofUrl(payment_proof_url, slug);
+    if (!proof.ok) {
+      return Response.json({ error: proof.error }, { status: proof.status });
     }
 
     if (isLicenseRecurringExempt(slug)) {
@@ -72,7 +71,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const updated = await uploadPartnerLicenseReceipt({
       partnerId: auth.partnerId,
       invoiceId: invoice_id ? Number(invoice_id) : undefined,
-      paymentProofUrl: payment_proof_url,
+      paymentProofUrl: proof.url,
     });
 
     return Response.json({

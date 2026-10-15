@@ -4,7 +4,7 @@ import argon2 from 'argon2';
 const OTP_TTL_MS = 15 * 60 * 1000;
 
 export function generatePartnerPinOtp() {
-  return String(randomInt(100000, 1000000));
+  return String(randomInt(10_000_000, 100_000_000));
 }
 
 export async function hashPartnerPinOtp(otp: string) {

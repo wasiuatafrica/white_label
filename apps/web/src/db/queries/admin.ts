@@ -175,6 +175,19 @@ export async function listPassedEvaluationsForPayouts() {
     );
 }
 
+export async function setTradeAccountFlag(
+  tradeAccountId: number,
+  flag: 'blown' | 'inactive',
+  value: boolean
+) {
+  const [row] = await db
+    .update(tradeAccounts)
+    .set({ [flag]: value, updatedAt: new Date() })
+    .where(eq(tradeAccounts.id, tradeAccountId))
+    .returning({ id: tradeAccounts.id });
+  return row ?? null;
+}
+
 export async function listAllTradeAccounts() {
   return db
     .select({

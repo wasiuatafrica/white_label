@@ -1,4 +1,4 @@
-import { getAdminUserById, updateAdminUserLastLogin } from '@/db/queries/admin-users';
+import { getAdminUserById, setAdminUserTotpSecret, updateAdminUserLastLogin } from '@/db/queries/admin-users';
 import {
   clearAdminPendingCookie,
   createAdminSessionCookie,
@@ -6,6 +6,11 @@ import {
   parseAdminPendingFromRequest,
 } from '@/lib/admin-session';
 import { verifyTotpCode } from '@/lib/admin-totp';
+import { checkRateLimit, getRequestRateLimitKey } from '@/lib/rate-limit';
+import { decryptTotpSecret, isEncryptedTotpSecret } from '@/lib/totp-secret-crypto';
+
+const MAX_TOTP_ATTEMPTS = 5;
+const TOTP_WINDOW_MS = 5 * 60 * 1000;
 
 function cookieOptions() {
   return { secure: process.env.NODE_ENV === 'production' };
@@ -18,6 +23,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const rateKey = `${getRequestRateLimitKey(request, 'admin-totp')}:${pending.adminUserId}`;
     const body = await request.json();
     const code = typeof body.code === 'string' ? body.code.replace(/\s/g, '') : '';
     if (!/^\d{6}$/.test(code)) {
@@ -29,9 +35,21 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const valid = await verifyTotpCode(user.totpSecret, code);
+    const secret = decryptTotpSecret(user.totpSecret);
+    const valid = await verifyTotpCode(secret, code);
     if (!valid) {
-      return Response.json({ error: 'Invalid authentication code' }, { status: 401 });
+      const headers = new Headers();
+      const again = await checkRateLimit(rateKey, MAX_TOTP_ATTEMPTS, TOTP_WINDOW_MS, {
+        failClosed: true,
+      });
+      if (!again.allowed) {
+        headers.append('Set-Cookie', clearAdminPendingCookie(cookieOptions()));
+      }
+      return Response.json({ error: 'Invalid authentication code' }, { status: 401, headers });
+    }
+
+    if (!isEncryptedTotpSecret(user.totpSecret)) {
+      await setAdminUserTotpSecret(user.id, secret);
     }
 
     await updateAdminUserLastLogin(user.id);

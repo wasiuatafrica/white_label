@@ -20,7 +20,7 @@ type SuggestSlugResponse = {
 export async function POST(request: Request) {
   try {
     const rateKey = getRequestRateLimitKey(request, 'partner-slug-suggestions');
-    const limited = checkRateLimit(rateKey, MAX_SUGGESTION_REQUESTS, SUGGESTION_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_SUGGESTION_REQUESTS, SUGGESTION_WINDOW_MS);
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many suggestion requests. Try again later.' },

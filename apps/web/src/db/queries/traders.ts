@@ -275,6 +275,23 @@ export async function completePasswordReset(traderId: number, passwordHash: stri
       passwordHash,
       resetToken: null,
       resetTokenExpires: null,
+      sessionsRevokedAtMs: Date.now(),
     })
+    .where(eq(traders.id, traderId));
+}
+
+export async function getTraderSessionsRevokedAtMs(traderId: number) {
+  const [row] = await db
+    .select({ revokedAt: traders.sessionsRevokedAtMs })
+    .from(traders)
+    .where(eq(traders.id, traderId))
+    .limit(1);
+  return row?.revokedAt ?? 0;
+}
+
+export async function setTraderSessionsRevokedAtMs(traderId: number, revokedAtMs: number) {
+  await db
+    .update(traders)
+    .set({ sessionsRevokedAtMs: revokedAtMs })
     .where(eq(traders.id, traderId));
 }

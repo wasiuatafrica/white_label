@@ -1,4 +1,5 @@
 import { count, desc, eq } from 'drizzle-orm';
+import { encryptTotpSecret } from '@/lib/totp-secret-crypto';
 import { db } from '../index';
 import { adminUsers } from '../schema/admin-users';
 
@@ -74,7 +75,7 @@ export async function updateAdminUserLastLogin(id: number) {
 export async function setAdminUserTotpSecret(id: number, secret: string) {
   await db
     .update(adminUsers)
-    .set({ totpSecret: secret, updatedAt: new Date() })
+    .set({ totpSecret: encryptTotpSecret(secret), updatedAt: new Date() })
     .where(eq(adminUsers.id, id));
 }
 

@@ -15,7 +15,10 @@ import {
   createPartnerAdminSessionToken,
   verifyPartnerAdminSessionToken,
 } from '@/lib/partner-admin-session';
-import { primeSessionsRevokedAtCache } from '@/lib/session-revocation';
+import {
+  primePartnerAdminSessionsRevokedAt,
+  primeSessionsRevokedAtCache,
+} from '@/lib/session-revocation';
 import { checkRateLimit, resetRateLimit } from '@/lib/rate-limit';
 import {
   createTraderSetupToken,
@@ -31,6 +34,7 @@ const sampleTrader = {
   status: 'active',
   resetToken: 'reset',
   resetTokenExpires: new Date(),
+  sessionsRevokedAtMs: null,
   kycStatus: 'approved',
   kycFullName: 'Trader Name',
   kycIdType: 'nin',
@@ -115,6 +119,7 @@ function sessionRequest(slug: string, mode?: 'readonly') {
 describe('partner admin auth guard', () => {
   it('marks PIN sessions as writable', async () => {
     primeSessionsRevokedAtCache(0);
+    primePartnerAdminSessionsRevokedAt(9, 0);
     const auth = await requirePartnerAdmin(sessionRequest('acme'), 'acme');
     expect(isPartnerAdminUnauthorized(auth)).toBe(false);
     if (isPartnerAdminUnauthorized(auth)) return;
@@ -125,6 +130,7 @@ describe('partner admin auth guard', () => {
 
   it('forbids writes for read-only sessions', async () => {
     primeSessionsRevokedAtCache(0);
+    primePartnerAdminSessionsRevokedAt(9, 0);
     const auth = await requirePartnerAdmin(sessionRequest('acme', 'readonly'), 'acme');
     expect(isPartnerAdminUnauthorized(auth)).toBe(false);
     if (isPartnerAdminUnauthorized(auth)) return;
@@ -151,12 +157,12 @@ describe('trader setup token', () => {
 });
 
 describe('rate limit', () => {
-  it('blocks after max attempts', () => {
+  it('blocks after max attempts', async () => {
     const key = 'test-key';
-    resetRateLimit(key);
-    expect(checkRateLimit(key, 2, 60_000).allowed).toBe(true);
-    expect(checkRateLimit(key, 2, 60_000).allowed).toBe(true);
-    expect(checkRateLimit(key, 2, 60_000).allowed).toBe(false);
-    resetRateLimit(key);
+    await resetRateLimit(key);
+    expect((await checkRateLimit(key, 2, 60_000)).allowed).toBe(true);
+    expect((await checkRateLimit(key, 2, 60_000)).allowed).toBe(true);
+    expect((await checkRateLimit(key, 2, 60_000)).allowed).toBe(false);
+    await resetRateLimit(key);
   });
 });

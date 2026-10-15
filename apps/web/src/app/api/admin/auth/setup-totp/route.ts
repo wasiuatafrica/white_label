@@ -11,6 +11,7 @@ import {
   parseAdminPendingFromRequest,
 } from '@/lib/admin-session';
 import { buildTotpUri, createTotpSecret, verifyTotpCode } from '@/lib/admin-totp';
+import { decryptTotpSecret } from '@/lib/totp-secret-crypto';
 
 function cookieOptions() {
   return { secure: process.env.NODE_ENV === 'production' };
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'A 6-digit code is required' }, { status: 400 });
     }
 
-    const valid = await verifyTotpCode(freshUser.totpSecret, code);
+    const valid = await verifyTotpCode(decryptTotpSecret(freshUser.totpSecret), code);
     if (!valid) {
       return Response.json({ error: 'Invalid authentication code' }, { status: 401 });
     }

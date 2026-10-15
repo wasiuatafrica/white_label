@@ -13,8 +13,10 @@ import {
   partnerPinNeedsGeneration,
 } from '@/lib/admin-pin';
 import { isAdminUnauthorized, logAdminAction, requireAdmin } from '@/lib/admin-auth-guard';
+import { parseAdminSessionFromRequest } from '@/lib/admin-session';
 import {
   isPartnerAdminUnauthorized,
+  requirePartnerAdmin,
   requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
 import {
@@ -28,7 +30,8 @@ import { hashPartnerAdminPin, verifyPartnerAdminPin } from '@/lib/partner-pin-cr
 import { issueAndNotifyRenewalForPartner } from '@/lib/partner-license-renewal';
 import { isAllowedPartnerLogoUrl } from '@/lib/partner-logo-validation';
 import { partnerLogoImageSrc } from '@/lib/partner-logo';
-import { revokeAllStatefulSessions } from '@/lib/session-revocation';
+import { revokePartnerAdminSessions } from '@/lib/session-revocation';
+import { isAllowedFeeMarkup } from '@/lib/partner-pricing';
 import { isPartnerStorefrontFrozen } from '@/lib/partner-storefront-access';
 
 const SUPER_ADMIN_FIELDS = ['status', 'monthly_fee_paid'] as const;
@@ -66,14 +69,29 @@ function stripAdminPin<T extends { admin_pin?: string }>(partner: T) {
   return partnerResponse;
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
+    const storefront_frozen = await isPartnerStorefrontFrozen(slug);
+    const partnerAdmin = await requirePartnerAdmin(request, slug);
+    const superAdmin = await parseAdminSessionFromRequest(request);
+    const canSeePrivate = Boolean(superAdmin) || !isPartnerAdminUnauthorized(partnerAdmin);
+
+    if (canSeePrivate) {
+      const partner = await getPartnerPrivateBySlug(slug);
+      if (!partner) {
+        return Response.json({ error: 'Partner not found' }, { status: 404 });
+      }
+      return Response.json({
+        ...withPartnerLogoDisplayUrl(stripAdminPin(partner)),
+        storefront_frozen,
+      });
+    }
+
     const partner = await getPartnerBySlug(slug);
     if (!partner) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
-    const storefront_frozen = await isPartnerStorefrontFrozen(slug);
     return Response.json({
       ...withPartnerLogoDisplayUrl(partner),
       storefront_frozen,
@@ -143,7 +161,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sl
       }
 
       body.admin_pin = await hashPartnerAdminPin(newPin);
-      await revokeAllStatefulSessions();
+      await revokePartnerAdminSessions(existing.id);
+    }
+
+    if ('fee_markup' in body && !isAllowedFeeMarkup(body.fee_markup)) {
+      return Response.json(
+        { error: 'fee_markup must be between 0 and 1000000' },
+        { status: 400 }
+      );
     }
 
     if ('logo_url' in body && body.logo_url != null && body.logo_url !== '') {

@@ -1,7 +1,9 @@
 import crypto from 'crypto';
 import { getTraderSetupTokenSecret } from '@/lib/auth-secret';
+import { consumeOneShot, createJti, issueOneShot } from '@/lib/one-shot';
 
-const UPLOAD_INTENT_MAX_AGE = 30 * 60;
+const UPLOAD_INTENT_MAX_AGE_MS = 5 * 60 * 1000;
+const SCOPE = 'upload-intent';
 
 export type UploadIntentPurpose = 'partner_apply' | 'guest_checkout';
 
@@ -9,6 +11,7 @@ export interface UploadIntentPayload {
   purpose: UploadIntentPurpose;
   slug?: string;
   attemptId?: string;
+  jti: string;
   exp: number;
 }
 
@@ -16,13 +19,17 @@ function sign(encoded: string) {
   return crypto.createHmac('sha256', getTraderSetupTokenSecret()).update(encoded).digest('hex');
 }
 
-export function createUploadIntentToken(
-  payload: Omit<UploadIntentPayload, 'exp'>
-): string {
+export async function createUploadIntentToken(
+  payload: Omit<UploadIntentPayload, 'exp' | 'jti'>
+): Promise<string | null> {
+  const jti = createJti();
+  const issued = await issueOneShot(SCOPE, jti, UPLOAD_INTENT_MAX_AGE_MS);
+  if (!issued) return null;
   const encoded = Buffer.from(
     JSON.stringify({
       ...payload,
-      exp: Date.now() + UPLOAD_INTENT_MAX_AGE * 1000,
+      jti,
+      exp: Date.now() + UPLOAD_INTENT_MAX_AGE_MS,
     })
   ).toString('base64url');
   return `${encoded}.${sign(encoded)}`;
@@ -40,9 +47,17 @@ export function verifyUploadIntentToken(token: string): UploadIntentPayload | nu
       return null;
     }
     const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString()) as UploadIntentPayload;
-    if (parsed.exp < Date.now()) return null;
+    if (parsed.exp < Date.now() || !parsed.jti) return null;
     return parsed;
   } catch {
     return null;
   }
+}
+
+export async function consumeUploadIntentToken(token: string) {
+  const parsed = verifyUploadIntentToken(token);
+  if (!parsed) return null;
+  const consumed = await consumeOneShot(SCOPE, parsed.jti);
+  if (!consumed) return null;
+  return parsed;
 }

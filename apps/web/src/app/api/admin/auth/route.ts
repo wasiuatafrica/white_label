@@ -62,7 +62,9 @@ export async function POST(request: Request) {
     }
 
     const rateKey = `${getRequestRateLimitKey(request, 'admin-login')}:${email}`;
-    const limited = checkRateLimit(rateKey, MAX_ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_ADMIN_LOGIN_ATTEMPTS, ADMIN_LOGIN_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many login attempts. Try again later.' },
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
     if (!valid) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 });
     }
-    resetRateLimit(rateKey);
+    await resetRateLimit(rateKey);
 
     const purpose = user.totpEnabled ? 'totp_verify' : 'totp_setup';
     const pendingToken = createAdminPendingToken(user.id, purpose);

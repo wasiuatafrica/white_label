@@ -1,4 +1,6 @@
 import { getSessionsRevokedAtMs, setSessionsRevokedAtMs } from '@/db/queries/app-settings';
+import { getPartnerAdminSessionsRevokedAtMs, setPartnerAdminSessionsRevokedAtMs } from '@/db/queries/partners';
+import { getTraderSessionsRevokedAtMs, setTraderSessionsRevokedAtMs } from '@/db/queries/traders';
 
 // Longer TTL cuts app_settings reads on every authed request; revoke-all
 // still primes the cache immediately via primeSessionsRevokedAtCache.
@@ -45,5 +47,70 @@ export async function revokeAllStatefulSessions() {
   const revokedAtMs = Date.now();
   await setSessionsRevokedAtMs(revokedAtMs);
   primeSessionsRevokedAtCache(revokedAtMs);
+  return revokedAtMs;
+}
+
+const subjectCache = new Map<string, { value: number; expiresAt: number }>();
+
+async function readSubjectRevokedAt(
+  cacheKey: string,
+  load: () => Promise<number>
+): Promise<number> {
+  const now = Date.now();
+  const cached = subjectCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) return cached.value;
+
+  const value = await load();
+  subjectCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  return value;
+}
+
+function issuedBefore(iat: number | undefined, revokedAtMs: number) {
+  if (revokedAtMs <= 0) return false;
+  if (iat === undefined) return true;
+  return iat <= revokedAtMs;
+}
+
+export function primePartnerAdminSessionsRevokedAt(partnerId: number, revokedAtMs = 0) {
+  subjectCache.set(`partner:${partnerId}`, {
+    value: revokedAtMs,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+}
+
+export async function isPartnerAdminSessionRevoked(
+  partnerId: number,
+  iat: number | undefined
+) {
+  const revokedAtMs = await readSubjectRevokedAt(`partner:${partnerId}`, () =>
+    getPartnerAdminSessionsRevokedAtMs(partnerId)
+  );
+  return issuedBefore(iat, revokedAtMs);
+}
+
+export async function revokePartnerAdminSessions(partnerId: number) {
+  const revokedAtMs = Date.now();
+  await setPartnerAdminSessionsRevokedAtMs(partnerId, revokedAtMs);
+  subjectCache.set(`partner:${partnerId}`, {
+    value: revokedAtMs,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+  return revokedAtMs;
+}
+
+export async function isTraderSessionRevoked(traderId: number, iat: number | undefined) {
+  const revokedAtMs = await readSubjectRevokedAt(`trader:${traderId}`, () =>
+    getTraderSessionsRevokedAtMs(traderId)
+  );
+  return issuedBefore(iat, revokedAtMs);
+}
+
+export async function revokeTraderSessions(traderId: number) {
+  const revokedAtMs = Date.now();
+  await setTraderSessionsRevokedAtMs(traderId, revokedAtMs);
+  subjectCache.set(`trader:${traderId}`, {
+    value: revokedAtMs,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
   return revokedAtMs;
 }

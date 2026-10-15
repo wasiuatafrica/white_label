@@ -26,7 +26,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const { email } = parsed.data;
     const rateKey = `${getRequestRateLimitKey(request, 'partner-forgot-pin')}:${slug}:${email}`;
-    const limited = checkRateLimit(rateKey, MAX_OTP_REQUESTS, OTP_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_OTP_REQUESTS, OTP_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many requests. Try again later.' },

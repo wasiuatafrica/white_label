@@ -13,6 +13,8 @@ import {
   resetRateLimit,
 } from '@/lib/rate-limit';
 import { sendTraderPasswordResetEmail } from '@/lib/email/partner-to-trader';
+import { hashResetToken } from '@/lib/reset-token';
+import { revokeTraderSessions } from '@/lib/session-revocation';
 import { getPartnerUrl } from '@/lib/tenant';
 
 const MAX_RESET_EMAIL_REQUESTS = 5;
@@ -29,7 +31,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const normalizedEmail = String(email).trim().toLowerCase();
 
     const rateKey = `${getRequestRateLimitKey(request, 'trader-password-reset-email')}:${slug}:${normalizedEmail}`;
-    const limited = checkRateLimit(rateKey, MAX_RESET_EMAIL_REQUESTS, RESET_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_RESET_EMAIL_REQUESTS, RESET_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many password reset requests. Try again later.' },
@@ -47,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const token = crypto.randomBytes(32).toString('hex');
     const expires = new Date(Date.now() + 3600 * 1000);
 
-    await setTraderResetToken(trader.id, token, expires);
+    await setTraderResetToken(trader.id, hashResetToken(token), expires);
 
     const resetUrl = getPartnerUrl(
       slug,
@@ -89,7 +93,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
     const normalizedEmail = String(email).trim().toLowerCase();
 
     const rateKey = `${getRequestRateLimitKey(request, 'trader-password-reset-complete')}:${slug}:${normalizedEmail}`;
-    const limited = checkRateLimit(rateKey, MAX_RESET_ATTEMPTS, RESET_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_RESET_ATTEMPTS, RESET_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many reset attempts. Try again later.' },
@@ -100,14 +106,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ slug
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) return Response.json({ error: 'Partner not found' }, { status: 404 });
 
-    const trader = await getTraderByResetToken(partnerId, normalizedEmail, token);
+    const trader = await getTraderByResetToken(
+      partnerId,
+      normalizedEmail,
+      hashResetToken(String(token))
+    );
     if (!trader) {
       return Response.json({ error: 'Invalid or expired reset link' }, { status: 400 });
     }
 
     const hash = await argon2.hash(password);
     await completePasswordReset(trader.id, hash);
-    resetRateLimit(rateKey);
+    await revokeTraderSessions(trader.id);
+    await resetRateLimit(rateKey);
 
     return Response.json({ success: true });
   } catch (e) {

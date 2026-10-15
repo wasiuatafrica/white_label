@@ -126,15 +126,15 @@ describe('partner admin view URLs', () => {
 
   it('keeps local Super Admin view on the same origin', () => {
     expect(
-      resolvePartnerAdminViewBounceUrl('powers', 'token-1', 'http://localhost:4000')
-    ).toBe('http://localhost:4000/api/partners/powers/admin-view?token=token-1');
+      resolvePartnerAdminViewBounceUrl('powers', 'http://localhost:4000')
+    ).toBe('http://localhost:4000/api/partners/powers/admin-view');
   });
 
   it('uses the partner subdomain from production Super Admin', () => {
     vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'ft9ja.com');
     expect(
-      resolvePartnerAdminViewBounceUrl('powers', 'token-1', 'https://partners.ft9ja.com')
-    ).toBe('https://powers.ft9ja.com/api/partners/powers/admin-view?token=token-1');
+      resolvePartnerAdminViewBounceUrl('powers', 'https://partners.ft9ja.com')
+    ).toBe('https://powers.ft9ja.com/api/partners/powers/admin-view');
   });
 
   it('redirects to /{slug}/admin on the request host, not /admin', () => {

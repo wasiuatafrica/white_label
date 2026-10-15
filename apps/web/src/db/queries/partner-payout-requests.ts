@@ -1,8 +1,10 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../index';
+import { isUniqueViolation } from '@/lib/db-errors';
 import { mapPartnerPayoutRequest } from '../mappers';
 import { evaluations } from '../schema/evaluations';
 import { partnerPayoutRequests } from '../schema/partner-payout-requests';
+import { partners } from '../schema/partners';
 import type { DbOrTx } from '../types';
 
 const RESERVED_PAYOUT_STATUSES = ['pending', 'approved', 'paid'] as const;
@@ -152,6 +154,12 @@ export async function createPartnerPayoutRequest(data: {
   notes?: string | null;
 }) {
   return db.transaction(async (tx) => {
+    await tx
+      .select({ id: partners.id })
+      .from(partners)
+      .where(eq(partners.id, data.partnerId))
+      .for('update');
+
     const existing = await findPendingPartnerPayoutRequest(data.partnerId, tx);
     if (existing) {
       throw new Error('You already have a pending payout request. Please wait for it to be processed.');
@@ -166,19 +174,26 @@ export async function createPartnerPayoutRequest(data: {
       throw new Error('Requested amount exceeds available balance');
     }
 
-    const [row] = await tx
-      .insert(partnerPayoutRequests)
-      .values({
-        partnerId: data.partnerId,
-        amountRequested: String(data.amountRequested),
-        bankName: data.bankName,
-        accountNumber: data.accountNumber,
-        accountName: data.accountName,
-        notes: data.notes ?? null,
-        status: 'pending',
-      })
-      .returning();
-    return mapPartnerPayoutRequest(row);
+    try {
+      const [row] = await tx
+        .insert(partnerPayoutRequests)
+        .values({
+          partnerId: data.partnerId,
+          amountRequested: String(data.amountRequested),
+          bankName: data.bankName,
+          accountNumber: data.accountNumber,
+          accountName: data.accountName,
+          notes: data.notes ?? null,
+          status: 'pending',
+        })
+        .returning();
+      return mapPartnerPayoutRequest(row);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error('You already have a pending payout request. Please wait for it to be processed.');
+      }
+      throw error;
+    }
   });
 }
 

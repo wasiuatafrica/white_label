@@ -33,8 +33,8 @@ type Partner = {
   id: number;
   slug: string;
   firm_name: string;
-  owner_name: string;
-  owner_email: string;
+  owner_name?: string | null;
+  owner_email?: string | null;
   brand_color: string;
   secondary_color: string;
   tagline: string;

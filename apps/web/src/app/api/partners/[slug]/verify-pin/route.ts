@@ -39,7 +39,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const { email, pin } = parsed.data;
     const rateKey = `${getRequestRateLimitKey(request, 'partner-pin')}:${slug}:${email}`;
-    const limited = checkRateLimit(rateKey, MAX_PIN_ATTEMPTS, PIN_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_PIN_ATTEMPTS, PIN_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many attempts. Try again later.', retryAfterSeconds: limited.retryAfterSeconds },
@@ -56,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       return Response.json({ error: INVALID_CREDENTIALS }, { status: 401 });
     }
 
-    resetRateLimit(rateKey);
+    await resetRateLimit(rateKey);
 
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) {

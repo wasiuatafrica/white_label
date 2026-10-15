@@ -1,6 +1,7 @@
 import { getTraderPasswordHash, getTraderProfile, updateTraderProfile } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 import argon2 from 'argon2';
+import { revokeTraderSessions } from '@/lib/session-revocation';
 
 export async function GET(
   request: Request,
@@ -70,6 +71,9 @@ export async function PATCH(
 
     const result = await updateTraderProfile(Number(id), session.partnerId, updates);
     if (!result) return Response.json({ error: 'Not found' }, { status: 404 });
+    if (updates.passwordHash) {
+      await revokeTraderSessions(Number(id));
+    }
 
     return Response.json(result);
   } catch (e) {

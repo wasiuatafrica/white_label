@@ -6,7 +6,28 @@ import { AdminLoginPanel } from '@/components/admin/admin-login-panel';
 import { AdminsTab } from '@/components/admin/admins-tab';
 import { AuditTab } from '@/components/admin/audit-tab';
 import { adminTabPath, type AdminTabId } from '@/lib/admin-tabs';
-import { getPartnerUrl, resolvePartnerAdminViewBounceUrl } from '@/lib/tenant';
+import {
+  getPartnerUrl,
+  resolvePartnerAdminViewBounceUrl,
+  resolvePartnerTraderViewUrl,
+} from '@/lib/tenant';
+
+function postSignedView(action: string, fields: Record<string, string>) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = action;
+  form.target = '_blank';
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  }
+  document.body.append(form);
+  form.submit();
+  form.remove();
+}
 import { splitVerifiedAmount, PARTNER_LICENSE_PERIOD_DAYS, type EvalType } from '@/lib/partner-pricing';
 import {
   addDays,
@@ -653,10 +674,9 @@ function PartnersTab({
       if (!res.ok) return;
       const data = (await res.json()) as { view_token?: string };
       if (!data.view_token) return;
-      window.open(
-        resolvePartnerAdminViewBounceUrl(slug, data.view_token, window.location.origin),
-        '_blank',
-        'noopener,noreferrer'
+      postSignedView(
+        resolvePartnerAdminViewBounceUrl(slug, window.location.origin),
+        { token: data.view_token }
       );
     } catch (error) {
       console.error('Failed to open partner admin view:', error);
@@ -1368,10 +1388,12 @@ function TradeAccountsTab() {
       const data = (await res.json()) as { view_token?: string };
       if (!data.view_token) return;
 
-      const path = `/dashboard?email=${encodeURIComponent(row.trader_email)}&view_token=${encodeURIComponent(data.view_token)}${
-        row.eval_id ? `&eval_id=${row.eval_id}` : ''
-      }`;
-      window.open(getPartnerUrl(row.partner_slug, path), '_blank', 'noopener,noreferrer');
+      const fields: Record<string, string> = {
+        token: data.view_token,
+        email: row.trader_email,
+      };
+      if (row.eval_id) fields.eval_id = String(row.eval_id);
+      postSignedView(resolvePartnerTraderViewUrl(row.partner_slug, window.location.origin), fields);
     } catch (error) {
       console.error('Failed to open trader dashboard:', error);
     }

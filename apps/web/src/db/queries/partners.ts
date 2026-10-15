@@ -324,3 +324,19 @@ export async function incrementPartnerRevenue(
     })
     .where(eq(partners.id, partnerId));
 }
+
+export async function getPartnerAdminSessionsRevokedAtMs(partnerId: number) {
+  const [row] = await db
+    .select({ revokedAt: partners.adminSessionsRevokedAtMs })
+    .from(partners)
+    .where(eq(partners.id, partnerId))
+    .limit(1);
+  return row?.revokedAt ?? 0;
+}
+
+export async function setPartnerAdminSessionsRevokedAtMs(partnerId: number, revokedAtMs: number) {
+  await db
+    .update(partners)
+    .set({ adminSessionsRevokedAtMs: revokedAtMs, updatedAt: sql`NOW()` })
+    .where(eq(partners.id, partnerId));
+}

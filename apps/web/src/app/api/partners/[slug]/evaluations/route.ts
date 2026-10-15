@@ -7,14 +7,15 @@ import {
 } from '@/db/queries/evaluations';
 import { getTraderPublicByEmail, getTraderForSession } from '@/db/queries/traders';
 import { parseSessionFromRequest } from '@/app/api/utils/session';
-import { verifyAdminTraderViewToken } from '@/lib/admin-trader-view-token';
+import { readAdminTraderViewCookie } from '@/lib/admin-trader-view-cookie';
+import { validatePaymentProofUrl } from '@/lib/receipt-url';
 import { emailSchema } from '@/lib/api-schemas';
 import { isUniqueViolation } from '@/lib/db-errors';
 import {
   isPartnerAdminUnauthorized,
   requirePartnerAdmin,
 } from '@/lib/partner-admin-auth-guard';
-import { amountsMatch, getTraderPrice, type EvalType } from '@/lib/partner-pricing';
+import { getTraderPrice, type EvalType } from '@/lib/partner-pricing';
 import { TraderEmailConflictError } from '@/lib/trader-email';
 import {
   assertPartnerStorefrontOpen,
@@ -61,12 +62,22 @@ function stripSensitiveEvaluationFields<
   return rest;
 }
 
+function stripViewKyc<T extends Record<string, unknown>>(trader: T) {
+  const {
+    kyc_id_number: _kycIdNumber,
+    kyc_address: _kycAddress,
+    kyc_id_url: _kycIdUrl,
+    kyc_selfie_url: _kycSelfieUrl,
+    ...rest
+  } = trader;
+  return rest;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
     const url = new URL(request.url);
     const email = url.searchParams.get('email');
-    const viewToken = url.searchParams.get('view_token');
 
     const partnerId = await getPartnerIdBySlug(slug);
     if (!partnerId) {
@@ -78,7 +89,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       if (isPartnerAdminUnauthorized(auth)) return auth;
 
       const evaluations = await listEvaluationsByPartnerId(partnerId);
-      return Response.json({ evaluations });
+      return Response.json({
+        evaluations: auth.readOnly
+          ? evaluations.map(stripSensitiveEvaluationFields)
+          : evaluations,
+      });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -94,15 +109,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     const partnerAdminAuth = await requirePartnerAdmin(request, slug);
     const isPartnerAdmin = !isPartnerAdminUnauthorized(partnerAdminAuth);
 
-    const hasAdminViewToken =
-      Boolean(viewToken) &&
-      verifyAdminTraderViewToken(String(viewToken), slug, normalizedEmail);
+    const hasAdminView =
+      Boolean(readAdminTraderViewCookie(request, slug, normalizedEmail));
 
-    if (!isTraderOwner && !isPartnerAdmin && !hasAdminViewToken) {
+    if (!isTraderOwner && !isPartnerAdmin && !hasAdminView) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const evaluations = await listEvaluationsByTrader(partnerId, trader.id);
+    if (hasAdminView && !isTraderOwner) {
+      return Response.json({
+        trader: stripViewKyc(trader),
+        evaluations: evaluations.map(stripSensitiveEvaluationFields),
+      });
+    }
     if (!isTraderOwner) {
       return Response.json({
         trader,
@@ -121,7 +141,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   try {
     const { slug } = await params;
     const body = await request.json();
-    const { name, email, eval_type, amount, payment_method, payment_proof_url } = body;
+    const { name, email, eval_type, payment_method, payment_proof_url } = body;
 
     if (eval_type !== 'SS' && eval_type !== 'SSL') {
       return Response.json({ error: 'eval_type must be SS or SSL' }, { status: 400 });
@@ -141,14 +161,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     await assertPartnerStorefrontOpen(slug);
 
-    const partner = await getPartnerPrivateBySlug(slug);
-    const expectedAmount = getTraderPrice(eval_type as EvalType, partner?.fee_markup ?? 0);
-    if (!amountsMatch(amount, expectedAmount)) {
-      return Response.json(
-        { error: 'amount does not match current partner pricing' },
-        { status: 400 }
-      );
+    const proof = validatePaymentProofUrl(payment_proof_url, slug);
+    if (!proof.ok) {
+      return Response.json({ error: proof.error }, { status: proof.status });
     }
+
+    const partner = await getPartnerPrivateBySlug(slug);
+    const amount = getTraderPrice(eval_type as EvalType, partner?.fee_markup ?? 0);
 
     const session = await parseSessionFromRequest(request, slug);
     if (session?.partnerId === partnerId) {
@@ -159,9 +178,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
         partnerId,
         traderId: trader.id,
         evalType: eval_type,
-        amount: amount || 0,
+        amount,
         paymentMethod: payment_method,
-        paymentProofUrl: payment_proof_url,
+        paymentProofUrl: proof.url,
       });
 
       return Response.json({ trader, evaluation }, { status: 201 });
@@ -181,9 +200,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       name,
       email: parsedEmail.data,
       evalType: eval_type,
-      amount: amount || 0,
+      amount,
       paymentMethod: payment_method,
-      paymentProofUrl: payment_proof_url,
+      paymentProofUrl: proof.url,
     });
 
     return Response.json(

@@ -1,9 +1,6 @@
 import { getPartnerIdBySlug } from '@/db/queries/partners';
 import { isAdminUnauthorized, requireAdmin } from '@/lib/admin-auth-guard';
-import {
-  PARTNER_ADMIN_VIEW_TOKEN_MAX_AGE,
-  createAdminPartnerAdminViewToken,
-} from '@/lib/admin-partner-admin-view-token';
+import { createAdminPartnerAdminViewToken } from '@/lib/admin-partner-admin-view-token';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export async function POST(request: Request) {
@@ -23,10 +20,16 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    const view_token = createAdminPartnerAdminViewToken({ slug });
+    const view_token = await createAdminPartnerAdminViewToken({
+      slug,
+      adminUserId: auth.admin.id,
+    });
+    if (!view_token) {
+      return Response.json({ error: 'View authorization is unavailable' }, { status: 503 });
+    }
     return Response.json({
       view_token,
-      expires_in_seconds: PARTNER_ADMIN_VIEW_TOKEN_MAX_AGE,
+      expires_in_seconds: 60,
     });
   } catch (e) {
     console.error(e);

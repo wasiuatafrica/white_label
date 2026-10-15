@@ -92,8 +92,21 @@ export function getWholesalePrice(evalType: EvalType): number {
   return FT9JA_BASE_PRICES[evalType] * (1 - PARTNER_DISCOUNT_RATE);
 }
 
+export const MAX_FEE_MARKUP = 1_000_000;
+
+export function clampFeeMarkup(markup: number | string | null | undefined): number {
+  const value = toMoneyNumber(markup);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.min(value, MAX_FEE_MARKUP);
+}
+
+export function isAllowedFeeMarkup(markup: number | string | null | undefined): boolean {
+  const value = Number(markup);
+  return Number.isFinite(value) && value >= 0 && value <= MAX_FEE_MARKUP;
+}
+
 export function getTraderPrice(evalType: EvalType, markup: number | string | null | undefined): number {
-  return FT9JA_BASE_PRICES[evalType] + toMoneyNumber(markup);
+  return FT9JA_BASE_PRICES[evalType] + clampFeeMarkup(markup);
 }
 
 export function getExpectedPrice(evalType: EvalType, markup: number | string | null | undefined): number {

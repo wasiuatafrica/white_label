@@ -37,9 +37,20 @@ export function mapPartner(row: Partner) {
 }
 
 export function mapPartnerPublic(row: Partner) {
-  const full = mapPartner(row);
-  const { admin_pin: _adminPin, ...rest } = full;
-  return rest;
+  return {
+    id: row.id,
+    slug: row.slug,
+    firm_name: row.firmName,
+    logo_url: row.logoUrl,
+    brand_color: row.brandColor,
+    secondary_color: row.secondaryColor,
+    tagline: row.tagline,
+    description: row.description,
+    template: row.template,
+    status: row.status,
+    fee_markup: row.feeMarkup,
+    total_traders: row.totalTraders,
+  };
 }
 
 export function mapPartnerForSuperAdmin(row: Partner) {

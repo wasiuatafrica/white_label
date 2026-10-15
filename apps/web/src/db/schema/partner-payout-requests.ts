@@ -1,5 +1,14 @@
-import { relations } from 'drizzle-orm';
-import { index, integer, numeric, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
+import {
+  index,
+  integer,
+  numeric,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { partnerPayoutRequestStatusEnum } from './enums';
 import { partners } from './partners';
 
@@ -23,6 +32,9 @@ export const partnerPayoutRequests = pgTable(
   },
   (table) => [
     index('partner_payout_requests_partner_status_idx').on(table.partnerId, table.status),
+    uniqueIndex('partner_payout_requests_one_pending_idx')
+      .on(table.partnerId)
+      .where(sql`${table.status} = 'pending'`),
   ]
 );
 

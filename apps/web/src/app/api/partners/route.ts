@@ -5,6 +5,7 @@ import { emailSchema } from '@/lib/api-schemas';
 import { isUniqueViolation } from '@/lib/db-errors';
 import { exemptLicenseCoverage, isLicenseStorefrontFrozen } from '@/lib/partner-license-billing';
 import { isLicenseRecurringExempt } from '@/lib/partner-pricing';
+import { validatePaymentProofUrl } from '@/lib/receipt-url';
 import { isValidPartnerSlug, normalizePartnerSlug } from '@/lib/tenant';
 
 export async function GET(request: Request) {
@@ -80,8 +81,9 @@ export async function POST(request: Request) {
       return Response.json({ error: 'That subdomain is unavailable.' }, { status: 400 });
     }
 
-    if (!payment_proof_url) {
-      return Response.json({ error: 'Payment receipt upload is required' }, { status: 400 });
+    const proof = validatePaymentProofUrl(payment_proof_url, slug);
+    if (!proof.ok) {
+      return Response.json({ error: proof.error }, { status: proof.status });
     }
 
     if (await slugExists(slug)) {
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
       description,
       brandColor: brand_color,
       secondaryColor: secondary_color,
-      paymentProofUrl: payment_proof_url,
+      paymentProofUrl: proof.url,
     });
 
     const { admin_pin: _adminPin, ...partnerResponse } = partner;

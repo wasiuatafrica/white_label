@@ -1,9 +1,10 @@
 import { parseSessionFromRequest } from '@/app/api/utils/session';
 import { parseAdminSessionFromRequest } from '@/lib/admin-session';
 import { getPartnerIdBySlug } from '@/db/queries/partners';
+import { getPartnerSignupEventByAttemptId } from '@/db/queries/partner-signup-events';
 import { parsePartnerAdminSessionFromRequest } from '@/lib/partner-admin-session';
 import {
-  verifyUploadIntentToken,
+  consumeUploadIntentToken,
   type UploadIntentPurpose,
 } from '@/lib/upload-intent-token';
 
@@ -38,7 +39,7 @@ export async function authorizeUpload(
   }
 
   if (uploadIntent) {
-    const intent = verifyUploadIntentToken(uploadIntent);
+    const intent = await consumeUploadIntentToken(uploadIntent);
     if (!intent) {
       return { authorized: false, status: 403, error: 'Invalid or expired upload authorization' };
     }
@@ -55,8 +56,12 @@ export async function authorizeUpload(
     }
 
     if (intent.purpose === 'partner_apply') {
-      if (!intent.attemptId) {
+      if (!intent.attemptId || !intent.slug || !slug || intent.slug !== slug) {
         return { authorized: false, status: 403, error: 'Invalid upload authorization' };
+      }
+      const event = await getPartnerSignupEventByAttemptId(intent.attemptId);
+      if (!event || event.status === 'submitted') {
+        return { authorized: false, status: 403, error: 'Upload authorization does not match an open application' };
       }
       return { authorized: true };
     }

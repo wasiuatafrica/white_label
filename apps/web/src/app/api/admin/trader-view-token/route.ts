@@ -21,8 +21,15 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    const view_token = createAdminTraderViewToken({ slug, email });
-    return Response.json({ view_token, expires_in_seconds: 60 * 60 });
+    const view_token = await createAdminTraderViewToken({
+      slug,
+      email,
+      adminUserId: auth.admin.id,
+    });
+    if (!view_token) {
+      return Response.json({ error: 'View authorization is unavailable' }, { status: 503 });
+    }
+    return Response.json({ view_token, expires_in_seconds: 60 });
   } catch (e) {
     console.error(e);
     return Response.json({ error: 'Failed to create view token' }, { status: 500 });

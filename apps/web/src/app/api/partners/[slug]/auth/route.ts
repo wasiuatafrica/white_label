@@ -86,7 +86,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     const { email: normalizedEmail, password } = parsed.data;
     const rateKey = `${getRequestRateLimitKey(request, 'trader-login')}:${slug}:${normalizedEmail}`;
-    const limited = checkRateLimit(rateKey, MAX_LOGIN_ATTEMPTS, LOGIN_WINDOW_MS);
+    const limited = await checkRateLimit(rateKey, MAX_LOGIN_ATTEMPTS, LOGIN_WINDOW_MS, {
+      failClosed: true,
+    });
     if (!limited.allowed) {
       return Response.json(
         { error: 'Too many login attempts. Try again later.' },
@@ -138,7 +140,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const valid = await argon2.verify(trader.password_hash, password);
     if (!valid) return Response.json({ error: INVALID_LOGIN }, { status: 401 });
 
-    resetRateLimit(rateKey);
+    await resetRateLimit(rateKey);
 
     const token = createSessionToken({
       traderId: trader.id,

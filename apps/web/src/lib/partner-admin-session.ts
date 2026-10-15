@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import { getPartnerAdminSessionSecret } from '@/lib/auth-secret';
-import { isSessionIssuedBeforeRevocation } from '@/lib/session-revocation';
+import {
+  isPartnerAdminSessionRevoked,
+  isSessionIssuedBeforeRevocation,
+} from '@/lib/session-revocation';
 
 export const PARTNER_ADMIN_SESSION_MAX_AGE = 60 * 60 * 12;
 export const PARTNER_ADMIN_VIEW_SESSION_MAX_AGE = 60 * 60;
@@ -121,5 +124,6 @@ export async function parsePartnerAdminSessionFromRequest(request: Request, slug
   const session = verifyPartnerAdminSessionToken(token);
   if (!session || session.slug !== slug) return null;
   if (await isSessionIssuedBeforeRevocation(session.iat)) return null;
+  if (await isPartnerAdminSessionRevoked(session.partnerId, session.iat)) return null;
   return session;
 }

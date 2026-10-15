@@ -2215,7 +2215,6 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailParam = searchParams.get('email');
-  const viewTokenParam = searchParams.get('view_token');
   const tabParam = searchParams.get('tab');
   const qc = useQueryClient();
   const now = useNow();
@@ -2261,12 +2260,9 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
     isLoading: evalLoading,
     isError: evalError,
   } = useQuery<{ trader: Trader; evaluations: Evaluation[] }>({
-    queryKey: ['evaluations', slug, email, viewTokenParam],
+    queryKey: ['evaluations', slug, email],
     queryFn: async () => {
       const params = new URLSearchParams({ email: email! });
-      if (viewTokenParam) {
-        params.set('view_token', viewTokenParam);
-      }
       const res = await fetch(`/api/partners/${slug}/evaluations?${params.toString()}`);
       if (!res.ok) throw new Error('Not found');
       return res.json();

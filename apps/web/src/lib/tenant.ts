@@ -213,17 +213,17 @@ export function getPartnerAdminPanelPath(slug: string) {
   return `/${normalizePartnerSlug(slug)}/admin`;
 }
 
-export function getPartnerAdminViewBouncePath(slug: string, token: string) {
+export function getPartnerAdminViewBouncePath(slug: string) {
   const normalized = normalizePartnerSlug(slug);
-  return `/api/partners/${normalized}/admin-view?token=${encodeURIComponent(token)}`;
+  return `/api/partners/${normalized}/admin-view`;
 }
 
-export function resolvePartnerAdminViewBounceUrl(
-  slug: string,
-  token: string,
-  currentOrigin?: string
-) {
-  const path = getPartnerAdminViewBouncePath(slug, token);
+export function resolvePartnerTraderViewUrl(slug: string, currentOrigin?: string) {
+  const normalized = normalizePartnerSlug(slug);
+  return resolvePartnerScopedUrl(slug, `/api/partners/${normalized}/trader-view`, currentOrigin);
+}
+
+function resolvePartnerScopedUrl(slug: string, path: string, currentOrigin?: string) {
   if (currentOrigin) {
     try {
       const originUrl = new URL(currentOrigin);
@@ -235,6 +235,10 @@ export function resolvePartnerAdminViewBounceUrl(
     }
   }
   return getPartnerUrl(slug, path);
+}
+
+export function resolvePartnerAdminViewBounceUrl(slug: string, currentOrigin?: string) {
+  return resolvePartnerScopedUrl(slug, getPartnerAdminViewBouncePath(slug), currentOrigin);
 }
 
 export function getRequestOrigin(request: Request) {

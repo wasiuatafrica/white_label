@@ -2035,7 +2035,7 @@ export default function PartnerAdminPage({ params }: { params: Promise<{ slug: s
                 inputMode="numeric"
                 value={resetOtp}
                 onChange={(e) => setResetOtp(e.target.value)}
-                placeholder="6-digit code"
+                placeholder="8-digit code"
                 autoFocus
                 className="mb-4 w-full rounded-lg border border-gray-200 px-4 py-3 text-center text-lg font-mono tracking-widest text-gray-900 outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
               />

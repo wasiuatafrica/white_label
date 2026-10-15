@@ -1,6 +1,7 @@
 import { createAdminAuditLog } from '@/db/queries/admin-audit-logs';
 import { getAdminUserById } from '@/db/queries/admin-users';
 import { parseAdminSessionFromRequest } from '@/lib/admin-session';
+import { getTrustedClientIp } from '@/lib/rate-limit';
 
 export type AdminContext = {
   admin: {
@@ -35,9 +36,7 @@ export async function requireAdmin(request: Request): Promise<AdminContext | Res
 }
 
 export function getRequestIp(request: Request) {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() ?? null;
-  return request.headers.get('x-real-ip');
+  return getTrustedClientIp(request);
 }
 
 export async function logAdminAction(params: {

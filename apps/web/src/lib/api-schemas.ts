@@ -17,7 +17,7 @@ export const partnerForgotPinSchema = z.object({
 
 export const partnerResetPinSchema = z.object({
   email: emailSchema,
-  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  otp: z.string().regex(/^\d{8}$/, 'OTP must be 8 digits'),
   new_pin: partnerAdminPinSchema,
 });
 
