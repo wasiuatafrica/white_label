@@ -1314,6 +1314,22 @@ function TradeAccountsTab() {
   const [search, setSearch] = useState('');
   const [partnerFilter, setPartnerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'blown'>('all');
+  const qc = useQueryClient();
+  const flagMutation = useMutation({
+    mutationFn: async (input: {
+      trade_account_id: number;
+      field: 'blown' | 'inactive';
+      value: boolean;
+    }) => {
+      const res = await fetch('/api/admin/trade-accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-trade-accounts'] }),
+  });
 
   const { data: rows = [], isLoading } = useQuery<TradeAccountRow[]>({
     queryKey: ['admin-trade-accounts'],
@@ -1551,6 +1567,7 @@ function TradeAccountsTab() {
                       {formatDate(row.created_at)}
                     </AdminTd>
                     <AdminTd className="text-right">
+                      <div className="flex flex-col items-end gap-1.5">
                       <button
                         type="button"
                         onClick={() => void openTraderDashboard(row)}
@@ -1558,6 +1575,37 @@ function TradeAccountsTab() {
                       >
                         View dashboard <ExternalLink size={11} />
                       </button>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={flagMutation.isPending}
+                          onClick={() =>
+                            flagMutation.mutate({
+                              trade_account_id: row.trade_account_id,
+                              field: 'blown',
+                              value: !row.blown,
+                            })
+                          }
+                          className="whitespace-nowrap rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {row.blown ? 'Unset blown' : 'Set blown'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={flagMutation.isPending}
+                          onClick={() =>
+                            flagMutation.mutate({
+                              trade_account_id: row.trade_account_id,
+                              field: 'inactive',
+                              value: !row.inactive,
+                            })
+                          }
+                          className="whitespace-nowrap rounded-md border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {row.inactive ? 'Set active' : 'Set inactive'}
+                        </button>
+                      </div>
+                      </div>
                     </AdminTd>
                   </tr>
                 ))}
