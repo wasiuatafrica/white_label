@@ -1,3 +1,6 @@
+// Super Admin "View" buttons POST a form to {slug}.<root domain>, so allow partner subdomains.
+const rootDomain = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'ft9ja.com').toLowerCase();
+
 /** @type {import('next').NextConfig} */
 const securityHeaders = [
   {
@@ -7,7 +10,7 @@ const securityHeaders = [
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'self'",
-      "form-action 'self'",
+      `form-action 'self' https://${rootDomain} https://*.${rootDomain}`,
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://fonts.gstatic.com https://ka-p.fontawesome.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",

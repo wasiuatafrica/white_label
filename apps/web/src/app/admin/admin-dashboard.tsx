@@ -1576,20 +1576,22 @@ function TradeAccountsTab() {
                         View dashboard <ExternalLink size={11} />
                       </button>
                       <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          disabled={flagMutation.isPending}
-                          onClick={() =>
-                            flagMutation.mutate({
-                              trade_account_id: row.trade_account_id,
-                              field: 'blown',
-                              value: !row.blown,
-                            })
-                          }
-                          className="whitespace-nowrap rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {row.blown ? 'Unset blown' : 'Set blown'}
-                        </button>
+                        {!row.blown && (
+                          <button
+                            type="button"
+                            disabled={flagMutation.isPending}
+                            onClick={() =>
+                              flagMutation.mutate({
+                                trade_account_id: row.trade_account_id,
+                                field: 'blown',
+                                value: true,
+                              })
+                            }
+                            className="whitespace-nowrap rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Set blown
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={flagMutation.isPending}
