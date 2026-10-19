@@ -2937,7 +2937,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                       Trading rules flagged this payout period
                     </div>
                     <div className="mt-0.5 text-xs text-orange-700">
-                      See the flagged rules above. Go to the Payouts tab to make your requests.
+                      
                     </div>
                   </div>
                 )}
