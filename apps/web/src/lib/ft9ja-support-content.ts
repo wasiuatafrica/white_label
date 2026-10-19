@@ -10,19 +10,23 @@ export type FaqItem = { q: string; a: string };
 export const DAILY_DRAWDOWN_RULE = '5% of daily starting balance/equity';
 
 export const SCALPING_RULE =
-  'Scalping is permitted, but trading activities involving positions held for less than 5 minutes are not allowed.';
+  'Scalping is permitted, but trading activities involving positions held for less than 5 minutes are not allowed. This is checked for each payout period — from your last approved payout, or your full trading history if you have not been paid yet.';
+
+export const SCALPING_RULE_SHORT = 'No trades held under 5 minutes';
 
 export const COPY_TRADING_RULE =
   'Copying trades from another FT9ja account is strictly forbidden, as is permitting another FT9ja account to replicate trades from your own FT9ja account.';
 
 export const ONE_SIDE_BETTING_RULE =
-  'Engaging in one-side betting is prohibited. One-sided betting is defined as a trading behaviour where a trader opens a large position on a single instrument or a series of large positions on a single instrument, followed by placing very small positions afterwards.';
+  'To comply with the one-sided betting rule, your profits must be spread out. A single day cannot generate more than 50% of the total profit in any payout period. Total profit is your net profit for the period (from your last approved payout, or from the start of your account if you have not been paid yet), and each day is measured by closed trades in UTC.';
+
+export const ONE_SIDE_BETTING_RULE_SHORT = 'One-sided betting (no day over 50% of period profit)';
 
 /** Short bullets for product cards on partner landing pages. */
 export const FT9JA_PRODUCT_CONDUCT_FEATURES = [
   'Scalping permitted — positions must be held at least 5 minutes',
   'Copy trading between FT9ja accounts is strictly forbidden',
-  'One-side betting is prohibited',
+  'No single day can make more than 50% of a payout period’s profit',
 ] as const;
 
 export type RuleRow = { label: string; value: string };
@@ -47,7 +51,7 @@ export const FT9JA_EVAL_RULES: EvalRuleCard[] = [
       { label: 'Min Hold Time', value: '5 minutes minimum' },
       { label: 'Scalping', value: '✅ Permitted (5 min min hold)' },
       { label: 'Copy Trading', value: '❌ Prohibited' },
-      { label: 'One-side Betting', value: '❌ Prohibited' },
+      { label: 'One-side Betting', value: 'Max 50% of period profit in one day' },
       { label: 'News Trading', value: '✅ Allowed' },
       { label: 'Expert Advisors', value: '✅ Allowed (no blackbox)' },
       { label: 'Aso Profit Split', value: 'Up to 90%' },
@@ -66,7 +70,7 @@ export const FT9JA_EVAL_RULES: EvalRuleCard[] = [
       { label: 'Min Hold Time', value: '5 minutes minimum' },
       { label: 'Scalping', value: '✅ Permitted (5 min min hold)' },
       { label: 'Copy Trading', value: '❌ Prohibited' },
-      { label: 'One-side Betting', value: '❌ Prohibited' },
+      { label: 'One-side Betting', value: 'Max 50% of period profit in one day' },
       { label: 'News Trading', value: '✅ Allowed' },
       { label: 'Expert Advisors', value: '✅ Allowed (no blackbox)' },
       { label: 'Talent Bonus', value: '5% weekly / 15% monthly' },
@@ -157,7 +161,7 @@ export const FT9JA_PARTNER_FAQS: FaqItem[] = [
   },
   {
     q: 'Does the consistency rule still apply?',
-    a: 'No. The consistency rule has been removed.',
+    a: 'The old consistency rule has been replaced by the one-sided betting rule: a single day cannot generate more than 50% of your total profit in any payout period.',
   },
   {
     q: 'Can I get a free second chance account?',
@@ -250,7 +254,7 @@ export const FT9JA_GUIDE_FAQ_SECTIONS: { id: string; title: string; faqs: FaqIte
       },
       {
         q: 'Does the consistency rule still apply?',
-        a: 'No. The consistency rule has been removed.',
+        a: 'The old consistency rule has been replaced by the one-sided betting rule: a single day cannot generate more than 50% of your total profit in any payout period.',
       },
     ],
   },
@@ -349,7 +353,7 @@ export const FT9JA_RULES_QUICK_REFERENCE: [string, string, string][] = [
   ['Min Hold Time', '5 minutes minimum', '5 minutes minimum'],
   ['Scalping', '✅ Permitted (5 min min hold)', '✅ Permitted (5 min min hold)'],
   ['Copy Trading', '❌ Prohibited', '❌ Prohibited'],
-  ['One-side Betting', '❌ Prohibited', '❌ Prohibited'],
+  ['One-side Betting', 'Max 50% of period profit/day', 'Max 50% of period profit/day'],
   ['News Trading', '✅ Allowed', '✅ Allowed'],
   ['EA / Bots', '✅ Allowed (no blackbox)', '✅ Allowed (no blackbox)'],
   ['Payouts', 'Up to 90% (Aso)', 'Talent bonus only'],
@@ -361,11 +365,11 @@ export const FT9JA_RULES_QUICK_REFERENCE: [string, string, string][] = [
 export const FT9JA_LEGAL_EVALUATION_RULES: { heading: string; text: string }[] = [
   {
     heading: 'Standard Evaluation (SS) — $10,000 Account',
-    text: '• Profit Target: 25% ($2,500)\n• Maximum Drawdown: 10% ($1,000) of starting equity\n• Daily Drawdown: 5% of that day’s starting balance/equity (resets at 00:00 WAT)\n• Minimum Trading Days: 10 per month, 2 per week\n• Minimum Hold Time: 5 minutes per trade\n• News Trading: Allowed\n• Expert Advisors: Allowed (blackbox EAs prohibited)\n• Path to Aso: Yes (up to 90% profit split)\n• Second Chance: Not available on SS',
+    text: '• Profit Target: 25% ($2,500)\n• Maximum Drawdown: 10% ($1,000) of starting equity\n• Daily Drawdown: 5% of that day’s starting balance/equity (resets at 00:00 WAT)\n• Minimum Trading Days: 10 per month, 2 per week\n• Minimum Hold Time: 5 minutes per trade\n• One-sided Betting: no single day over 50% of a payout period’s profit\n• News Trading: Allowed\n• Expert Advisors: Allowed (blackbox EAs prohibited)\n• Path to Aso: Yes (up to 90% profit split)\n• Second Chance: Not available on SS',
   },
   {
     heading: 'Starter Evaluation (SSL) — $10,000 Account',
-    text: '• Profit Target: None (no evaluation)\n• Maximum Drawdown: 10% ($1,000) of starting equity\n• Daily Drawdown: 5% of that day’s starting balance/equity (resets at 00:00 WAT)\n• Minimum Trading Days: 10 per month, 2 per week\n• Minimum Hold Time: 5 minutes per trade\n• News Trading: Allowed\n• Expert Advisors: Allowed (blackbox EAs prohibited)\n• Talent Bonus: 5% weekly or 15% monthly\n• Aso Account: Not available on SSL',
+    text: '• Profit Target: None (no evaluation)\n• Maximum Drawdown: 10% ($1,000) of starting equity\n• Daily Drawdown: 5% of that day’s starting balance/equity (resets at 00:00 WAT)\n• Minimum Trading Days: 10 per month, 2 per week\n• Minimum Hold Time: 5 minutes per trade\n• One-sided Betting: no single day over 50% of a payout period’s profit\n• News Trading: Allowed\n• Expert Advisors: Allowed (blackbox EAs prohibited)\n• Talent Bonus: 5% weekly or 15% monthly\n• Aso Account: Not available on SSL',
   },
   {
     heading: 'Drawdown Calculation',

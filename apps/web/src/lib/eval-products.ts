@@ -24,7 +24,7 @@ export type EvalProduct = {
 const PARTNER_PRODUCT_CONDUCT_FEATURES = [
   'Scalping permitted — positions must be held at least 5 minutes',
   'Copy trading between accounts is strictly forbidden',
-  'One-side betting is prohibited',
+  'No single day can make more than 50% of a payout period’s profit',
 ] as const;
 
 const BASE_EVAL_PRODUCTS: EvalProduct[] = [

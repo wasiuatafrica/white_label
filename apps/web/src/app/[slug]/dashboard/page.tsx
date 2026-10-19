@@ -5,6 +5,7 @@ import {
     ArrowRight,
     Banknote,
     BarChart3,
+    ChartLine,
     Bitcoin,
     CheckCircle,
     ChevronDown,
@@ -27,11 +28,17 @@ import {
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
-import { DAILY_DRAWDOWN_RULE } from '@/lib/ft9ja-support-content';
+import {
+  DAILY_DRAWDOWN_RULE,
+  ONE_SIDE_BETTING_RULE_SHORT,
+  SCALPING_RULE_SHORT,
+} from '@/lib/ft9ja-support-content';
 import { PasswordInput } from '@/components/ui/password-input';
+import { EvaluationPerformanceTabs } from '@/components/dashboard/performance/evaluation-performance-tabs';
 import { getDefaultEvalProduct, getPartnerProducts } from '@/lib/eval-products';
 import { getFt9jaPaymentRows, type Ft9jaPaymentMethod } from '@/lib/ft9ja-payments';
 import useUpload from '@/utils/useUpload';
+import type { TradingRuleChecks } from '@/lib/trading-rules';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,6 +107,7 @@ type Evaluation = {
     daily_drawdown_breached: boolean;
     account_drawdown_breached: boolean;
   } | null;
+  rules: TradingRuleChecks | null;
 };
 type TraderRequest = {
   id: number;
@@ -349,15 +357,10 @@ function useNow(intervalMs = 15_000) {
   return now;
 }
 
+/** Only SS evaluations can pass; SSL is a payout account with no profit target. */
 function hasPassedByRules(eval_: Evaluation) {
+  if (!hasProfitTarget(eval_.eval_type)) return false;
   if (eval_.status === 'passed') return true;
-  if (!hasProfitTarget(eval_.eval_type)) {
-    return Boolean(
-      eval_.telemetry?.min_trading_days_passed &&
-        !eval_.telemetry?.daily_drawdown_breached &&
-        !eval_.telemetry?.account_drawdown_breached
-    );
-  }
   return Boolean(
     eval_.telemetry?.profit_target_passed &&
       eval_.telemetry.min_trading_days_passed &&
@@ -373,9 +376,36 @@ function hasFailedByRules(eval_: Evaluation) {
   );
 }
 
+/**
+ * Payout requests unlock after the minimum trading days with no drawdown breach, for SS
+ * (talent bonus during evaluation) and SSL. The 5-minute and one-sided betting rules do not
+ * block a request; they are flagged for the trader and the admin who reviews it.
+ */
+function isPayoutEligible(eval_: Evaluation) {
+  if (hasPassedByRules(eval_)) return true;
+  if (eval_.status !== 'active' || hasFailedByRules(eval_)) return false;
+  return Boolean(eval_.telemetry?.min_trading_days_passed);
+}
+
+function getRuleFlags(eval_: Evaluation) {
+  const flags: string[] = [];
+  const shortTrades = eval_.rules?.short_trades;
+  if (shortTrades?.checked && !shortTrades.passed) {
+    flags.push(
+      `${shortTrades.count} trade${shortTrades.count === 1 ? '' : 's'} held under 5 minutes`
+    );
+  }
+  const oneSided = eval_.rules?.one_sided_betting;
+  if (oneSided?.checked && !oneSided.passed) {
+    flags.push(`one day made ${oneSided.best_day_share}% of this period's profit`);
+  }
+  return flags;
+}
+
 function getEffectiveEvalStatus(eval_: Evaluation) {
   if (hasFailedByRules(eval_)) return 'failed';
   if (hasPassedByRules(eval_)) return 'passed';
+  if (!hasProfitTarget(eval_.eval_type) && isPayoutEligible(eval_)) return 'payout_eligible';
   return eval_.status;
 }
 
@@ -400,6 +430,11 @@ function StatusBadge({ status }: { status: string }) {
       label: 'Passed ✓',
       cls: 'border-blue-200 bg-blue-50 text-blue-700',
       dot: 'bg-blue-500',
+    },
+    payout_eligible: {
+      label: 'Payout Eligible',
+      cls: 'border-green-200 bg-green-50 text-green-700',
+      dot: 'bg-green-600',
     },
     failed: { label: 'Failed', cls: 'border-red-200 bg-red-50 text-red-600', dot: 'bg-red-500' },
   };
@@ -1437,12 +1472,12 @@ function PayoutsTab({
     onError: (e: Error) => setSubmitError(e.message),
   });
 
-  const passedEvals = evaluations.filter(hasPassedByRules);
-  const isLocked = passedEvals.length === 0;
+  const eligibleEvals = evaluations.filter(isPayoutEligible);
+  const isLocked = eligibleEvals.length === 0;
   const inProgressEvals = evaluations.filter(
     (e) => e.status !== 'pending_payment' && e.status !== 'failed'
   );
-  const displayEvals = isLocked ? inProgressEvals : passedEvals;
+  const displayEvals = isLocked ? inProgressEvals : eligibleEvals;
   const showPlaceholder = isLocked && displayEvals.length === 0;
   const previewEvalType = displayEvals[0]?.eval_type ?? 'SSL';
 
@@ -1454,15 +1489,15 @@ function PayoutsTab({
       {/* Payout status summary */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Passed Evals', value: passedEvals.length, color: '#2563EB' },
+          { label: 'Payout Eligible', value: eligibleEvals.length, color: '#2563EB' },
           {
             label: 'Processing',
-            value: passedEvals.filter((e) => e.payout_status === 'processing').length,
+            value: eligibleEvals.filter((e) => e.payout_status === 'processing').length,
             color: '#F59E0B',
           },
           {
             label: 'Paid Out',
-            value: passedEvals.filter((e) => e.payout_status === 'paid').length,
+            value: eligibleEvals.filter((e) => e.payout_status === 'paid').length,
             color: '#16A34A',
           },
         ].map((c) => (
@@ -1481,8 +1516,8 @@ function PayoutsTab({
           <div>
             <p className="text-sm font-semibold text-gray-700">Payout requests are locked</p>
             <p className="mt-0.5 text-xs text-gray-500">
-              Pass an evaluation to unlock the buttons below. The preview shows where you&apos;ll
-              click once you&apos;re eligible.
+              Complete the minimum trading days without breaching a drawdown limit to unlock the
+              buttons below. The preview shows where you&apos;ll click once you&apos;re eligible.
             </p>
           </div>
         </div>
@@ -1544,7 +1579,8 @@ function PayoutsTab({
           </div>
         ) : (
           displayEvals.map((e) => {
-            const isEligible = hasPassedByRules(e);
+            const isEligible = isPayoutEligible(e);
+            const ruleFlags = getRuleFlags(e);
             const isExpanded = expandedEval === e.id || (isLocked && displayEvals[0]?.id === e.id);
             const availableTypes = getAvailableRequests(e.eval_type);
 
@@ -1606,6 +1642,14 @@ function PayoutsTab({
                 {/* Expanded: requests */}
                 {isExpanded && (
                   <div className="border-t border-gray-100 px-5 py-5 space-y-4">
+                    {ruleFlags.length > 0 && (
+                      <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-xs text-orange-700">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          Flagged this payout period: {ruleFlags.join('; ')}.
+                        </span>
+                      </div>
+                    )}
                     <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
                       Available Requests
                     </p>
@@ -2220,8 +2264,8 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const now = useNow();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
-  >(tabParam === 'account' ? 'account' : 'overview');
+    'overview' | 'performance' | 'payments' | 'account' | 'payouts' | 'profile' | 'kyc'
+  >(tabParam === 'account' ? 'account' : tabParam === 'performance' ? 'performance' : 'overview');
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [selectedEvalId, setSelectedEvalId] = useState<number | null>(null);
 
@@ -2481,6 +2525,12 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   const allConditionsMet = hasProfitTarget(eval_.eval_type)
     ? profitDone && daysDone && !dailyDrawdownBreached && !accountDrawdownBreached
     : daysDone && !dailyDrawdownBreached && !accountDrawdownBreached;
+  const ruleFlags = getRuleFlags(eval_);
+  const rulePeriodLabel = eval_.rules?.period_start
+    ? `since last payout (${formatDate(eval_.rules.period_start)})`
+    : 'full history (no payout yet)';
+  const shortTrades = eval_.rules?.short_trades;
+  const oneSided = eval_.rules?.one_sided_betting;
   const accountSize = 10000;
   const currentBalance =
     eval_.latest_balance ?? accountSize * (1 + eval_.current_profit / 100);
@@ -2495,13 +2545,14 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
   };
 
   const pendingPaymentCount = evaluations.filter((e) => e.status === 'pending_payment').length;
-  const passedCount = evaluations.filter(hasPassedByRules).length;
+  const payoutEligibleCount = evaluations.filter(isPayoutEligible).length;
   const accountSetupCount = evaluations.filter(
     (e) => e.status === 'active' && e.account_creation_code && !e.trade_account_completed
   ).length;
 
   const allTabs = [
     { id: 'overview', label: 'Dashboard', icon: <BarChart3 size={13} />, badge: 0 },
+    { id: 'performance', label: 'Performance', icon: <ChartLine size={13} />, badge: 0 },
     {
       id: 'payments',
       label: 'Payments',
@@ -2514,7 +2565,7 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       icon: <KeyRound size={13} />,
       badge: accountSetupCount,
     },
-    { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: passedCount },
+    { id: 'payouts', label: 'Payouts', icon: <Banknote size={13} />, badge: payoutEligibleCount },
     { id: 'profile', label: 'Profile', icon: <User size={13} />, badge: 0 },
     {
       id: 'kyc',
@@ -2523,6 +2574,10 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
       badge: 0,
     },
   ] as const;
+  // Read-only viewers (partner admin, Super Admin) get the trading views only.
+  const visibleTabs = hasSession
+    ? allTabs
+    : allTabs.filter((t) => t.id === 'overview' || t.id === 'performance');
 
   return (
     <div className="min-h-screen bg-[#F7F4EF] font-inter">
@@ -2577,10 +2632,10 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
         </div>
 
         {/* Tab bar */}
-        {hasSession && (
+        {(hasSession || isViewOnly) && (
           <div className="mx-auto max-w-6xl px-6 overflow-x-auto">
             <div className="flex gap-0 min-w-max">
-              {allTabs.map((t) => (
+              {visibleTabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setActiveTab(t.id)}
@@ -2820,6 +2875,26 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                         accountDrawdownBreached ||
                         eval_.current_drawdown >= eval_.max_drawdown * 0.8,
                     },
+                    {
+                      rule: SCALPING_RULE_SHORT,
+                      done: Boolean(shortTrades?.checked && shortTrades.passed),
+                      detail: !shortTrades?.checked
+                        ? 'Not checked yet — waiting for trade history to sync'
+                        : shortTrades.passed
+                          ? `No short trades · ${rulePeriodLabel}`
+                          : `${shortTrades.count} trade${shortTrades.count === 1 ? '' : 's'} held under 5 minutes (see Trading History) · ${rulePeriodLabel}`,
+                      warn: Boolean(shortTrades?.checked && !shortTrades.passed),
+                    },
+                    {
+                      rule: ONE_SIDE_BETTING_RULE_SHORT,
+                      done: Boolean(oneSided?.checked && oneSided.passed),
+                      detail: !oneSided?.checked
+                        ? 'Not checked yet — waiting for trade data'
+                        : oneSided.status === 'no_profit'
+                          ? `No net profit · ${rulePeriodLabel}`
+                          : `Best day ${formatDate(oneSided.best_day ?? '')} made ${oneSided.best_day_share}% of $${oneSided.total_profit.toLocaleString()} profit (limit ${oneSided.limit_percent}%) · ${rulePeriodLabel}`,
+                      warn: Boolean(oneSided?.checked && !oneSided.passed),
+                    },
                   ].map((r) => (
                     <div key={r.rule} className="flex items-start gap-3">
                       {r.done && !r.warn ? (
@@ -2838,12 +2913,27 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                     </div>
                   ))}
                 </div>
-                {allConditionsMet && (
+                {allConditionsMet && ruleFlags.length === 0 && (
                   <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                     <CheckCircle size={20} className="mx-auto mb-2 text-[#16A34A]" />
-                    <div className="text-sm font-semibold text-green-800">All conditions met!</div>
+                    <div className="text-sm font-semibold text-green-800">
+                      {hasProfitTarget(eval_.eval_type)
+                        ? 'Evaluation passed — all conditions met!'
+                        : 'Eligible for payout'}
+                    </div>
                     <div className="mt-0.5 text-xs text-green-600">
                       Go to the Payouts tab to make your requests.
+                    </div>
+                  </div>
+                )}
+                {allConditionsMet && ruleFlags.length > 0 && (
+                  <div className="mt-5 rounded-lg border border-orange-200 bg-orange-50 p-4 text-center">
+                    <AlertCircle size={20} className="mx-auto mb-2 text-orange-500" />
+                    <div className="text-sm font-semibold text-orange-800">
+                      Trading rules flagged this payout period
+                    </div>
+                    <div className="mt-0.5 text-xs text-orange-700">
+                      See the flagged rules above. Go to the Payouts tab to make your requests.
                     </div>
                   </div>
                 )}
@@ -2895,6 +2985,42 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400">
+              <Shield size={12} /> Powered by{' '}
+              <span className="font-semibold text-[#16A34A]">FT9ja</span> — Trade data updates every
+              15 minutes.
+            </div>
+          </>
+        )}
+
+        {/* ── Performance Tab ── */}
+        {activeTab === 'performance' && (
+          <>
+            <div className="mb-6">
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">Performance</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {getEvalTypeLabel(eval_.eval_type)} ·{' '}
+                <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
+                  {formatEvaluationCode(eval_.id)}
+                </code>
+                {eval_.trade_account_number ? (
+                  <span className="ml-2 text-xs text-gray-400">
+                    · MT5 {eval_.trade_account_number}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+
+            <EvaluationPerformanceTabs
+              key={eval_.id}
+              slug={slug}
+              evaluationId={eval_.id}
+              primary={primary}
+              accountLinked={!!eval_.trade_account_number && !!eval_.trade_account_completed}
+              hasProfitTarget={hasProfitTarget(eval_.eval_type)}
+              startDate={eval_.purchase_date || null}
+            />
 
             <div className="flex items-center justify-center gap-1.5 text-xs text-gray-400">
               <Shield size={12} /> Powered by{' '}

@@ -6,6 +6,7 @@ import { AdminLoginPanel } from '@/components/admin/admin-login-panel';
 import { AdminsTab } from '@/components/admin/admins-tab';
 import { AuditTab } from '@/components/admin/audit-tab';
 import { adminTabPath, type AdminTabId } from '@/lib/admin-tabs';
+import type { TradingRuleChecks } from '@/lib/trading-rules';
 import {
   getPartnerUrl,
   resolvePartnerAdminViewBounceUrl,
@@ -3670,6 +3671,116 @@ function PartnerPayoutsTab() {
 
 // ─── Requests Tab ─────────────────────────────────────────────────────────────
 
+type RequestRuleChecksResponse = {
+  account_number: number | null;
+  telemetry: {
+    trading_days: number;
+    required_days: number;
+    daily_drawdown_breached: boolean;
+    account_drawdown_breached: boolean;
+  } | null;
+  rules: TradingRuleChecks | null;
+};
+
+/** Trading rule status for the evaluation behind a trader request. Rules never auto-reject. */
+function RequestRuleChecks({ requestId }: { requestId: number }) {
+  const { data, isLoading, isError } = useQuery<RequestRuleChecksResponse>({
+    queryKey: ['admin-request-rule-checks', requestId],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/requests/${requestId}/rule-checks`);
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const rules = data?.rules;
+  const telemetry = data?.telemetry;
+  const period = rules?.period_start
+    ? `Since last approved payout (${formatDate(rules.period_start)})`
+    : 'Full history (no approved payout yet)';
+  const shortTrades = rules?.short_trades;
+  const oneSided = rules?.one_sided_betting;
+
+  const rows: { label: string; ok: boolean | null; detail: string }[] = [
+    {
+      label: 'Min trading days',
+      ok: telemetry ? telemetry.trading_days >= telemetry.required_days : null,
+      detail: telemetry ? `${telemetry.trading_days} / ${telemetry.required_days}` : 'No data',
+    },
+    {
+      label: 'Drawdown limits',
+      ok: telemetry
+        ? !telemetry.daily_drawdown_breached && !telemetry.account_drawdown_breached
+        : null,
+      detail: telemetry
+        ? telemetry.daily_drawdown_breached || telemetry.account_drawdown_breached
+          ? 'Breached'
+          : 'Within limits'
+        : 'No data',
+    },
+    {
+      label: '5-minute rule',
+      ok: shortTrades?.checked ? shortTrades.passed : null,
+      detail: !shortTrades?.checked
+        ? 'Trade history not synced'
+        : shortTrades.passed
+          ? 'No short trades'
+          : `${shortTrades.count} trade${shortTrades.count === 1 ? '' : 's'} under 5 min`,
+    },
+    {
+      label: 'One-sided betting',
+      ok: oneSided?.checked ? oneSided.passed : null,
+      detail: !oneSided?.checked
+        ? 'No trade data'
+        : oneSided.status === 'no_profit'
+          ? 'No net profit in period'
+          : `Best day ${oneSided.best_day} = ${oneSided.best_day_share}% of $${oneSided.total_profit.toLocaleString()} (max ${oneSided.limit_percent}%)`,
+    },
+  ];
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        Trading Rules
+      </p>
+      <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-4 text-xs text-gray-400">
+            <Loader2 size={13} className="animate-spin" /> Checking rules...
+          </div>
+        ) : isError ? (
+          <div className="px-4 py-3 text-xs text-red-500">Could not load rule checks.</div>
+        ) : !data?.account_number ? (
+          <div className="px-4 py-3 text-xs text-gray-400">No MT5 account linked.</div>
+        ) : (
+          <>
+            <div className="border-b border-gray-50 px-4 py-2 text-[11px] text-gray-400">
+              MT5 {data.account_number} · {period}
+            </div>
+            {rows.map((r) => (
+              <div
+                key={r.label}
+                className="flex items-center justify-between gap-3 border-b border-gray-50 px-4 py-2.5 last:border-0"
+              >
+                <span className="text-xs font-medium text-gray-500">{r.label}</span>
+                <span
+                  className={`text-right text-xs font-medium ${r.ok === null ? 'text-gray-400' : r.ok ? 'text-green-600' : 'text-red-600'}`}
+                >
+                  {r.ok === null ? '' : r.ok ? '✓ ' : '✗ '}
+                  {r.detail}
+                </span>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+      <p className="mt-1.5 text-[11px] text-gray-400">
+        Rule flags do not reject requests automatically — reject below if needed.
+      </p>
+    </div>
+  );
+}
+
 type SelectedRequest =
   | { kind: 'trader'; row: RequestRow }
   | { kind: 'aso'; row: AsoRequestRow };
@@ -3886,6 +3997,8 @@ function RequestsTab() {
                   ))}
                 </div>
               </div>
+
+              <RequestRuleChecks requestId={selected.row.id} />
 
               {selected.row.notes && (
                 <div>

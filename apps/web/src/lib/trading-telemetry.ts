@@ -50,7 +50,7 @@ function roundPercent(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function getMongoClient() {
+export function getMongoClient() {
   const url = process.env.MONGODB_URL;
   if (!url) return null;
 
@@ -58,7 +58,7 @@ function getMongoClient() {
   return mongoClientPromise;
 }
 
-function getUtcDayKey(timestamp: number) {
+export function getUtcDayKey(timestamp: number) {
   return new Date(timestamp * 1000).toISOString().slice(0, 10);
 }
 
@@ -142,26 +142,12 @@ export function calculateTradingTelemetryMetrics(
   };
 }
 
-export async function getTradingTelemetryMetrics(accountNumber: number) {
-  if (!Number.isFinite(accountNumber) || accountNumber <= 0) return null;
-
-  const cacheKey = `telemetry:${accountNumber}`;
-  const redis = getRedisClient();
-
-  if (redis) {
-    try {
-      const cached = await redis.get(cacheKey);
-      if (cached) return JSON.parse(cached) as TradingTelemetryMetrics;
-    } catch (err) {
-      console.error('[redis] cache read error', err);
-    }
-  }
-
+export async function fetchBalanceEquityPoints(accountNumber: number) {
   const clientPromise = getMongoClient();
   if (!clientPromise) return null;
 
   const client = await clientPromise;
-  const points = await client
+  return client
     .db('stocks')
     .collection<BalanceEquityPoint>(String(accountNumber))
     .find(
@@ -178,6 +164,25 @@ export async function getTradingTelemetryMetrics(accountNumber: number) {
     )
     .sort({ timestamp: 1 })
     .toArray();
+}
+
+export async function getTradingTelemetryMetrics(accountNumber: number) {
+  if (!Number.isFinite(accountNumber) || accountNumber <= 0) return null;
+
+  const cacheKey = `telemetry:${accountNumber}`;
+  const redis = getRedisClient();
+
+  if (redis) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return JSON.parse(cached) as TradingTelemetryMetrics;
+    } catch (err) {
+      console.error('[redis] cache read error', err);
+    }
+  }
+
+  const points = await fetchBalanceEquityPoints(accountNumber);
+  if (!points) return null;
 
   const metrics = calculateTradingTelemetryMetrics(points);
 

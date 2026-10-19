@@ -29,6 +29,8 @@ import { incrementPartnerRevenue, incrementPartnerTraders } from './partners';
 import { partners } from '../schema/partners';
 import { createTrader, getTraderByEmail, getTraderEmailOwner } from './traders';
 import { createTradeAccountActivation } from './trade-accounts';
+import { getLastApprovedPayoutAtByEval } from './trader-requests';
+import { getTradingRuleChecks } from '@/lib/trading-rules';
 
 const evaluationColumns = {
   id: evaluations.id,
@@ -145,18 +147,25 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
     .leftJoin(tradeAccounts, eq(tradeAccounts.evaluationId, evaluations.id))
     .where(and(eq(evaluations.traderId, traderId), eq(evaluations.partnerId, partnerId)))
     .orderBy(desc(evaluations.purchaseDate));
+  const payoutPeriodStarts = await getLastApprovedPayoutAtByEval(rows.map((row) => row.id));
   const enrichedRows = await Promise.all(
     rows.map(async (row) => {
       let telemetry: Awaited<ReturnType<typeof getTradingTelemetryMetrics>> = null;
+      let rules: Awaited<ReturnType<typeof getTradingRuleChecks>> = null;
       if (row.trade_account_number) {
-        try {
-          telemetry = await getTradingTelemetryMetrics(Number(row.trade_account_number));
-        } catch (error) {
-          console.error('Failed to load trading telemetry', {
-            accountNumber: row.trade_account_number,
-            error,
-          });
-        }
+        const accountNumber = Number(row.trade_account_number);
+        const [telemetryResult, rulesResult] = await Promise.allSettled([
+          getTradingTelemetryMetrics(accountNumber),
+          getTradingRuleChecks(accountNumber, payoutPeriodStarts.get(row.id) ?? null),
+        ]);
+        if (telemetryResult.status === 'fulfilled') telemetry = telemetryResult.value;
+        else console.error('Failed to load trading telemetry', { accountNumber, error: telemetryResult.reason });
+        if (rulesResult.status === 'fulfilled') rules = rulesResult.value;
+        else console.error('Failed to load trading rule checks', { accountNumber, error: rulesResult.reason });
+      }
+      // SSL is a payout account: it has no profit target, so it can never "pass".
+      if (telemetry && row.evalType === 'SSL') {
+        telemetry = { ...telemetry, profit_target: 0, profit_target_passed: false };
       }
       const evaluation = mapEvaluation(row);
 
@@ -179,6 +188,7 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
         latest_balance: telemetry?.latest_balance ?? null,
         latest_equity: telemetry?.latest_equity ?? null,
         telemetry,
+        rules,
         account_creation_code: row.account_creation_code,
         trade_account_id: row.trade_account_id,
         trade_account_number: row.trade_account_number,
@@ -572,4 +582,20 @@ export async function backfillEvaluationPricing() {
   }
 
   return { updatedEvaluations: updated, partnersAdjusted: partnerTotals.length };
+}
+
+export async function getEvaluationTradeAccountForView(partnerId: number, evaluationId: number) {
+  const [row] = await db
+    .select({
+      id: evaluations.id,
+      trader_id: evaluations.traderId,
+      trader_email: traders.email,
+      trade_account_number: tradeAccounts.number,
+    })
+    .from(evaluations)
+    .innerJoin(traders, eq(traders.id, evaluations.traderId))
+    .leftJoin(tradeAccounts, eq(tradeAccounts.evaluationId, evaluations.id))
+    .where(and(eq(evaluations.id, evaluationId), eq(evaluations.partnerId, partnerId)))
+    .limit(1);
+  return row ?? null;
 }
