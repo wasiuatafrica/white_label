@@ -1,7 +1,7 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import {
   formatDateTime,
@@ -11,8 +11,7 @@ import {
   type TradesResponse,
 } from './shared';
 
-const RECENT_COUNT = 5;
-const FULL_PAGE_SIZE = 20;
+const PAGE_SIZE = 20;
 
 type ShortFilter = 'all' | 'short' | 'long';
 
@@ -52,25 +51,20 @@ export function TradingHistoryTab({
   evaluationId: number;
   primary: string;
 }) {
-  const [full, setFull] = useState(false);
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<ShortFilter>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const pageSize = full ? FULL_PAGE_SIZE : RECENT_COUNT;
-  const effectivePage = full ? page : 1;
-  const effectiveFilter = full ? filter : 'all';
-
   const { data, isLoading, isError, isFetching } = useQuery<TradesResponse>({
-    queryKey: ['evaluation-trades', slug, evaluationId, effectivePage, pageSize, effectiveFilter],
+    queryKey: ['evaluation-trades', slug, evaluationId, page, PAGE_SIZE, filter],
     queryFn: async () => {
       const params = new URLSearchParams({
-        page: String(effectivePage),
-        page_size: String(pageSize),
+        page: String(page),
+        page_size: String(PAGE_SIZE),
       });
-      if (effectiveFilter !== 'all') params.set('short', String(effectiveFilter === 'short'));
+      if (filter !== 'all') params.set('short', String(filter === 'short'));
       const res = await fetch(
-        `/api/partners/${slug}/evaluations/${evaluationId}/trades?${params.toString()}`
+        `/api/partners/${slug}/evaluations/${evaluationId}/trades?${params.toString()}`,
       );
       if (!res.ok) throw new Error('Failed to load trading history');
       return res.json();
@@ -81,45 +75,38 @@ export function TradingHistoryTab({
 
   const trades = data?.trades ?? [];
   const total = data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            {full ? 'Full trading history' : 'Recent trades'}
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-900">Trading history</h3>
           <p className="text-xs text-gray-400">Closed positions, newest first.</p>
         </div>
         <div className="flex items-center gap-2">
-          {full && (
-            <select
-              value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value as ShortFilter);
-                setPage(1);
-              }}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700"
-              aria-label="Filter by trade duration"
-            >
-              <option value="all">All trades</option>
-              <option value="short">Under 5 minutes</option>
-              <option value="long">5 minutes or longer</option>
-            </select>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setFull((v) => !v);
+          <select
+            value={filter}
+            onChange={(e) => {
+              setFilter(e.target.value as ShortFilter);
               setPage(1);
-              setExpanded(null);
             }}
-            className="rounded-lg border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-gray-50"
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700"
+            aria-label="Filter by trade duration"
+          >
+            <option value="all">All trades</option>
+            <option value="short">Under 5 minutes</option>
+            <option value="long">5 minutes or longer</option>
+          </select>
+          <a
+            href={`/${slug}/dashboard/report?eval_id=${evaluationId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-gray-50"
             style={{ borderColor: primary, color: primary }}
           >
-            {full ? 'Recent trades' : 'Full History'}
-          </button>
+            Full History <ExternalLink size={12} />
+          </a>
         </div>
       </div>
 
@@ -129,7 +116,7 @@ export function TradingHistoryTab({
         <PanelMessage>Could not load trading history. Please try again shortly.</PanelMessage>
       ) : trades.length === 0 ? (
         <PanelMessage>
-          {effectiveFilter === 'all'
+          {filter === 'all'
             ? 'There is no trading history for this account.'
             : 'No trades match this filter.'}
         </PanelMessage>
@@ -174,7 +161,9 @@ export function TradingHistoryTab({
                     <td className="max-w-40 truncate px-3 py-2 text-gray-500" title={t.comment}>
                       {t.comment || '—'}
                     </td>
-                    <td className={`px-3 py-2 font-medium ${t.short_trade ? 'text-orange-600' : 'text-gray-500'}`}>
+                    <td
+                      className={`px-3 py-2 font-medium ${t.short_trade ? 'text-orange-600' : 'text-gray-500'}`}
+                    >
                       {t.short_trade ? 'Yes' : 'No'}
                     </td>
                   </tr>
@@ -212,33 +201,31 @@ export function TradingHistoryTab({
             })}
           </div>
 
-          {full && (
-            <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-              <span>
-                Page {page} of {pageCount} ({total} trade{total === 1 ? '' : 's'})
-              </span>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                  disabled={page <= 1}
-                  className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(p + 1, pageCount))}
-                  disabled={page >= pageCount}
-                  className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30"
-                  aria-label="Next page"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+          <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+            <span>
+              Page {page} of {pageCount} ({total} trade{total === 1 ? '' : 's'})
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                disabled={page <= 1}
+                className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30"
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(p + 1, pageCount))}
+                disabled={page >= pageCount}
+                className="rounded-lg border border-gray-200 p-1.5 disabled:opacity-30"
+                aria-label="Next page"
+              >
+                <ChevronRight size={14} />
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

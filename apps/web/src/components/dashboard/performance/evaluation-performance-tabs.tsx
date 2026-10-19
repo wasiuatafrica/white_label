@@ -77,7 +77,7 @@ export function EvaluationPerformanceTabs({
   } else if (tab === 'daily-drawdown') {
     body = <DailyDrawdownTab performance={performance} startDate={startDate} />;
   } else {
-    body = <TradingDaysTab performance={performance} startDate={startDate} primary={primary} />;
+    body = <TradingDaysTab performance={performance} startDate={startDate} />;
   }
 
   return (

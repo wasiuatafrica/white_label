@@ -17,7 +17,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { DailyFeedDay } from '@/lib/trading-performance';
-import { formatMoney, PanelLoading, PanelMessage } from './shared';
+import { formatMoney, PanelLoading, PanelMessage, PROFIT_GREEN } from './shared';
 
 const RANGES = [
   { days: 1, label: 'Current day' },
@@ -56,7 +56,7 @@ function DayCard({
   dailyLimit: number;
 }) {
   const bars = [
-    { name: 'Profit', value: day.profit, fill: day.profit >= 0 ? primary : '#DC2626' },
+    { name: 'Profit', value: day.profit, fill: day.profit >= 0 ? PROFIT_GREEN : '#DC2626' },
     {
       name: 'Drawdown',
       value: day.drawdown,

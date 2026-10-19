@@ -405,11 +405,15 @@ function getRuleFlags(eval_: Evaluation) {
 function getEffectiveEvalStatus(eval_: Evaluation) {
   if (hasFailedByRules(eval_)) return 'failed';
   if (hasPassedByRules(eval_)) return 'passed';
-  if (!hasProfitTarget(eval_.eval_type) && isPayoutEligible(eval_)) return 'payout_eligible';
+  if (!hasProfitTarget(eval_.eval_type) && isPayoutEligible(eval_)) {
+    // Flagged rules: no status badge at all; "Payout Eligible" only when nothing is flagged.
+    return getRuleFlags(eval_).length > 0 ? null : 'payout_eligible';
+  }
   return eval_.status;
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string | null }) {
+  if (!status) return null;
   const map: Record<string, { label: string; cls: string; dot: string }> = {
     active: {
       label: 'Active',

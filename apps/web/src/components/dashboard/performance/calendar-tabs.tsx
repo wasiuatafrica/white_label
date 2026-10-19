@@ -77,14 +77,12 @@ export function DailyDrawdownTab({
 export function TradingDaysTab({
   performance,
   startDate,
-  primary,
 }: {
   performance: TradingPerformance;
   startDate: string | null;
-  primary: string;
 }) {
   const { trading_days, required_days } = performance.metrics;
-  const traded: CalendarCell = { className: 'text-white', style: { backgroundColor: primary } };
+  const traded: CalendarCell = { className: 'bg-green-600 text-white' };
 
   return (
     <div>

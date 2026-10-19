@@ -6,6 +6,8 @@ export type PerformanceResponse = { performance: TradingPerformance | null };
 export type TradesResponse = TradeHistoryPage;
 
 export const ACCOUNT_SIZE = 10000;
+/** Gains are always green, whatever the partner's brand colour. */
+export const PROFIT_GREEN = '#16A34A';
 
 export function formatDateTime(iso: string | null) {
   if (!iso) return '—';
