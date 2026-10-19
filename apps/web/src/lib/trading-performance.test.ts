@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDailyFeed,
   calculatePerformanceDays,
   calculateTradingPerformance,
   downsampleSeries,
@@ -84,5 +85,22 @@ describe('mapReportDoc', () => {
       comment: '',
       short_trade: true,
     });
+  });
+});
+
+describe('buildDailyFeed', () => {
+  it('returns the latest N calendar days with data, newest first, with intraday points', () => {
+    const feed = buildDailyFeed(points, 3);
+    expect(feed.map((d) => d.date)).toEqual(['2026-06-19', '2026-06-18', '2026-06-17']);
+    expect(feed[2]).toMatchObject({ drawdown: 2, profit: -2, traded: true });
+    expect(feed[2]?.points).toHaveLength(2);
+  });
+
+  it('treats the latest day with data as the current day', () => {
+    expect(buildDailyFeed(points, 1).map((d) => d.date)).toEqual(['2026-06-19']);
+  });
+
+  it('is empty without data', () => {
+    expect(buildDailyFeed([], 7)).toEqual([]);
   });
 });

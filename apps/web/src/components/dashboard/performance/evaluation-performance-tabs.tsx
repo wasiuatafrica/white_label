@@ -65,7 +65,15 @@ export function EvaluationPerformanceTabs({
       </PanelMessage>
     );
   } else if (tab === 'progress') {
-    body = <ProgressTab performance={performance} primary={primary} hasProfitTarget={hasProfitTarget} />;
+    body = (
+      <ProgressTab
+        slug={slug}
+        evaluationId={evaluationId}
+        performance={performance}
+        primary={primary}
+        hasProfitTarget={hasProfitTarget}
+      />
+    );
   } else if (tab === 'daily-drawdown') {
     body = <DailyDrawdownTab performance={performance} startDate={startDate} />;
   } else {

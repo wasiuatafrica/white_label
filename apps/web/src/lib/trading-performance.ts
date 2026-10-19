@@ -177,6 +177,72 @@ export async function getTradingPerformance(accountNumber: number) {
   });
 }
 
+export const DAILY_FEED_RANGES = [1, 3, 7, 30] as const;
+export type DailyFeedRange = (typeof DAILY_FEED_RANGES)[number];
+const DAILY_FEED_POINTS_PER_DAY = 300;
+const DAY_SECONDS = 86400;
+
+export type DailyFeedDay = PerformanceDay & { points: PerformanceSeriesPoint[] };
+
+export function isDailyFeedRange(value: number): value is DailyFeedRange {
+  return (DAILY_FEED_RANGES as readonly number[]).includes(value);
+}
+
+/**
+ * Per-day cards for the last `days` UTC calendar days, counted back from the latest day
+ * that has data (so "current day" is the last day traded). Newest first.
+ */
+export function buildDailyFeed(points: BalanceEquityPoint[], days: number): DailyFeedDay[] {
+  const ordered = usablePoints(points);
+  const latest = ordered[ordered.length - 1];
+  if (!latest) return [];
+
+  const latestDayStart = Math.floor(latest.timestamp / DAY_SECONDS) * DAY_SECONDS;
+  const windowStart = latestDayStart - (days - 1) * DAY_SECONDS;
+  const inWindow = ordered.filter((p) => p.timestamp >= windowStart);
+
+  const byDay = new Map<string, BalanceEquityPoint[]>();
+  for (const point of inWindow) {
+    const key = getUtcDayKey(point.timestamp);
+    const bucket = byDay.get(key) ?? [];
+    bucket.push(point);
+    byDay.set(key, bucket);
+  }
+
+  return calculatePerformanceDays(inWindow)
+    .map((day) => ({
+      ...day,
+      points: downsampleSeries(byDay.get(day.date) ?? [], DAILY_FEED_POINTS_PER_DAY),
+    }))
+    .reverse();
+}
+
+export async function getDailyFeed(accountNumber: number, days: DailyFeedRange) {
+  if (!Number.isFinite(accountNumber) || accountNumber <= 0) return null;
+  return withCache(`feed:${accountNumber}:${days}`, CACHE_TTL_SECONDS, async () => {
+    const clientPromise = getMongoClient();
+    if (!clientPromise) return null;
+    const client = await clientPromise;
+    const collection = client.db('stocks').collection<BalanceEquityPoint>(String(accountNumber));
+    const projection = { _id: 0, account: 1, timestamp: 1, balance: 1, equity: 1 } as const;
+
+    const latest = await collection.findOne(
+      { account: accountNumber },
+      { projection, sort: { timestamp: -1 } }
+    );
+    if (!latest) return { days: [] as DailyFeedDay[] };
+
+    const windowStart =
+      Math.floor(latest.timestamp / DAY_SECONDS) * DAY_SECONDS - (days - 1) * DAY_SECONDS;
+    const points = await collection
+      .find({ account: accountNumber, timestamp: { $gte: windowStart } }, { projection })
+      .sort({ timestamp: 1 })
+      .toArray();
+
+    return { days: buildDailyFeed(points, days) };
+  });
+}
+
 type ReportDoc = {
   position_id?: number | string;
   symbol?: string;
