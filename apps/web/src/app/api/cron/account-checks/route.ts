@@ -1,5 +1,6 @@
 import { after, NextResponse } from 'next/server';
 import { ACCOUNT_CHECKS, type AccountCheck, runAccountCheck } from '@/lib/account-checks';
+import { sendAccountCheckAlert } from '@/lib/account-checks-alert';
 import { isCronAuthorized } from '@/lib/cron-auth';
 
 export const dynamic = 'force-dynamic';
@@ -39,7 +40,11 @@ async function handleAccountChecks(request: Request) {
     try {
       const summary = await runAccountCheck(check, options);
       console.log('[CRON] account check finished', JSON.stringify(summary));
+      if (summary.errors > 0) await sendAccountCheckAlert(check, { summary });
       return summary;
+    } catch (error) {
+      await sendAccountCheckAlert(check, { error });
+      throw error;
     } finally {
       running.delete(check);
     }

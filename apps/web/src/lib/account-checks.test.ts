@@ -82,7 +82,12 @@ describe('runAccountCheck', () => {
 
     expect(fetchDailyOpenAndLows).toHaveBeenCalledWith(1002, getUtcDayStart(NOW_SECONDS) - DAY);
     expect(markTradeAccountBlown).toHaveBeenCalledWith(2, 'daily_drawdown', 5.2);
-    expect(summary).toMatchObject({ checked: 2, errors: 1, flagged: [{ number: 1002 }] });
+    expect(summary).toMatchObject({
+      checked: 2,
+      errors: 1,
+      flagged: [{ number: 1002 }],
+      failures: [{ number: 1001, message: 'mongo down' }],
+    });
   });
 
   it('does not report accounts another run already blew', async () => {

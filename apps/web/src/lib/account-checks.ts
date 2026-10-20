@@ -20,6 +20,7 @@ export type AccountCheck = (typeof ACCOUNT_CHECKS)[number];
 const DAY_SECONDS = 86_400;
 const INACTIVITY_DAYS = 14;
 const MONGO_CONCURRENCY = 10;
+const MAX_REPORTED_FAILURES = 20;
 
 type MonitoredAccount = { id: number; number: number };
 
@@ -30,6 +31,8 @@ export type AccountCheckSummary = {
   checked: number;
   flagged: { trade_account_id: number; number: number; value: number }[];
   errors: number;
+  /** First few per-account errors, for the alert email. */
+  failures: { number: number; message: string }[];
 };
 
 export function getUtcDayStart(nowSeconds: number) {
@@ -53,6 +56,7 @@ async function forEachAccount(
   check: (account: MonitoredAccount) => Promise<void>
 ) {
   let errors = 0;
+  const failures: AccountCheckSummary['failures'] = [];
   let next = 0;
   async function worker() {
     while (next < accounts.length) {
@@ -61,12 +65,18 @@ async function forEachAccount(
         await check(account);
       } catch (error) {
         errors += 1;
+        if (failures.length < MAX_REPORTED_FAILURES) {
+          failures.push({
+            number: account.number,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
         console.error('[account-checks] account check failed', { number: account.number, error });
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(MONGO_CONCURRENCY, accounts.length) }, worker));
-  return errors;
+  return { errors, failures };
 }
 
 /**
@@ -89,7 +99,7 @@ export async function runAccountCheck(
   const accounts = await listMonitoredTradeAccounts();
   const flagged: AccountCheckSummary['flagged'] = [];
 
-  const errors = await forEachAccount(accounts, async (account) => {
+  const { errors, failures } = await forEachAccount(accounts, async (account) => {
     if (check === 'account_drawdown') {
       const lows = await fetchAccountLows(account.number);
       if (!lows) return;
@@ -126,5 +136,6 @@ export async function runAccountCheck(
     checked: accounts.length,
     flagged,
     errors,
+    failures,
   };
 }
