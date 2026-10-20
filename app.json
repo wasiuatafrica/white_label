@@ -28,6 +28,10 @@
       "description": "OpenAI API key for partner AI logo generation",
       "required": false
     },
+    "ACCOUNT_CHECKS_ALERT_EMAIL": {
+      "description": "Recipient for /api/cron/account-checks error alerts (default dev5.ft9a@gmail.com)",
+      "required": false
+    },
     "CRON_SECRET": {
       "description": "Secret token for Heroku Scheduler curl to /api/cron/partner-licenses and /api/cron/account-checks",
       "required": false
