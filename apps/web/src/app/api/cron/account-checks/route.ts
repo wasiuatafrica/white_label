@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 const running = new Set<AccountCheck>();
 
 /**
- * Heroku Scheduler (UTC; times below are Africa/Lagos):
- *   16:00  ?check=inactivity
- *   19:00  ?check=account_drawdown
- *   23:50  ?check=daily_drawdown   (yesterday + today; add &from=all to re-check full history)
+ * Heroku Scheduler daily jobs (Africa/Lagos, Scheduler runs in UTC):
+ *   16:00 (15:00 UTC)  ?check=inactivity
+ *   19:00 (18:00 UTC)  ?check=account_drawdown
+ *   23:30 (22:30 UTC)  ?check=daily_drawdown   (yesterday + today; &from=all re-checks full history)
  *
  * Responds 202 and runs after the response so long runs outlive Heroku's 30s router timeout.
  * Add &wait=1 to run inline and get the summary back (local / manual use).
