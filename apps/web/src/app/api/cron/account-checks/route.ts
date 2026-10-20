@@ -1,0 +1,69 @@
+import { after, NextResponse } from 'next/server';
+import { ACCOUNT_CHECKS, type AccountCheck, runAccountCheck } from '@/lib/account-checks';
+import { isCronAuthorized } from '@/lib/cron-auth';
+
+export const dynamic = 'force-dynamic';
+
+// One run per check at a time on this dyno (Scheduler retries or manual triggers overlap).
+const running = new Set<AccountCheck>();
+
+/**
+ * Heroku Scheduler (UTC; times below are Africa/Lagos):
+ *   16:00  ?check=inactivity
+ *   19:00  ?check=account_drawdown
+ *   23:50  ?check=daily_drawdown   (yesterday + today; add &from=all to re-check full history)
+ *
+ * Responds 202 and runs after the response so long runs outlive Heroku's 30s router timeout.
+ * Add &wait=1 to run inline and get the summary back (local / manual use).
+ */
+async function handleAccountChecks(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const check = url.searchParams.get('check') as AccountCheck | null;
+  if (!check || !ACCOUNT_CHECKS.includes(check)) {
+    return NextResponse.json(
+      { error: `check must be one of: ${ACCOUNT_CHECKS.join(', ')}` },
+      { status: 400 }
+    );
+  }
+  if (running.has(check)) {
+    return NextResponse.json({ error: `${check} is already running` }, { status: 409 });
+  }
+
+  const options = url.searchParams.get('from') === 'all' ? { dailyFromTimestamp: 0 } : {};
+  running.add(check);
+  const run = async () => {
+    try {
+      const summary = await runAccountCheck(check, options);
+      console.log('[CRON] account check finished', JSON.stringify(summary));
+      return summary;
+    } finally {
+      running.delete(check);
+    }
+  };
+
+  if (url.searchParams.get('wait') === '1') {
+    return NextResponse.json({ ok: true, summary: await run() });
+  }
+
+  after(() =>
+    run().catch((error) => console.error(`[CRON] Unhandled error in ${check} check:`, error))
+  );
+  return NextResponse.json({ ok: true, started: check }, { status: 202 });
+}
+
+export async function POST(request: Request) {
+  try {
+    return await handleAccountChecks(request);
+  } catch (error) {
+    console.error('[CRON] Unhandled error in account checks cron:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
+}

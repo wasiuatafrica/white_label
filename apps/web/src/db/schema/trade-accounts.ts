@@ -43,7 +43,12 @@ export const tradeAccounts = pgTable(
     profitTarget: numeric('profit_target', { precision: 5, scale: 2 }),
     creationCode: varchar('creation_code', { length: 8 }).notNull(),
     blown: boolean('blown').notNull().default(false),
+    // Set by the drawdown cron ('daily_drawdown' | 'account_drawdown'); null when blown manually.
+    blownReason: varchar('blown_reason', { length: 30 }),
+    blownDrawdown: numeric('blown_drawdown', { precision: 6, scale: 2 }),
+    blownAt: timestamp('blown_at', { withTimezone: false }),
     inactive: boolean('inactive').notNull().default(false),
+    inactiveAt: timestamp('inactive_at', { withTimezone: false }),
     createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow(),
   },
@@ -64,6 +69,10 @@ export const tradeAccounts = pgTable(
     index('trade_accounts_trader_id_idx').on(table.traderId),
     index('trade_accounts_partner_id_idx').on(table.partnerId),
     index('trade_accounts_number_idx').on(table.number),
+    // Accounts the daily drawdown / inactivity crons still need to check.
+    index('trade_accounts_monitored_idx')
+      .on(table.id)
+      .where(sql`${table.blown} = false AND ${table.inactive} = false AND ${table.number} > 0`),
   ]
 );
 

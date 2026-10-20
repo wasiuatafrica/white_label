@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../index';
 import type { DbOrTx } from '../types';
+import { evaluations } from '../schema/evaluations';
 import { tradeAccounts } from '../schema/trade-accounts';
 
 function generateCreationCode() {
@@ -30,7 +31,11 @@ function mapTradeAccount(row: typeof tradeAccounts.$inferSelect) {
     profit_target: row.profitTarget,
     creation_code: row.creationCode,
     blown: row.blown,
+    blown_reason: row.blownReason,
+    blown_drawdown: row.blownDrawdown,
+    blown_at: row.blownAt,
     inactive: row.inactive,
+    inactive_at: row.inactiveAt,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
     is_completed: row.number > 0 && Boolean(row.password) && Boolean(row.investorPassword),
@@ -176,4 +181,56 @@ export async function createAsoTradeAccount(
   }
 
   throw new Error('Unable to generate a unique ASO account creation code');
+}
+
+/**
+ * Accounts the drawdown and inactivity crons check: not blown or inactive, has an MT5 number,
+ * not already upgraded to ASO, and either an ASO account or tied to an active evaluation.
+ */
+export async function listMonitoredTradeAccounts() {
+  return db
+    .select({ id: tradeAccounts.id, number: tradeAccounts.number })
+    .from(tradeAccounts)
+    .leftJoin(evaluations, eq(evaluations.id, tradeAccounts.evaluationId))
+    .where(
+      and(
+        eq(tradeAccounts.blown, false),
+        eq(tradeAccounts.inactive, false),
+        gt(tradeAccounts.number, 0),
+        isNull(tradeAccounts.hasAso),
+        or(isNull(tradeAccounts.evaluationId), eq(evaluations.status, 'active'))
+      )
+    );
+}
+
+/** Returns false when the account was already blown (so callers only act once). */
+export async function markTradeAccountBlown(
+  tradeAccountId: number,
+  reason: 'daily_drawdown' | 'account_drawdown',
+  drawdownPercent: number
+) {
+  const now = new Date();
+  const [row] = await db
+    .update(tradeAccounts)
+    .set({
+      blown: true,
+      blownReason: reason,
+      blownDrawdown: drawdownPercent.toFixed(2),
+      blownAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(tradeAccounts.id, tradeAccountId), eq(tradeAccounts.blown, false)))
+    .returning({ id: tradeAccounts.id });
+  return Boolean(row);
+}
+
+/** Returns false when the account was already inactive. */
+export async function markTradeAccountInactive(tradeAccountId: number) {
+  const now = new Date();
+  const [row] = await db
+    .update(tradeAccounts)
+    .set({ inactive: true, inactiveAt: now, updatedAt: now })
+    .where(and(eq(tradeAccounts.id, tradeAccountId), eq(tradeAccounts.inactive, false)))
+    .returning({ id: tradeAccounts.id });
+  return Boolean(row);
 }

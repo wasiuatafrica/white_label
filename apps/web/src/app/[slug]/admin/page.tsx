@@ -204,8 +204,17 @@ type Evaluation = {
   trade_account_number: number | null;
   trade_account_platform: string | null;
   trade_account_broker: string | null;
+  trade_account_blown: boolean | null;
+  trade_account_inactive: boolean | null;
   trade_account_completed: boolean | null;
 };
+
+/** Evaluation status with the cron-persisted trade account flags applied. */
+function getEvalDisplayStatus(ev: Evaluation) {
+  if (ev.trade_account_blown) return 'failed';
+  if (ev.trade_account_inactive && ev.status === 'active') return 'inactive';
+  return ev.status;
+}
 
 type PayoutRequest = {
   id: number;
@@ -578,11 +587,16 @@ function PaymentsTab({
                     </span>
                   </div>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${ev.status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : ev.status === 'passed' ? 'border-blue-200 bg-blue-50 text-blue-700' : ev.status === 'failed' ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-gray-50 text-gray-500'}`}
-                >
-                  {ev.status}
-                </span>
+                {(() => {
+                  const status = getEvalDisplayStatus(ev);
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${status === 'active' ? 'border-green-200 bg-green-50 text-green-700' : status === 'passed' ? 'border-blue-200 bg-blue-50 text-blue-700' : status === 'failed' ? 'border-red-200 bg-red-50 text-red-600' : 'border-gray-200 bg-gray-50 text-gray-500'}`}
+                    >
+                      {status}
+                    </span>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -1043,9 +1057,9 @@ function AnalyticsTab({
   primary: string;
 }) {
   const { confirmed, gross: totalRevenue, partnerEarnings } = sumEvaluationFinancials(evaluations);
-  const active = evaluations.filter((e) => e.status === 'active');
-  const passed = evaluations.filter((e) => e.status === 'passed');
-  const failed = evaluations.filter((e) => e.status === 'failed');
+  const active = evaluations.filter((e) => getEvalDisplayStatus(e) === 'active');
+  const passed = evaluations.filter((e) => getEvalDisplayStatus(e) === 'passed');
+  const failed = evaluations.filter((e) => getEvalDisplayStatus(e) === 'failed');
   const pending = evaluations.filter((e) => e.status === 'pending_payment');
   const sslEvals = confirmed.filter((e) => e.eval_type === 'SSL');
   const ssEvals = confirmed.filter((e) => e.eval_type === 'SS');

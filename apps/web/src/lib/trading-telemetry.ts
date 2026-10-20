@@ -2,6 +2,7 @@ import { MongoClient } from 'mongodb';
 import { getRedisClient } from './redis';
 
 const CACHE_TTL_SECONDS = 300;
+const DAY_SECONDS = 86_400;
 
 export const TRADING_ACCOUNT_SIZE = 10000;
 export const TRADING_PROFIT_TARGET_PERCENT = 25;
@@ -54,12 +55,36 @@ export function getMongoClient() {
   const url = process.env.MONGODB_URL;
   if (!url) return null;
 
-  mongoClientPromise ??= new MongoClient(url).connect();
+  mongoClientPromise ??= new MongoClient(url).connect().catch((error) => {
+    // Don't cache a failed connection; the next call retries.
+    mongoClientPromise = null;
+    throw error;
+  });
   return mongoClientPromise;
 }
 
 export function getUtcDayKey(timestamp: number) {
   return new Date(timestamp * 1000).toISOString().slice(0, 10);
+}
+
+/** Largest drop below the starting account size, % of account size (unrounded). */
+export function calculateAccountDrawdownPercent(lowestBalance: number, lowestEquity: number) {
+  const lowest = Math.min(TRADING_ACCOUNT_SIZE, lowestBalance, lowestEquity);
+  return ((TRADING_ACCOUNT_SIZE - lowest) / TRADING_ACCOUNT_SIZE) * 100;
+}
+
+/** Largest intraday drop from the day's first balance/equity, % of account size (unrounded). */
+export function calculateDailyDrawdownPercent(day: {
+  firstBalance: number;
+  firstEquity: number;
+  lowestBalance: number;
+  lowestEquity: number;
+}) {
+  return Math.max(
+    ((day.firstBalance - day.lowestBalance) / TRADING_ACCOUNT_SIZE) * 100,
+    ((day.firstEquity - day.lowestEquity) / TRADING_ACCOUNT_SIZE) * 100,
+    0
+  );
 }
 
 export function calculateTradingTelemetryMetrics(
@@ -106,20 +131,19 @@ export function calculateTradingTelemetryMetrics(
       balanceChanged ||= point.balance !== first.balance;
     }
 
-    const balanceDrawdown =
-      ((first.balance - dayLowestBalance) / TRADING_ACCOUNT_SIZE) * 100;
-    const equityDrawdown =
-      ((first.equity - dayLowestEquity) / TRADING_ACCOUNT_SIZE) * 100;
-
-    maxDailyDrawdown = Math.max(maxDailyDrawdown, balanceDrawdown, equityDrawdown);
+    maxDailyDrawdown = Math.max(
+      maxDailyDrawdown,
+      calculateDailyDrawdownPercent({
+        firstBalance: first.balance,
+        firstEquity: first.equity,
+        lowestBalance: dayLowestBalance,
+        lowestEquity: dayLowestEquity,
+      })
+    );
     if (balanceChanged) tradingDays += 1;
   }
 
-  const balanceAccountDrawdown =
-    ((TRADING_ACCOUNT_SIZE - lowestBalance) / TRADING_ACCOUNT_SIZE) * 100;
-  const equityAccountDrawdown =
-    ((TRADING_ACCOUNT_SIZE - lowestEquity) / TRADING_ACCOUNT_SIZE) * 100;
-  const accountDrawdown = Math.max(balanceAccountDrawdown, equityAccountDrawdown);
+  const accountDrawdown = calculateAccountDrawdownPercent(lowestBalance, lowestEquity);
   const currentProfit = ((latest.balance - TRADING_ACCOUNT_SIZE) / TRADING_ACCOUNT_SIZE) * 100;
 
   return {
@@ -142,14 +166,19 @@ export function calculateTradingTelemetryMetrics(
   };
 }
 
-export async function fetchBalanceEquityPoints(accountNumber: number) {
+async function getAccountCollection(accountNumber: number) {
   const clientPromise = getMongoClient();
   if (!clientPromise) return null;
 
   const client = await clientPromise;
-  return client
-    .db('stocks')
-    .collection<BalanceEquityPoint>(String(accountNumber))
+  return client.db('stocks').collection<BalanceEquityPoint>(String(accountNumber));
+}
+
+export async function fetchBalanceEquityPoints(accountNumber: number) {
+  const collection = await getAccountCollection(accountNumber);
+  if (!collection) return null;
+
+  return collection
     .find(
       { account: accountNumber },
       {
@@ -164,6 +193,91 @@ export async function fetchBalanceEquityPoints(accountNumber: number) {
     )
     .sort({ timestamp: 1 })
     .toArray();
+}
+
+/** All-time lowest balance and equity, aggregated in MongoDB. */
+export async function fetchAccountLows(accountNumber: number) {
+  const collection = await getAccountCollection(accountNumber);
+  if (!collection) return null;
+
+  const [row] = await collection
+    .aggregate<{ lowestBalance: number; lowestEquity: number }>([
+      { $match: { account: accountNumber } },
+      {
+        $group: {
+          _id: null,
+          lowestBalance: { $min: '$balance' },
+          lowestEquity: { $min: '$equity' },
+        },
+      },
+    ])
+    .toArray();
+  return row ?? null;
+}
+
+export type DailyOpenAndLows = {
+  dayStart: number;
+  firstBalance: number;
+  firstEquity: number;
+  lowestBalance: number;
+  lowestEquity: number;
+};
+
+/** First and lowest balance/equity per UTC day since `fromTimestamp`, aggregated in MongoDB. */
+export async function fetchDailyOpenAndLows(accountNumber: number, fromTimestamp: number) {
+  const collection = await getAccountCollection(accountNumber);
+  if (!collection) return null;
+
+  return collection
+    .aggregate<DailyOpenAndLows>(
+      [
+        { $match: { account: accountNumber, timestamp: { $gte: fromTimestamp } } },
+        { $sort: { timestamp: 1 } },
+        {
+          $group: {
+            _id: { $subtract: ['$timestamp', { $mod: ['$timestamp', DAY_SECONDS] }] },
+            firstBalance: { $first: '$balance' },
+            firstEquity: { $first: '$equity' },
+            lowestBalance: { $min: '$balance' },
+            lowestEquity: { $min: '$equity' },
+          },
+        },
+        { $project: { _id: 0, dayStart: '$_id', firstBalance: 1, firstEquity: 1, lowestBalance: 1, lowestEquity: 1 } },
+      ],
+      { allowDiskUse: true }
+    )
+    .toArray();
+}
+
+/**
+ * Timestamp of the last balance/equity change: the first tick of the final run of
+ * identical balance/equity values. Null when the account has no ticks.
+ */
+export async function fetchLastActivityTimestamp(accountNumber: number) {
+  const collection = await getAccountCollection(accountNumber);
+  if (!collection) return null;
+
+  const projection = { _id: 0, timestamp: 1, balance: 1, equity: 1 } as const;
+  const latest = await collection.findOne(
+    { account: accountNumber },
+    { projection, sort: { timestamp: -1 } }
+  );
+  if (!latest) return null;
+
+  const lastDifferent = await collection.findOne(
+    {
+      account: accountNumber,
+      $or: [{ balance: { $ne: latest.balance } }, { equity: { $ne: latest.equity } }],
+    },
+    { projection, sort: { timestamp: -1 } }
+  );
+  const runStart = await collection.findOne(
+    lastDifferent
+      ? { account: accountNumber, timestamp: { $gt: lastDifferent.timestamp } }
+      : { account: accountNumber },
+    { projection, sort: { timestamp: 1 } }
+  );
+  return runStart?.timestamp ?? latest.timestamp;
 }
 
 export async function getTradingTelemetryMetrics(accountNumber: number) {

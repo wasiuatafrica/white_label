@@ -29,7 +29,7 @@
       "required": false
     },
     "CRON_SECRET": {
-      "description": "Secret token for Heroku Scheduler curl to /api/cron/partner-licenses",
+      "description": "Secret token for Heroku Scheduler curl to /api/cron/partner-licenses and /api/cron/account-checks",
       "required": false
     }
   },

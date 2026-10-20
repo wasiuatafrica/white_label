@@ -97,6 +97,10 @@ export async function listEvaluationsByPartnerId(partnerId: number) {
       trade_account_has_aso: tradeAccounts.hasAso,
       trade_account_aso_account_id: tradeAccounts.asoAccountId,
       trade_account_aso_account_number: tradeAccounts.asoAccountNumber,
+      trade_account_blown: tradeAccounts.blown,
+      trade_account_blown_reason: tradeAccounts.blownReason,
+      trade_account_blown_drawdown: tradeAccounts.blownDrawdown,
+      trade_account_inactive: tradeAccounts.inactive,
       trade_account_completed: sql<boolean>`CASE WHEN ${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> '' THEN true ELSE false END`,
     })
     .from(evaluations)
@@ -140,6 +144,10 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
       trade_account_has_aso: tradeAccounts.hasAso,
       trade_account_aso_account_id: tradeAccounts.asoAccountId,
       trade_account_aso_account_number: tradeAccounts.asoAccountNumber,
+      trade_account_blown: tradeAccounts.blown,
+      trade_account_blown_reason: tradeAccounts.blownReason,
+      trade_account_blown_drawdown: tradeAccounts.blownDrawdown,
+      trade_account_inactive: tradeAccounts.inactive,
       trade_account_completed: sql<boolean>`CASE WHEN ${tradeAccounts.number} > 0 AND ${tradeAccounts.password} <> '' AND ${tradeAccounts.investorPassword} <> '' THEN true ELSE false END`,
       trade_account_number_added_at: tradeAccounts.updatedAt,
     })
@@ -197,6 +205,11 @@ export async function listEvaluationsByTrader(partnerId: number, traderId: numbe
         trade_account_has_aso: row.trade_account_has_aso,
         trade_account_aso_account_id: row.trade_account_aso_account_id,
         trade_account_aso_account_number: row.trade_account_aso_account_number,
+        trade_account_blown: row.trade_account_blown ?? false,
+        trade_account_blown_reason: row.trade_account_blown_reason,
+        trade_account_blown_drawdown:
+          row.trade_account_blown_drawdown == null ? null : Number(row.trade_account_blown_drawdown),
+        trade_account_inactive: row.trade_account_inactive ?? false,
         trade_account_completed: row.trade_account_completed,
         trade_account_number_added_at: row.trade_account_completed
           ? row.trade_account_number_added_at

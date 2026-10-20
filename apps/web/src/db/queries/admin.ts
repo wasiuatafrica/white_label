@@ -180,9 +180,19 @@ export async function setTradeAccountFlag(
   flag: 'blown' | 'inactive',
   value: boolean
 ) {
+  const now = new Date();
+  const changes =
+    flag === 'blown'
+      ? {
+          blown: value,
+          blownAt: value ? now : null,
+          blownReason: null,
+          blownDrawdown: null,
+        }
+      : { inactive: value, inactiveAt: value ? now : null };
   const [row] = await db
     .update(tradeAccounts)
-    .set({ [flag]: value, updatedAt: new Date() })
+    .set({ ...changes, updatedAt: now })
     .where(eq(tradeAccounts.id, tradeAccountId))
     .returning({ id: tradeAccounts.id });
   return row ?? null;

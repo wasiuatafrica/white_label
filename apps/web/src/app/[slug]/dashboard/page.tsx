@@ -88,6 +88,10 @@ type Evaluation = {
   trade_account_has_aso: number | null;
   trade_account_aso_account_id: number | null;
   trade_account_aso_account_number: number | null;
+  trade_account_blown: boolean;
+  trade_account_blown_reason: 'daily_drawdown' | 'account_drawdown' | null;
+  trade_account_blown_drawdown: number | null;
+  trade_account_inactive: boolean;
   trade_account_completed: boolean | null;
   trade_account_number_added_at: string | null;
   telemetry: {
@@ -369,11 +373,9 @@ function hasPassedByRules(eval_: Evaluation) {
   );
 }
 
+/** Drawdown breaches are persisted by the daily crons (trade account `blown`), not derived live. */
 function hasFailedByRules(eval_: Evaluation) {
-  if (eval_.status === 'failed') return true;
-  return Boolean(
-    eval_.telemetry?.daily_drawdown_breached || eval_.telemetry?.account_drawdown_breached
-  );
+  return eval_.status === 'failed' || eval_.trade_account_blown;
 }
 
 /**
@@ -382,6 +384,7 @@ function hasFailedByRules(eval_: Evaluation) {
  * block a request; they are flagged for the trader and the admin who reviews it.
  */
 function isPayoutEligible(eval_: Evaluation) {
+  if (hasFailedByRules(eval_) || eval_.trade_account_inactive) return false;
   if (hasPassedByRules(eval_)) return true;
   if (eval_.status !== 'active' || hasFailedByRules(eval_)) return false;
   return Boolean(eval_.telemetry?.min_trading_days_passed);
@@ -404,12 +407,28 @@ function getRuleFlags(eval_: Evaluation) {
 
 function getEffectiveEvalStatus(eval_: Evaluation) {
   if (hasFailedByRules(eval_)) return 'failed';
+  if (eval_.trade_account_inactive) return 'inactive';
   if (hasPassedByRules(eval_)) return 'passed';
   if (!hasProfitTarget(eval_.eval_type) && isPayoutEligible(eval_)) {
     // Flagged rules: no status badge at all; "Payout Eligible" only when nothing is flagged.
     return getRuleFlags(eval_).length > 0 ? null : 'payout_eligible';
   }
   return eval_.status;
+}
+
+function getAccountClosedMessage(eval_: Evaluation) {
+  if (eval_.trade_account_blown) {
+    const pct =
+      eval_.trade_account_blown_drawdown != null
+        ? ` (${eval_.trade_account_blown_drawdown.toFixed(2)}%)`
+        : '';
+    if (eval_.trade_account_blown_reason === 'daily_drawdown')
+      return `This account breached the ${eval_.max_daily_drawdown}% daily drawdown limit${pct} and has been closed.`;
+    if (eval_.trade_account_blown_reason === 'account_drawdown')
+      return `This account breached the ${eval_.max_drawdown}% account drawdown limit${pct} and has been closed.`;
+    return 'This account has been closed for a rule breach.';
+  }
+  return 'This account has been marked inactive after 14 days with no trading activity.';
 }
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -441,6 +460,11 @@ function StatusBadge({ status }: { status: string | null }) {
       dot: 'bg-green-600',
     },
     failed: { label: 'Failed', cls: 'border-red-200 bg-red-50 text-red-600', dot: 'bg-red-500' },
+    inactive: {
+      label: 'Inactive',
+      cls: 'border-gray-200 bg-gray-50 text-gray-600',
+      dot: 'bg-gray-400',
+    },
   };
   const s = map[status] || {
     label: status,
@@ -1134,9 +1158,7 @@ function TradingAccountTab({
     ? selectedSsAccount.current_profit >= selectedSsAccount.profit_target
     : false;
   const ssBlown = selectedSsAccount
-    ? selectedSsAccount.daily_drawdown >= selectedSsAccount.max_daily_drawdown ||
-      selectedSsAccount.current_drawdown >= selectedSsAccount.max_drawdown ||
-      getEffectiveEvalStatus(selectedSsAccount) === 'failed'
+    ? hasFailedByRules(selectedSsAccount) || selectedSsAccount.trade_account_inactive
     : false;
   const ssHasAso = Boolean(
     selectedSsAccount?.trade_account_has_aso ||
@@ -2791,7 +2813,16 @@ export default function TraderDashboardPage({ params }: { params: Promise<{ slug
               </div>
             )}
 
-            {dragged && eval_.status === 'active' && (
+            {(eval_.trade_account_blown || eval_.trade_account_inactive) && (
+              <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+                <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+                <p className="text-sm text-red-700">
+                  {getAccountClosedMessage(eval_)}
+                </p>
+              </div>
+            )}
+
+            {dragged && eval_.status === 'active' && !hasFailedByRules(eval_) && (
               <div className="mb-6 flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 px-5 py-4">
                 <AlertCircle size={16} className="shrink-0 text-orange-500" />
                 <p className="text-sm text-orange-700">

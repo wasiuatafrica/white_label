@@ -162,11 +162,8 @@ export async function getAsoEligibilityForAccount(
   const accountDrawdown = telemetry?.account_drawdown ?? Number(row.evalCurrentDrawdown ?? 0);
   const maxAccountDrawdown =
     telemetry?.max_account_drawdown ?? Number(row.evalMaxDrawdown ?? TRADING_ACCOUNT_DRAWDOWN_LIMIT_PERCENT);
-  const blown =
-    row.blown ||
-    row.evalStatus === 'failed' ||
-    dailyDrawdown >= maxDailyDrawdown ||
-    accountDrawdown >= maxAccountDrawdown;
+  // Breaches are persisted by the drawdown crons (trade_accounts.blown), not derived live.
+  const blown = row.blown || row.evalStatus === 'failed';
 
   const account = {
     id: row.accountId,
@@ -188,6 +185,7 @@ export async function getAsoEligibilityForAccount(
   };
 
   if (blown) return { eligible: false, reason: 'Account drawdown limit has been breached', account };
+  if (row.inactive) return { eligible: false, reason: 'Account is inactive', account };
   if (currentProfit < profitTarget) {
     return { eligible: false, reason: 'Profit target has not been met', account };
   }
