@@ -51,8 +51,7 @@ const nextConfig = {
     NEXT_PUBLIC_PROJECT_GROUP_ID: process.env.NEXT_PUBLIC_PROJECT_GROUP_ID,
   },
   serverExternalPackages: [
-    '@neondatabase/serverless',
-    'ws',
+    'pg',
     '@better-auth/kysely-adapter',
     'kysely',
     'drizzle-orm',

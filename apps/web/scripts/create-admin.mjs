@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import argon2 from 'argon2';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './lib/pg-sql.mjs';
 
 const MAX_ADMINS = 5;
 
@@ -24,7 +24,7 @@ async function main() {
     throw new Error('DATABASE_URL is required');
   }
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
 
   const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM admin_users`;
   if (count >= MAX_ADMINS) {

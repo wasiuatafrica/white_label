@@ -1,25 +1,27 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle as drizzleNeon } from 'drizzle-orm/neon-serverless';
-import ws from 'ws';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import { pgliteDataDir, usesPglite } from './pglite-env';
 import * as schema from './schema';
 
-neonConfig.webSocketConstructor = ws;
-
-function createNeonDb() {
+function createPgDb() {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     max: 5,
     idleTimeoutMillis: 20_000,
     connectionTimeoutMillis: 10_000,
   });
-  return drizzleNeon(pool, { schema });
+  // An idle client losing its connection (DB restart, network blip) emits 'error' on the pool;
+  // unhandled, that would crash the server. The pool discards the client and reconnects on demand.
+  pool.on('error', (error) => {
+    console.error('[db] idle client error', error);
+  });
+  return drizzlePg(pool, { schema });
 }
 
-type AppDatabase = ReturnType<typeof createNeonDb>;
+type AppDatabase = ReturnType<typeof createPgDb>;
 type DbGlobal = typeof globalThis & { __ft9jaAppPgliteDb?: AppDatabase };
 
-let neonDb: AppDatabase | undefined;
+let pgDb: AppDatabase | undefined;
 
 function getDb(): AppDatabase {
   if (usesPglite()) {
@@ -29,11 +31,11 @@ function getDb(): AppDatabase {
     }
     return cached;
   }
-  neonDb ??= createNeonDb();
-  return neonDb;
+  pgDb ??= createPgDb();
+  return pgDb;
 }
 
-// Query modules are typed against the Neon driver. PGlite is API-compatible at runtime.
+// Query modules are typed against the node-postgres driver. PGlite is API-compatible at runtime.
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, prop, receiver) {
     const value = Reflect.get(getDb(), prop, receiver);
@@ -46,7 +48,7 @@ export async function ensureLocalSchema() {
     return;
   }
 
-  // Keep PGlite out of the Neon module graph (jsdom tests import query modules).
+  // Keep PGlite out of the Postgres module graph (jsdom tests import query modules).
   const { ensurePgliteSchema, getPgliteDb } = await import('./pglite-db');
   (globalThis as DbGlobal).__ft9jaAppPgliteDb = getPgliteDb() as unknown as AppDatabase;
   await ensurePgliteSchema();

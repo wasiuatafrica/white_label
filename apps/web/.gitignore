@@ -17,3 +17,7 @@ next-env.d.ts
 
 # Local PGlite data
 .pglite/
+
+# vinext / Cloudflare build output
+.cloudflare/
+.vinext/

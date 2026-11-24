@@ -83,8 +83,20 @@ export async function resetRateLimit(key: string) {
   }
 }
 
-/** Rightmost X-Forwarded-For hop is the address appended by the edge proxy. */
+/**
+ * Client IP as reported by the platform's edge proxy.
+ *
+ * Set `TRUSTED_CLIENT_IP_HEADER` when the edge overwrites a single header with the client
+ * address (Railway: `x-real-ip`). Only set it on a platform that overwrites that header,
+ * or clients can spoof it. Otherwise the rightmost X-Forwarded-For hop is used: the address
+ * appended by an edge that appends (Heroku).
+ */
 export function getTrustedClientIp(request: Request) {
+  const trustedHeader = process.env.TRUSTED_CLIENT_IP_HEADER?.trim();
+  if (trustedHeader) {
+    return request.headers.get(trustedHeader)?.trim() || null;
+  }
+
   const forwarded = request.headers.get('x-forwarded-for');
   const hops = forwarded
     ?.split(',')

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Copy schema + data from one Neon Postgres database to another (empty) Neon database.
+# Copy schema + data from one Postgres database (e.g. Neon) to another, empty one (Neon, Railway, ...).
 #
 # Requirements:
 #   - Local Postgres client tools: pg_dump, pg_restore, psql
 #     (e.g. sudo apt install postgresql-client)
-#   - Direct Neon connection strings (host without "-pooler"), with sslmode=require
+#   - Direct connection strings (for Neon: host without "-pooler", with sslmode=require)
 #
 # Usage:
-#   1. Set SOURCE_DATABASE_URL and TARGET_DATABASE_URL below
+#   1. Export SOURCE_DATABASE_URL and TARGET_DATABASE_URL (or set them below; don't commit them)
 #   2. ./scripts/copy-neon-db.sh [--yes] [--keep-dump] [--dry-run]
 #
 # Flags:
@@ -17,9 +17,9 @@
 
 set -euo pipefail
 
-# --- Edit these (direct Neon URLs, not -pooler) ---
-SOURCE_DATABASE_URL=''
-TARGET_DATABASE_URL=''
+# --- Environment variables win; otherwise edit these (direct URLs, not Neon -pooler) ---
+SOURCE_DATABASE_URL="${SOURCE_DATABASE_URL:-}"
+TARGET_DATABASE_URL="${TARGET_DATABASE_URL:-}"
 # -------------------------------------------------
 
 KEEP_DUMP=0
@@ -29,7 +29,7 @@ DRY_RUN=0
 usage() {
   cat <<'EOF'
 Usage:
-  Edit SOURCE_DATABASE_URL and TARGET_DATABASE_URL at the top of this script, then:
+  Export SOURCE_DATABASE_URL and TARGET_DATABASE_URL (or edit them at the top of this script), then:
   ./scripts/copy-neon-db.sh [--yes] [--keep-dump] [--dry-run]
 
 Copies full schema and data from SOURCE to an empty TARGET using pg_dump -Fc / pg_restore.
@@ -39,7 +39,7 @@ Flags:
   --keep-dump   Leave the temporary custom-format dump file after restore
   --dry-run     Validate and report what would run; do not dump or restore
 
-Requires direct Neon URLs (no -pooler) and local pg_dump, pg_restore, psql.
+Requires direct URLs (no Neon -pooler) and local pg_dump, pg_restore, psql.
 EOF
 }
 
@@ -134,10 +134,10 @@ require_cmd pg_restore
 require_cmd psql
 
 if [[ -z "$SOURCE_DATABASE_URL" || "$SOURCE_DATABASE_URL" == *"USER:PASSWORD"* ]]; then
-  die "set SOURCE_DATABASE_URL at the top of this script to a real Neon connection string"
+  die "set SOURCE_DATABASE_URL (env or top of this script) to a real Postgres connection string"
 fi
 if [[ -z "$TARGET_DATABASE_URL" || "$TARGET_DATABASE_URL" == *"USER:PASSWORD"* ]]; then
-  die "set TARGET_DATABASE_URL at the top of this script to a real Neon connection string"
+  die "set TARGET_DATABASE_URL (env or top of this script) to a real Postgres connection string"
 fi
 
 SOURCE_NORM="$(normalize_url "$SOURCE_DATABASE_URL")"

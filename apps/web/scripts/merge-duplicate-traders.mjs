@@ -1,14 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
-import { neonConfig, Pool } from '@neondatabase/serverless';
-import ws from 'ws';
+import pg from 'pg';
 
 dotenv.config({
   path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.env'),
 });
-
-neonConfig.webSocketConstructor = ws;
 
 const KYC_RANK = {
   not_started: 0,
@@ -50,7 +47,7 @@ async function openClient(databaseUrl) {
     };
   }
 
-  const pool = new Pool({ connectionString: databaseUrl });
+  const pool = new pg.Pool({ connectionString: databaseUrl });
   const client = await pool.connect();
   return {
     query: (text, params) => client.query(text, params),

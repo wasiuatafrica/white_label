@@ -2,7 +2,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyPgliteSchema } from '@/db/pglite-schema';
 import * as schema from '@/db/schema';
 import { partners } from '@/db/schema/partners';
@@ -383,6 +383,10 @@ describe('Partner License Billing - Database Operations (PGlite)', { timeout: 60
 
   it('handles receipt upload and review transitions (approve, reject, waive)', async () => {
     const { client, db } = await setupTestDb();
+    // Rejecting a receipt re-derives pending vs overdue from the wall clock (overdue once 7 days
+    // past due). Pin "now" two days after the 16 Sep 2026 due date so the expected status holds.
+    vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(Date.UTC(2026, 8, 18, 0, 0, 0)));
     try {
       const [partner] = await db
         .insert(partners)
@@ -469,6 +473,7 @@ describe('Partner License Billing - Database Operations (PGlite)', { timeout: 60
       );
       expect(coverageAfterApprove.isCovered).toBe(true);
     } finally {
+      vi.useRealTimers();
       await client.close();
     }
   });

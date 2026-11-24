@@ -1,0 +1,4 @@
+# Not needed in the Railway build (railway up also honours .gitignore)
+publisher
+apps/web/.cloudflare
+apps/web/.vinext

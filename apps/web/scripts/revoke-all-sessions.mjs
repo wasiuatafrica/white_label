@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './lib/pg-sql.mjs';
 
 const SESSIONS_REVOKED_AT_KEY = 'sessions_revoked_at_ms';
 
@@ -9,7 +9,7 @@ async function main() {
     throw new Error('DATABASE_URL is required');
   }
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
 
   const tableCheck = await sql`
     SELECT to_regclass('public.app_settings') AS table_name

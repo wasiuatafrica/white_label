@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { neon } from '@neondatabase/serverless';
+import { createSql } from './lib/pg-sql.mjs';
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -7,7 +7,7 @@ async function main() {
     throw new Error('DATABASE_URL is required');
   }
 
-  const sql = neon(databaseUrl);
+  const sql = createSql(databaseUrl);
   const rows = await sql`
     UPDATE partners
     SET admin_pin = '0000', updated_at = NOW()
