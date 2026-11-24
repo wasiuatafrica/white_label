@@ -3,6 +3,7 @@ import {
   getPartnerUrl,
   getRootDomain,
   getTenantSlugFromHost,
+  isForeignPlatformHost,
   isPlatformPathSegment,
 } from './lib/tenant';
 
@@ -17,6 +18,15 @@ function isPlatformRoute(pathname: string) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Reserved names (community, mail, api, hq, ...) belong to other ft9ja.com
+  // services; they only reach this app through the *.ft9ja.com DNS wildcard.
+  if (isForeignPlatformHost(request.headers.get('host'))) {
+    return new NextResponse('Not found', {
+      status: 404,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  }
 
   if (isStaticAsset(pathname) || pathname.startsWith('/api')) {
     return NextResponse.next();

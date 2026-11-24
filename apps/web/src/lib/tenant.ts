@@ -8,19 +8,27 @@ export const RESERVED_SUBDOMAINS = new Set([
   'apps',
   'app',
   'apply',
+  'academy',
   'assets',
+  'autodiscover',
   'billing',
   'billings',
   'blog',
   'cdn',
+  'community',
   'customercare',
   'dashboard',
   'dev',
   'discount',
   'docs',
+  'email',
   'ft9ja',
+  'ftp',
   'guide',
   'help',
+  'hq',
+  'imap',
+  'journal',
   'legal',
   'local',
   'localhost',
@@ -28,14 +36,27 @@ export const RESERVED_SUBDOMAINS = new Set([
   'partner',
   'partners',
   'promo',
+  'selfservice',
+  'share',
+  'smtp',
+  'spreadog',
   'staging',
   'static',
   'status',
   'support',
   'superadmin',
+  'talent',
   'test',
+  'ticket',
+  'webmail',
   'www',
 ]);
+
+// Subdomains of the root domain that this app serves as the platform itself
+// (not a partner storefront). Every other reserved name is owned by another
+// ft9ja.com service; requests for it that reach this app only got here through
+// the *.ft9ja.com DNS wildcard and must not be answered (see isForeignPlatformHost).
+const PLATFORM_HOST_SUBDOMAINS = new Set(['partners', 'partner']);
 
 const PLATFORM_PATH_SEGMENTS = new Set([
   '_next',
@@ -289,6 +310,26 @@ export function getTenantSlugFromHost(hostHeader: string | null) {
   if (subdomain.includes('.')) return null;
 
   return isValidPartnerSlug(subdomain) ? subdomain : null;
+}
+
+/**
+ * True when the host is a *.<root> subdomain this app must not serve: a reserved
+ * name that belongs to another ft9ja.com service (community, mail, api, hq, ...)
+ * or a multi-level name (s1._domainkey.ft9ja.com). Such requests only arrive via
+ * the DNS wildcard, so answering them would impersonate that service.
+ */
+export function isForeignPlatformHost(hostHeader: string | null) {
+  if (!hostHeader) return false;
+  const host = hostHeader.split(':')[0]?.toLowerCase();
+  if (!host) return false;
+
+  const rootDomain = getRootDomain().toLowerCase();
+  if (!host.endsWith(`.${rootDomain}`)) return false;
+
+  const subdomain = host.slice(0, -`.${rootDomain}`.length);
+  if (PLATFORM_HOST_SUBDOMAINS.has(subdomain)) return false;
+  if (subdomain.includes('.') || subdomain.includes('_')) return true;
+  return isReservedPartnerSlug(subdomain);
 }
 
 export function isPlatformPathSegment(segment: string) {

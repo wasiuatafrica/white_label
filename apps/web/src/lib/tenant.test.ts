@@ -4,6 +4,7 @@ import {
   getPartnerBaseUrl,
   getPartnerUrl,
   getTenantSlugFromHost,
+  isForeignPlatformHost,
   isReservedPartnerSlug,
   isValidPartnerSlug,
   resolvePartnerAdminViewBounceUrl,
@@ -96,6 +97,36 @@ describe('reserved partner slugs', () => {
     expect(getTenantSlugFromHost('ft9ja-pro.ft9ja.com')).toBeNull();
     expect(getTenantSlugFromHost('my-admin.ft9ja.com')).toBeNull();
     expect(getTenantSlugFromHost('powers.ft9ja.com')).toBe('powers');
+    vi.unstubAllEnvs();
+  });
+
+  it('reserves subdomains used by other ft9ja.com services', () => {
+    for (const slug of ['community', 'share', 'webmail', 'autodiscover', 'email', 'smtp', 'imap', 'hq', 'selfservice', 'academy', 'talent', 'ticket', 'journal', 'spreadog']) {
+      expect(isValidPartnerSlug(slug)).toBe(false);
+    }
+  });
+
+  it('keeps every existing partner slug valid', () => {
+    for (const slug of ['apexfunds', 'd-hustlers', 'emaunegbe-funded-tra', 'halo', 'hamma', 'joefunds', 'sabi9ja', 'snipergang', 'sochima', 'tradeforge-funding']) {
+      expect(isValidPartnerSlug(slug)).toBe(true);
+    }
+  });
+});
+
+describe('isForeignPlatformHost', () => {
+  it('flags reserved and multi-level subdomains that belong to other services', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'ft9ja.com');
+    for (const host of ['community.ft9ja.com', 'www.community.ft9ja.com', 'mail.ft9ja.com', 'api.ft9ja.com', 'hq.ft9ja.com', 'admin.ft9ja.com', 's1._domainkey.ft9ja.com', 'autodiscover.ft9ja.com:443']) {
+      expect(isForeignPlatformHost(host)).toBe(true);
+    }
+    vi.unstubAllEnvs();
+  });
+
+  it('serves the platform host, partner storefronts and non-ft9ja hosts', () => {
+    vi.stubEnv('NEXT_PUBLIC_ROOT_DOMAIN', 'ft9ja.com');
+    for (const host of ['partners.ft9ja.com', 'partner.ft9ja.com', 'apexfunds.ft9ja.com', 'tradeforge-funding.ft9ja.com', 'web-production-26a508a3.up.railway.app', 'localhost:3000', null]) {
+      expect(isForeignPlatformHost(host)).toBe(false);
+    }
     vi.unstubAllEnvs();
   });
 });
