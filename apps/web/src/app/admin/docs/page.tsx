@@ -1405,6 +1405,17 @@ export default function DocsPage() {
               ['AWS_SECRET_ACCESS_KEY', 'Backend (API routes)', 'AWS secret key for S3 uploads'],
               ['AWS_REGION', 'Backend (API routes)', 'AWS region for the receipt bucket'],
               ['AWS_S3_BUCKET', 'Backend (API routes)', 'S3 bucket for uploaded receipts'],
+              [
+                'R2_ENDPOINT',
+                'Backend (API routes)',
+                'Cloudflare R2 S3 endpoint. When set, uploads and receipt links use R2 instead of S3',
+              ],
+              ['R2_ACCESS_KEY_ID', 'Backend (API routes)', 'R2 access key (used when R2_ENDPOINT is set)'],
+              [
+                'R2_SECRET_ACCESS_KEY',
+                'Backend (API routes)',
+                'R2 secret key (used when R2_ENDPOINT is set)',
+              ],
               ['NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'Frontend', 'Google Maps API key (if maps used)'],
               [
                 'STRIPE_SECRET_KEY',

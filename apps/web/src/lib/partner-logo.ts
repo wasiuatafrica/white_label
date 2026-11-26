@@ -1,23 +1,15 @@
-import { createS3PresignedGetUrl, parseS3ObjectUrl } from '@/lib/storage/s3';
+import {
+  createS3PresignedGetUrl,
+  getStorageConfig,
+  parseS3ObjectUrl,
+  type StorageConfig,
+} from '@/lib/storage/s3';
 
-export type S3EnvConfig = {
-  accessKeyId: string;
-  secretAccessKey: string;
-  region: string;
-  bucket: string;
-};
+export type S3EnvConfig = StorageConfig;
 
+/** Storage config (S3, or R2 when `R2_ENDPOINT` is set); see `@/lib/storage/s3`. */
 export function getS3EnvConfig(): S3EnvConfig | null {
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  const region = process.env.AWS_REGION;
-  const bucket = process.env.AWS_S3_BUCKET;
-
-  if (!accessKeyId || !secretAccessKey || !region || !bucket) {
-    return null;
-  }
-
-  return { accessKeyId, secretAccessKey, region, bucket };
+  return getStorageConfig();
 }
 
 export function parsePartnerLogoS3Key(
@@ -25,7 +17,7 @@ export function parsePartnerLogoS3Key(
   logoUrl: string,
   config: S3EnvConfig
 ): string | null {
-  const key = parseS3ObjectUrl(logoUrl, config.bucket, config.region);
+  const key = parseS3ObjectUrl(logoUrl, config);
   if (!key || !key.startsWith(`uploads/logos/${slug}/`)) {
     return null;
   }
@@ -57,7 +49,7 @@ export function partnerLogoImageSrc(
 
 export async function fetchPartnerLogoFromS3(key: string, config: S3EnvConfig) {
   const signedUrl = createS3PresignedGetUrl({
-    ...config,
+    config,
     key,
     expiresInSeconds: 60,
   });

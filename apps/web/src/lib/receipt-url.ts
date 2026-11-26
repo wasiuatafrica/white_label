@@ -1,9 +1,8 @@
-import { hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
+import { getStorageLocation, hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
 
 export function validatePaymentProofUrl(url: unknown, slug: string) {
-  const region = process.env.AWS_REGION;
-  const bucket = process.env.AWS_S3_BUCKET;
-  if (!region || !bucket) {
+  const location = getStorageLocation();
+  if (!location) {
     return { ok: false as const, status: 500, error: 'Receipt storage is not configured' };
   }
 
@@ -12,7 +11,7 @@ export function validatePaymentProofUrl(url: unknown, slug: string) {
     return { ok: false as const, status: 400, error: 'payment_proof_url is required' };
   }
 
-  const key = parseS3ObjectUrl(value, bucket, region);
+  const key = parseS3ObjectUrl(value, location);
   if (!key || !hasAllowedS3KeyPrefix(key, [`uploads/receipts/${slug}/`])) {
     return { ok: false as const, status: 400, error: 'payment_proof_url is not a valid receipt' };
   }

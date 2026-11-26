@@ -1,5 +1,6 @@
 import {
   createS3PresignedGetUrl,
+  getStorageConfig,
   hasAllowedS3KeyPrefix,
   parseS3ObjectUrl,
 } from '@/lib/storage/s3';
@@ -14,12 +15,9 @@ export async function GET(request: Request) {
   if (isAdminUnauthorized(auth)) return auth;
 
   try {
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const region = process.env.AWS_REGION;
-    const bucket = process.env.AWS_S3_BUCKET;
+    const storage = getStorageConfig();
 
-    if (!accessKeyId || !secretAccessKey || !region || !bucket) {
+    if (!storage) {
       return Response.json({ error: 'AWS receipt viewing is not configured' }, { status: 500 });
     }
 
@@ -30,7 +28,7 @@ export async function GET(request: Request) {
       return Response.json({ error: 'url is required' }, { status: 400 });
     }
 
-    const key = parseS3ObjectUrl(receiptUrl, bucket, region);
+    const key = parseS3ObjectUrl(receiptUrl, storage);
     if (!key) {
       return Response.json({ error: 'Receipt URL is not valid for this bucket' }, { status: 400 });
     }
@@ -39,10 +37,7 @@ export async function GET(request: Request) {
     }
 
     const signedUrl = createS3PresignedGetUrl({
-      bucket,
-      region,
-      accessKeyId,
-      secretAccessKey,
+      config: storage,
       key,
       expiresInSeconds: 300,
     });

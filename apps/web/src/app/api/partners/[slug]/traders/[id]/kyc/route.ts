@@ -4,12 +4,11 @@ import {
   isPartnerAdminUnauthorized,
   requirePartnerAdminWrite,
 } from '@/lib/partner-admin-auth-guard';
-import { hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
+import { getStorageLocation, hasAllowedS3KeyPrefix, parseS3ObjectUrl } from '@/lib/storage/s3';
 
 function validateKycDocumentUrl(url: unknown, slug: string) {
-  const region = process.env.AWS_REGION;
-  const bucket = process.env.AWS_S3_BUCKET;
-  if (!region || !bucket) {
+  const location = getStorageLocation();
+  if (!location) {
     return { ok: false as const, status: 500, error: 'KYC document storage is not configured' };
   }
 
@@ -18,7 +17,7 @@ function validateKycDocumentUrl(url: unknown, slug: string) {
     return { ok: false as const, status: 400, error: 'KYC document URL is required' };
   }
 
-  const key = parseS3ObjectUrl(value, bucket, region);
+  const key = parseS3ObjectUrl(value, location);
   if (!key || !hasAllowedS3KeyPrefix(key, [`uploads/receipts/${slug}/`])) {
     return { ok: false as const, status: 400, error: 'KYC document URL is not valid' };
   }
